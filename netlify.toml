@@ -1,0 +1,26 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(self), camera=(), microphone=(), payment=()"
+    # Written as a single line on purpose: Netlify does not reliably convert
+    # the embedded newlines in a TOML multi-line ("""...""") string into a
+    # valid single HTTP header value. In practice this has been reported to
+    # join directives incorrectly, which can collapse the effective policy
+    # down to "default-src 'self'" for every directive after the first —
+    # silently blocking unpkg.com (Leaflet), cdn.jsdelivr.net (Supabase JS),
+    # cartocdn.com (map tiles), and fonts.googleapis.com. Keeping this as one
+    # line avoids that failure mode entirely.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://unpkg.com https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org; frame-ancestors 'none';"
+
+# No [[redirects]] rule for /request.html on purpose: request.html handles its
+# own redirect to index.html via <meta http-equiv="refresh">. A Netlify
+# redirect with status = 200 is a rewrite, not an HTTP redirect — it would
+# serve index.html's content at the /request.html URL before the browser
+# ever saw request.html's own meta-refresh tag, making that file's logic
+# dead code. Keep only one redirect mechanism, not both.
