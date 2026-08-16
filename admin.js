@@ -4,8 +4,8 @@
 // grants nothing; the admins table is the real gate. This file only
 // controls what the UI *shows*, never what the database *allows*.
 
-const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', in_progress: 'قيد التنفيذ', completed: 'مكتملة', cancelled: 'ملغاة' };
-const TIMELINE_STEPS = ['new', 'assigned', 'in_progress', 'completed'];
+const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'السائق بالطريق', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
+const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
 const SERVICE_LABELS = { taxi: 'تاكسي', private: 'سيارة خاصة', courier: 'توصيل طرود', intercity: 'رحلات بين المدن' };
 
 const state = {
@@ -108,7 +108,7 @@ async function loadRequests() {
 function updateStats(rows) {
   document.getElementById('statTotal').textContent = rows.length;
   document.getElementById('statNew').textContent = rows.filter(r => r.status === 'new').length;
-  document.getElementById('statProgress').textContent = rows.filter(r => r.status === 'assigned' || r.status === 'in_progress').length;
+  document.getElementById('statProgress').textContent = rows.filter(r => r.status === 'assigned' || r.status === 'en_route' || r.status === 'arrived').length;
   document.getElementById('statDone').textContent = rows.filter(r => r.status === 'completed').length;
 }
 
@@ -193,6 +193,11 @@ async function openDetail(id) {
   document.getElementById('modalNotes').textContent = r.notes || '—';
   document.getElementById('driverName').value = r.driver_name || '';
   document.getElementById('driverPhone').value = r.driver_phone || '';
+  document.getElementById('driverPhoto').value = r.driver_photo_url || '';
+  document.getElementById('driverCarType').value = r.driver_car_type || '';
+  document.getElementById('driverPlate').value = r.driver_plate || '';
+  document.getElementById('driverRating').value = r.driver_rating ?? '';
+  document.getElementById('driverEta').value = r.eta_minutes ?? '';
 
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.classList.toggle('active', b.dataset.status === r.status);
@@ -227,6 +232,13 @@ async function saveDriver() {
   if (!state.selectedId) return;
   const driver_name = document.getElementById('driverName').value.trim();
   const driver_phone = document.getElementById('driverPhone').value.trim();
+  const driver_photo_url = document.getElementById('driverPhoto').value.trim();
+  const driver_car_type = document.getElementById('driverCarType').value.trim();
+  const driver_plate = document.getElementById('driverPlate').value.trim();
+  const ratingRaw = document.getElementById('driverRating').value;
+  const etaRaw = document.getElementById('driverEta').value;
+  const driver_rating = ratingRaw === '' ? null : Number(ratingRaw);
+  const eta_minutes = etaRaw === '' ? null : Number(etaRaw);
 
   // Assigning a driver to a "new" request moves it to "assigned" automatically.
   const current = state.requests.find(r => r.id === state.selectedId);
@@ -234,7 +246,10 @@ async function saveDriver() {
 
   const { error } = await supabaseClient
     .from('trip_requests')
-    .update({ driver_name, driver_phone, status: nextStatus })
+    .update({
+      driver_name, driver_phone, driver_photo_url, driver_car_type, driver_plate,
+      driver_rating, eta_minutes, status: nextStatus,
+    })
     .eq('id', state.selectedId);
 
   if (error) {

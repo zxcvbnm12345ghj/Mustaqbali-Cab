@@ -62,7 +62,8 @@
       <button type="button" class="admin-filter active" data-status="all">الكل</button>
       <button type="button" class="admin-filter" data-status="new">جديد</button>
       <button type="button" class="admin-filter" data-status="assigned">تم التعيين</button>
-      <button type="button" class="admin-filter" data-status="in_progress">قيد التنفيذ</button>
+      <button type="button" class="admin-filter" data-status="en_route">السائق بالطريق</button>
+      <button type="button" class="admin-filter" data-status="arrived">تم الوصول</button>
       <button type="button" class="admin-filter" data-status="completed">مكتملة</button>
       <button type="button" class="admin-filter" data-status="cancelled">ملغاة</button>
     </div>
@@ -117,13 +118,34 @@
       <label for="driverPhone">رقم جوال السائق</label>
       <input type="text" id="driverPhone" placeholder="07xxxxxxxxx" maxlength="20">
     </div>
+    <div class="admin-field">
+      <label for="driverPhoto">رابط صورة السائق <span class="opt">(اختياري)</span></label>
+      <input type="text" id="driverPhoto" placeholder="https://...">
+    </div>
+    <div class="admin-field">
+      <label for="driverCarType">نوع السيارة</label>
+      <input type="text" id="driverCarType" placeholder="مثال: تويوتا كامري 2022" maxlength="100">
+    </div>
+    <div class="admin-field">
+      <label for="driverPlate">رقم اللوحة</label>
+      <input type="text" id="driverPlate" placeholder="مثال: بغداد 12345" maxlength="20">
+    </div>
+    <div class="admin-field">
+      <label for="driverRating">تقييم السائق (0-5)</label>
+      <input type="number" id="driverRating" min="0" max="5" step="0.1" placeholder="4.8">
+    </div>
+    <div class="admin-field">
+      <label for="driverEta">الوقت المتوقع للوصول (دقائق)</label>
+      <input type="number" id="driverEta" min="0" max="999" placeholder="5">
+    </div>
     <button type="button" class="admin-btn" id="assignDriverBtn">حفظ بيانات السائق</button>
 
     <p class="section-label" style="margin-top:20px;">تحديث الحالة</p>
     <div class="admin-status-actions">
       <button type="button" data-status="new">جديد</button>
       <button type="button" data-status="assigned">تم التعيين</button>
-      <button type="button" data-status="in_progress">قيد التنفيذ</button>
+      <button type="button" data-status="en_route">بالطريق</button>
+      <button type="button" data-status="arrived">وصل</button>
       <button type="button" data-status="completed">مكتملة</button>
       <button type="button" class="cancel" data-status="cancelled">إلغاء</button>
     </div>

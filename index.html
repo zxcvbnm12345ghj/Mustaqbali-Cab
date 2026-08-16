@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>مستقبلي كاب | Mustaqbali Cab</title>
 <meta name="description" content="مستقبلي كاب: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
 <meta name="theme-color" content="#0A0E1A">
@@ -14,20 +14,26 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body class="app-body">
 
 <div class="app-shell">
   <!-- Full-screen map -->
   <div id="map"></div>
+  <div class="map-skeleton" id="mapSkeleton" aria-hidden="true"></div>
+
   <svg width="0" height="0" style="position:absolute">
     <defs>
       <linearGradient id="appRouteGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#E8A94C"/>
         <stop offset="1" stop-color="#33D6C0"/>
       </linearGradient>
+      <radialGradient id="pulseGrad" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#E8A94C" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#E8A94C" stop-opacity="0"/>
+      </radialGradient>
     </defs>
   </svg>
 
@@ -60,8 +66,16 @@
           <span>إلى أين تذهب؟</span>
         </button>
 
+        <div id="recentLocations" class="recent-locations" hidden>
+          <p class="section-label">أماكن مؤخرة</p>
+          <div class="recent-list" id="recentList"></div>
+        </div>
+
         <p class="section-label">اختر خدمتك</p>
-        <div class="quick-services" id="quickServices"></div>
+        <div class="quick-services" id="quickServices">
+          <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards -->
+          <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
+        </div>
 
         <div class="promo-card">
           <span class="ic">
@@ -82,42 +96,46 @@
         <div class="svc-switch" id="svcSwitch"></div>
 
         <form id="requestForm" novalidate>
-          <div class="app-field">
-            <label for="pickup">مكان الانطلاق</label>
+          <div class="float-field">
             <div class="field-inline-app">
-              <input type="text" id="pickup" placeholder="مثال: الكرادة، بغداد" maxlength="300" required>
+              <input type="text" id="pickup" placeholder=" " maxlength="300" required autocomplete="off">
+              <label for="pickup">مكان الانطلاق</label>
               <button type="button" class="btn-locate-app" id="locateBtnApp">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 موقعي
               </button>
             </div>
+            <span class="field-error" id="errPickup"></span>
             <input type="hidden" id="pickupLat">
             <input type="hidden" id="pickupLng">
           </div>
 
-          <div class="app-field">
+          <div class="float-field">
+            <input type="text" id="dropoff" placeholder=" " maxlength="300" autocomplete="off">
             <label for="dropoff">الوجهة</label>
-            <input type="text" id="dropoff" placeholder="مثال: المنصور" maxlength="300">
           </div>
 
-          <div class="app-field">
+          <div class="float-field">
+            <input type="text" id="customerName" placeholder=" " maxlength="100" required autocomplete="name">
             <label for="customerName">الاسم الكامل</label>
-            <input type="text" id="customerName" placeholder="مثال: زينب الجبوري" maxlength="100" required>
+            <span class="field-error" id="errName"></span>
           </div>
 
-          <div class="app-field">
+          <div class="float-field">
+            <input type="tel" id="phone" placeholder=" " maxlength="20" required autocomplete="tel" inputmode="tel">
             <label for="phone">رقم الجوال</label>
-            <input type="tel" id="phone" placeholder="07xxxxxxxxx" maxlength="20" required>
+            <span class="field-hint">مثال: 07xxxxxxxxx</span>
+            <span class="field-error" id="errPhone"></span>
           </div>
 
-          <div class="app-field">
-            <label for="scheduledAt">موعد الرحلة <span class="opt">(اختياري)</span></label>
-            <input type="datetime-local" id="scheduledAt">
+          <div class="float-field">
+            <input type="datetime-local" id="scheduledAt" placeholder=" ">
+            <label for="scheduledAt">موعد الرحلة (اختياري)</label>
           </div>
 
-          <div class="app-field">
-            <label for="notes">ملاحظات <span class="opt">(اختياري)</span></label>
-            <input type="text" id="notes" placeholder="أمتعة إضافية، مقعد أطفال..." maxlength="500">
+          <div class="float-field">
+            <input type="text" id="notes" placeholder=" " maxlength="500" autocomplete="off">
+            <label for="notes">ملاحظات (اختياري)</label>
           </div>
 
           <div class="price-bar">
@@ -125,7 +143,7 @@
             <b id="priceEstimate">3000 دينار تقريباً</b>
           </div>
 
-          <button type="submit" class="app-btn"><span id="bookBtnLabel">اطلب تاكسي الآن</span></button>
+          <button type="submit" class="app-btn" id="bookSubmitBtn"><span id="bookBtnLabel">اطلب تاكسي الآن</span></button>
           <div class="app-msg" id="appMsg"></div>
         </form>
       </section>
@@ -141,24 +159,48 @@
       <!-- STATUS view -->
       <section class="sheet-view" data-view="status">
         <div class="status-header">
-          <span class="req-chip" id="statusReqChip">#MSQ-...</span>
+          <div>
+            <span class="req-chip" id="statusReqChip">#MSQ-...</span>
+            <span class="status-time" id="statusTime">—</span>
+          </div>
           <span class="status-svc-tag" id="statusSvcTag">تاكسي</span>
         </div>
 
         <p class="section-label">حالة الطلب</p>
         <div class="timeline-app" id="timelineApp"></div>
 
-        <div class="driver-card-app driver-pending">
-          <span class="driver-avatar">
+        <div class="driver-card-app driver-pending" id="driverCard">
+          <span class="driver-avatar" id="driverAvatar">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 17h1a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h1v-5l-2.5-5.5A2 2 0 0 0 15.7 5H8.3a2 2 0 0 0-1.8 1.5L4 12v5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </span>
           <div class="driver-info">
-            <b>بانتظار تعيين سائق</b>
-            <span>سنُعلمك فور تعيين السائق</span>
+            <b id="driverPendingText">بانتظار تعيين سائق</b>
+            <span id="driverPendingSub">سنُعلمك فور تعيين السائق</span>
+            <div class="driver-meta" id="driverMeta" hidden>
+              <span class="driver-rating" id="driverRatingTag">4.8 ★</span>
+              <span id="driverCarTag">—</span>
+              <span class="driver-plate" id="driverPlateTag">—</span>
+            </div>
+          </div>
+          <div class="driver-eta" id="driverEta" hidden>
+            <b id="driverEtaVal">5</b>
+            <span>دقيقة</span>
           </div>
         </div>
 
+        <div class="driver-actions" id="driverActions" hidden>
+          <a href="#" class="driver-action-btn call" id="callDriverBtn" aria-label="اتصال بالسائق">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            اتصال
+          </a>
+          <a href="#" class="driver-action-btn whatsapp" id="whatsappDriverBtn" target="_blank" rel="noopener" aria-label="واتساب السائق">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
+            واتساب
+          </a>
+        </div>
+
         <div class="trip-summary-app">
+          <div class="tsa-row"><span>الخدمة</span><b id="statusServiceLabel">—</b></div>
           <div class="tsa-row"><span>من</span><b id="statusPickup">—</b></div>
           <div class="tsa-row"><span>إلى</span><b id="statusDropoff">—</b></div>
         </div>
@@ -166,7 +208,7 @@
         <div class="status-actions">
           <a href="#" class="app-btn whatsapp" id="whatsappBtnApp" target="_blank" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
-            تواصل عبر واتساب
+            تواصل مع مستقبلي كاب
           </a>
           <button type="button" class="app-btn secondary" id="newRequestBtn">طلب رحلة جديدة</button>
         </div>
@@ -180,7 +222,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
