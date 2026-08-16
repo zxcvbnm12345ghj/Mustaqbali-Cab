@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة الإدارة | مستقبلي كاب</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-body">
+
+<!-- LOGIN -->
+<div class="admin-login" id="adminLogin">
+  <div class="admin-login-card">
+    <div class="admin-login-brand">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.8"/><circle cx="11" cy="12" r="2" fill="#0A0E1A"/></svg>
+      </span>
+      <span>مستقبلي — لوحة الإدارة</span>
+    </div>
+    <h1>تسجيل الدخول</h1>
+    <p>هذه اللوحة مخصصة للمشرفين المسجّلين في جدول admins فقط.</p>
+    <form id="loginForm">
+      <div class="admin-field">
+        <label for="loginEmail">البريد الإلكتروني</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="admin-field">
+        <label for="loginPassword">كلمة المرور</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="admin-btn" id="loginBtn">دخول</button>
+      <div class="admin-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="admin-shell" id="adminShell">
+  <div class="admin-topbar">
+    <div class="brand-chip">
+      <span class="brand-mark"></span>
+      <span>مستقبلي — لوحة الإدارة</span>
+    </div>
+    <div class="admin-user">
+      <span id="adminEmail"></span>
+      <button type="button" class="admin-btn danger" id="logoutBtn" style="width:auto; padding:8px 16px;">تسجيل الخروج</button>
+    </div>
+  </div>
+
+  <div class="admin-main">
+    <div class="admin-stats">
+      <div class="admin-stat-card"><b id="statTotal">0</b><span>الإجمالي</span></div>
+      <div class="admin-stat-card new"><b id="statNew">0</b><span>طلبات جديدة</span></div>
+      <div class="admin-stat-card progress"><b id="statProgress">0</b><span>قيد التنفيذ</span></div>
+      <div class="admin-stat-card done"><b id="statDone">0</b><span>مكتملة</span></div>
+    </div>
+
+    <div class="admin-toolbar">
+      <input type="text" class="admin-search" id="searchInput" placeholder="بحث بالاسم، الجوال، أو رقم الطلب...">
+      <button type="button" class="admin-filter active" data-status="all">الكل</button>
+      <button type="button" class="admin-filter" data-status="new">جديد</button>
+      <button type="button" class="admin-filter" data-status="assigned">تم التعيين</button>
+      <button type="button" class="admin-filter" data-status="in_progress">قيد التنفيذ</button>
+      <button type="button" class="admin-filter" data-status="completed">مكتملة</button>
+      <button type="button" class="admin-filter" data-status="cancelled">ملغاة</button>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>رقم الطلب</th>
+            <th>الخدمة</th>
+            <th>العميل</th>
+            <th>الجوال</th>
+            <th>من</th>
+            <th>الحالة</th>
+            <th>التاريخ</th>
+          </tr>
+        </thead>
+        <tbody id="requestsBody"></tbody>
+      </table>
+      <div class="admin-empty" id="emptyState" style="display:none;">لا توجد طلبات مطابقة.</div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="admin-modal-backdrop" id="modalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div>
+        <h2 id="modalReqNumber" style="font-size:17px;">#MSQ-...</h2>
+        <span class="status-pill" id="modalStatusPill">جديد</span>
+      </div>
+      <button type="button" class="admin-modal-close" id="modalCloseBtn">✕</button>
+    </div>
+
+    <div class="admin-timeline" id="modalTimeline"></div>
+
+    <div class="admin-detail-row"><span>الخدمة</span><b id="modalService">—</b></div>
+    <div class="admin-detail-row"><span>الاسم</span><b id="modalName">—</b></div>
+    <div class="admin-detail-row"><span>الجوال</span><b id="modalPhone">—</b></div>
+    <div class="admin-detail-row"><span>من</span><b id="modalPickup">—</b></div>
+    <div class="admin-detail-row"><span>إلى</span><b id="modalDropoff">—</b></div>
+    <div class="admin-detail-row"><span>موعد الرحلة</span><b id="modalScheduled">—</b></div>
+    <div class="admin-detail-row"><span>ملاحظات</span><b id="modalNotes">—</b></div>
+
+    <div class="admin-field" style="margin-top:16px;">
+      <label for="driverName">اسم السائق</label>
+      <input type="text" id="driverName" placeholder="اسم السائق" maxlength="100">
+    </div>
+    <div class="admin-field">
+      <label for="driverPhone">رقم جوال السائق</label>
+      <input type="text" id="driverPhone" placeholder="07xxxxxxxxx" maxlength="20">
+    </div>
+    <button type="button" class="admin-btn" id="assignDriverBtn">حفظ بيانات السائق</button>
+
+    <p class="section-label" style="margin-top:20px;">تحديث الحالة</p>
+    <div class="admin-status-actions">
+      <button type="button" data-status="new">جديد</button>
+      <button type="button" data-status="assigned">تم التعيين</button>
+      <button type="button" data-status="in_progress">قيد التنفيذ</button>
+      <button type="button" data-status="completed">مكتملة</button>
+      <button type="button" class="cancel" data-status="cancelled">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

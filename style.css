@@ -1,0 +1,226 @@
+/* =========================================================
+   Mustaqbali Cab — Shared Design Tokens + Admin Panel Styles
+   Rebuilt to match the token names referenced throughout app.css
+   and the component names described in README.md / admin.js.
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg-deep:#0A0E1A;
+  --bg-deep-2:#10152A;
+  --bg-deep-3:#141B34;
+
+  --surface:rgba(255,255,255,0.045);
+  --surface-hi:rgba(255,255,255,0.08);
+  --surface-brd:rgba(255,255,255,0.10);
+
+  --gold:#E8A94C;
+  --gold-soft:#F2C879;
+  --gold-dim:rgba(232,169,76,0.16);
+
+  --teal:#33D6C0;
+  --teal-dim:rgba(51,214,192,0.14);
+
+  --text:#F5F3EC;
+  --text-muted:#9399AE;
+  --text-faint:#5C6377;
+
+  --success:#43D48A;
+  --danger:#E8654A;
+  --warning:#E8C34A;
+
+  --f-display:'Tajawal', sans-serif;
+  --f-body:'IBM Plex Sans Arabic', sans-serif;
+
+  --shadow-deep: 0 20px 50px -18px rgba(0,0,0,0.6);
+  --radius-lg: 18px;
+  --radius-md: 14px;
+}
+
+*{ box-sizing: border-box; }
+html, body{
+  margin: 0;
+  background: radial-gradient(120% 90% at 15% -10%, #16204A 0%, var(--bg-deep) 45%),
+              radial-gradient(90% 70% at 100% 0%, #1C1030 0%, transparent 55%),
+              var(--bg-deep);
+  color: var(--text);
+  font-family: var(--f-body);
+  direction: rtl;
+}
+h1,h2,h3,.sheet-title{ font-family: var(--f-display); margin: 0; }
+a{ color: inherit; text-decoration: none; }
+button{ font-family: inherit; border: none; cursor: pointer; }
+input, textarea, select{ font-family: inherit; }
+
+/* =========================================================
+   Admin panel (admin.html + admin.js)
+   ========================================================= */
+
+.admin-body{ min-height: 100vh; padding: 0; }
+
+/* ---- Login screen ---- */
+.admin-login{
+  min-height: 100vh;
+  display:flex; align-items:center; justify-content:center;
+  padding: 24px;
+}
+.admin-login-card{
+  width: 100%; max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  box-shadow: var(--shadow-deep);
+}
+.admin-login-brand{ display:flex; align-items:center; gap:10px; margin-bottom: 22px; }
+.admin-login-brand .brand-mark{
+  width:36px; height:36px; border-radius:10px;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  display:flex; align-items:center; justify-content:center;
+}
+.admin-login-brand span{ font-family: var(--f-display); font-weight:800; font-size:17px; }
+.admin-login-card h1{ font-size: 19px; margin-bottom: 6px; }
+.admin-login-card p{ color: var(--text-muted); font-size: 13px; margin: 0 0 22px; }
+.admin-field{ margin-bottom: 14px; }
+.admin-field label{ display:block; font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:7px; }
+.admin-field input{
+  width:100%; background: rgba(0,0,0,0.25); border:1px solid var(--surface-brd);
+  border-radius: 12px; padding: 13px 14px; color: var(--text); font-size:15px;
+}
+.admin-field input:focus{ outline:none; border-color: var(--gold); }
+.admin-btn{
+  width:100%; padding: 14px; border-radius: 12px; font-weight:800; font-size:14.5px;
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color:#1A1204;
+  margin-top: 6px;
+}
+.admin-btn[disabled]{ opacity:.55; }
+.admin-btn.secondary{ background: var(--surface); color: var(--text); border:1px solid var(--surface-brd); }
+.admin-btn.danger{ background: rgba(232,101,74,0.16); color: var(--danger); border:1px solid rgba(232,101,74,0.35); }
+.admin-error{
+  margin-top: 14px; padding: 11px 14px; border-radius: 12px; font-size: 12.5px;
+  background: rgba(232,101,74,0.14); border:1px solid rgba(232,101,74,0.32); color: var(--danger);
+  display:none;
+}
+.admin-error.show{ display:block; }
+
+/* ---- Dashboard shell ---- */
+.admin-shell{ display:none; min-height:100vh; }
+.admin-shell.active{ display:block; }
+.admin-topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 16px 24px; border-bottom: 1px solid var(--surface-brd);
+  position: sticky; top:0; z-index: 20;
+  background: rgba(10,14,26,0.85); backdrop-filter: blur(14px);
+  flex-wrap: wrap; gap: 12px;
+}
+.admin-topbar .brand-chip{
+  display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px;
+}
+.admin-topbar .brand-chip .brand-mark{
+  width:30px; height:30px; border-radius:9px;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+}
+.admin-user{ display:flex; align-items:center; gap:12px; font-size:12.5px; color: var(--text-muted); }
+
+.admin-main{ padding: 22px 24px 60px; max-width: 1200px; margin: 0 auto; }
+
+.admin-stats{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.admin-stat-card{
+  background: var(--surface); border:1px solid var(--surface-brd); border-radius: var(--radius-lg);
+  padding: 18px;
+}
+.admin-stat-card b{ display:block; font-family: var(--f-display); font-size: 26px; margin-bottom:4px; }
+.admin-stat-card span{ font-size:12px; color: var(--text-muted); font-weight:700; }
+.admin-stat-card.new b{ color: var(--gold-soft); }
+.admin-stat-card.progress b{ color: var(--teal); }
+.admin-stat-card.done b{ color: var(--success); }
+
+.admin-toolbar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+.admin-search{
+  flex: 1; min-width: 200px;
+  background: rgba(0,0,0,0.25); border:1px solid var(--surface-brd); border-radius: 12px;
+  padding: 11px 14px; color: var(--text); font-size:14px;
+}
+.admin-filter{
+  background: var(--surface); border:1px solid var(--surface-brd); border-radius: 12px;
+  padding: 11px 14px; color: var(--text-muted); font-size:13px; font-weight:700;
+}
+.admin-filter.active{ background: linear-gradient(180deg,var(--gold-soft),var(--gold)); color:#1A1204; border-color:transparent; }
+
+.admin-table-wrap{
+  background: var(--surface); border:1px solid var(--surface-brd); border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+table.admin-table{ width:100%; border-collapse: collapse; min-width: 720px; }
+.admin-table th{
+  text-align: right; font-size: 11.5px; font-weight:700; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing:.03em; padding: 14px 16px; border-bottom: 1px solid var(--surface-brd);
+  white-space: nowrap;
+}
+.admin-table td{
+  padding: 14px 16px; border-bottom: 1px solid var(--surface-brd); font-size: 13.5px; vertical-align: middle;
+}
+.admin-table tr:last-child td{ border-bottom:none; }
+.admin-table tr.clickable{ cursor:pointer; transition: background .15s; }
+.admin-table tr.clickable:hover{ background: rgba(255,255,255,0.03); }
+
+.status-pill{ display:inline-block; padding:5px 11px; border-radius:100px; font-size:11px; font-weight:700; white-space:nowrap; }
+.status-pill.new{ background: var(--gold-dim); color: var(--gold-soft); }
+.status-pill.assigned{ background: var(--teal-dim); color: var(--teal); }
+.status-pill.in_progress{ background: rgba(51,150,214,0.16); color:#5FB4E8; }
+.status-pill.completed{ background: rgba(67,212,138,0.16); color: var(--success); }
+.status-pill.cancelled{ background: rgba(232,101,74,0.14); color: var(--danger); }
+
+.admin-empty{ padding: 40px 20px; text-align:center; color: var(--text-muted); font-size:13.5px; }
+
+.section-label{
+  font-size: 12.5px; font-weight:700; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing:0.04em; margin: 0 0 12px;
+}
+
+/* ---- Detail modal ---- */
+.admin-modal-backdrop{
+  position: fixed; inset:0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+  display:none; align-items:center; justify-content:center; z-index: 100; padding: 20px;
+}
+.admin-modal-backdrop.show{ display:flex; }
+.admin-modal{
+  width:100%; max-width: 460px; max-height: 88vh; overflow-y:auto;
+  background: linear-gradient(180deg, rgba(17,22,44,0.98), rgba(9,13,24,0.99));
+  border:1px solid var(--surface-brd); border-radius: var(--radius-lg);
+  padding: 24px; box-shadow: var(--shadow-deep);
+}
+.admin-modal-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+.admin-modal-close{ background: var(--surface); border:1px solid var(--surface-brd); border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; color: var(--text-muted); }
+
+.admin-detail-row{ display:flex; justify-content:space-between; gap: 12px; padding: 9px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size:13px; }
+.admin-detail-row:last-of-type{ border-bottom:none; }
+.admin-detail-row span{ color: var(--text-faint); flex-shrink:0; }
+.admin-detail-row b{ text-align:left; font-weight:600; word-break: break-word; }
+
+.admin-timeline{ display:flex; margin: 18px 0; }
+.admin-tl-step{ flex:1; display:flex; flex-direction:column; align-items:center; position:relative; }
+.admin-tl-step:not(:last-child)::after{
+  content:''; position:absolute; top:9px; right:calc(-50% + 10px); width:calc(100% - 20px); height:2px; background: rgba(255,255,255,0.1);
+}
+.admin-tl-step.done:not(:last-child)::after{ background: var(--success); }
+.admin-tl-dot{ width:19px; height:19px; border-radius:50%; background: var(--surface-hi); border:2px solid var(--surface-brd); margin-bottom:6px; z-index:1; }
+.admin-tl-step.done .admin-tl-dot{ background: var(--success); border-color: var(--success); }
+.admin-tl-step.current .admin-tl-dot{ background: var(--gold); border-color: var(--gold); box-shadow: 0 0 0 4px var(--gold-dim); }
+.admin-tl-step span{ font-size:9.5px; font-weight:700; color: var(--text-faint); text-align:center; }
+.admin-tl-step.done span, .admin-tl-step.current span{ color: var(--text); }
+
+.admin-status-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top: 8px; }
+.admin-status-actions button{
+  flex:1; min-width: 100px; padding: 10px; border-radius: 10px; font-size:12.5px; font-weight:700;
+  background: var(--surface); border:1px solid var(--surface-brd); color: var(--text-muted);
+}
+.admin-status-actions button.active{ background: linear-gradient(180deg,var(--gold-soft),var(--gold)); color:#1A1204; border-color:transparent; }
+.admin-status-actions button.cancel{ color: var(--danger); }
+
+@media (max-width: 760px){
+  .admin-stats{ grid-template-columns: repeat(2,1fr); }
+  .admin-main{ padding: 18px 14px 50px; }
+  .admin-topbar{ padding: 14px 16px; }
+}

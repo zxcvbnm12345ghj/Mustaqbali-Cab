@@ -1,0 +1,302 @@
+// Mustaqbali Cab — Admin Panel
+// Auth via Supabase Auth (email/password). Access to actual trip data is
+// gated server-side by is_admin()/RLS (see schema.sql) — logging in alone
+// grants nothing; the admins table is the real gate. This file only
+// controls what the UI *shows*, never what the database *allows*.
+
+const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', in_progress: 'قيد التنفيذ', completed: 'مكتملة', cancelled: 'ملغاة' };
+const TIMELINE_STEPS = ['new', 'assigned', 'in_progress', 'completed'];
+const SERVICE_LABELS = { taxi: 'تاكسي', private: 'سيارة خاصة', courier: 'توصيل طرود', intercity: 'رحلات بين المدن' };
+
+const state = {
+  session: null,
+  requests: [],
+  activeFilter: 'all',
+  searchTerm: '',
+  selectedId: null,
+};
+
+/* ============================================================
+   XSS-safe rendering helpers
+   Every customer-supplied value (name, phone, pickup, notes...)
+   goes through escapeHtml before hitting innerHTML. service_type
+   and status are already constrained by a CHECK constraint in the
+   database, but escapeAttr is applied to them too as a second,
+   defensive layer.
+   ============================================================ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+function escapeAttr(str) {
+  return escapeHtml(str).replaceAll('`', '&#096;');
+}
+
+/* ============================================================
+   Auth
+   ============================================================ */
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  errEl.classList.remove('show');
+  btn.disabled = true;
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  btn.disabled = false;
+  if (error) {
+    errEl.textContent = 'تعذّر تسجيل الدخول. تحقق من البريد وكلمة المرور.';
+    errEl.classList.add('show');
+    return;
+  }
+  state.session = data.session;
+  await enterDashboard();
+}
+
+async function handleLogout() {
+  await supabaseClient.auth.signOut();
+  state.session = null;
+  state.requests = [];
+  document.getElementById('adminShell').classList.remove('active');
+  document.getElementById('adminLogin').style.display = 'flex';
+}
+
+async function enterDashboard() {
+  document.getElementById('adminLogin').style.display = 'none';
+  document.getElementById('adminShell').classList.add('active');
+  document.getElementById('adminEmail').textContent = state.session?.user?.email || '';
+  await loadRequests();
+}
+
+/* ============================================================
+   Data loading
+   Capped at 300 rows — see DEPLOYMENT_CHECKLIST.md section 5.
+   Search/filter below operate on this loaded set, not a fresh
+   query, so a request older than the most recent 300 won't
+   surface in search. That's a deliberate cost/simplicity
+   trade-off documented in the checklist, not a bug.
+   ============================================================ */
+async function loadRequests() {
+  const { data, error } = await supabaseClient
+    .from('trip_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(300);
+
+  if (error) {
+    console.error(error);
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('emptyState').textContent = 'تعذّر تحميل الطلبات. تأكد من صلاحيات حسابك.';
+    document.getElementById('requestsBody').innerHTML = '';
+    updateStats([]);
+    return;
+  }
+
+  state.requests = data || [];
+  updateStats(state.requests);
+  renderTable();
+}
+
+function updateStats(rows) {
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statNew').textContent = rows.filter(r => r.status === 'new').length;
+  document.getElementById('statProgress').textContent = rows.filter(r => r.status === 'assigned' || r.status === 'in_progress').length;
+  document.getElementById('statDone').textContent = rows.filter(r => r.status === 'completed').length;
+}
+
+/* ============================================================
+   Table rendering
+   ============================================================ */
+function filteredRequests() {
+  let rows = state.requests;
+  if (state.activeFilter !== 'all') {
+    rows = rows.filter(r => r.status === state.activeFilter);
+  }
+  if (state.searchTerm) {
+    const q = state.searchTerm.toLowerCase();
+    rows = rows.filter(r =>
+      (r.customer_name || '').toLowerCase().includes(q) ||
+      (r.phone || '').toLowerCase().includes(q) ||
+      (r.request_number || '').toLowerCase().includes(q)
+    );
+  }
+  return rows;
+}
+
+function renderTable() {
+  const rows = filteredRequests();
+  const body = document.getElementById('requestsBody');
+  const empty = document.getElementById('emptyState');
+
+  if (rows.length === 0) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = 'لا توجد طلبات مطابقة.';
+    return;
+  }
+  empty.style.display = 'none';
+
+  body.innerHTML = rows.map(r => `
+    <tr class="clickable" data-id="${escapeAttr(r.id)}">
+      <td>›</td>
+      <td>${escapeHtml(r.request_number || r.id.slice(0, 8))}</td>
+      <td>${escapeHtml(SERVICE_LABELS[r.service_type] || r.service_type)}</td>
+      <td>${escapeHtml(r.customer_name)}</td>
+      <td>${escapeHtml(r.phone)}</td>
+      <td>${escapeHtml(r.pickup_location)}</td>
+      <td><span class="status-pill ${escapeAttr(r.status)}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
+      <td>${escapeHtml(formatDate(r.created_at))}</td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => openDetail(tr.dataset.id));
+  });
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
+/* ============================================================
+   Detail modal
+   ============================================================ */
+async function openDetail(id) {
+  const r = state.requests.find(x => x.id === id);
+  if (!r) return;
+  state.selectedId = id;
+
+  document.getElementById('modalReqNumber').textContent = '#' + (r.request_number || r.id.slice(0, 8).toUpperCase());
+  const pill = document.getElementById('modalStatusPill');
+  pill.className = 'status-pill ' + r.status;
+  pill.textContent = STATUS_LABELS[r.status] || r.status;
+
+  document.getElementById('modalService').textContent = SERVICE_LABELS[r.service_type] || r.service_type;
+  document.getElementById('modalName').textContent = r.customer_name || '—';
+  document.getElementById('modalPhone').textContent = r.phone || '—';
+  document.getElementById('modalPickup').textContent = r.pickup_location || '—';
+  document.getElementById('modalDropoff').textContent = r.dropoff_location || '—';
+  document.getElementById('modalScheduled').textContent = r.scheduled_at ? formatDate(r.scheduled_at) : 'فوري';
+  document.getElementById('modalNotes').textContent = r.notes || '—';
+  document.getElementById('driverName').value = r.driver_name || '';
+  document.getElementById('driverPhone').value = r.driver_phone || '';
+
+  document.querySelectorAll('.admin-status-actions button').forEach(b => {
+    b.classList.toggle('active', b.dataset.status === r.status);
+  });
+
+  renderModalTimeline(r.status);
+
+  document.getElementById('modalBackdrop').classList.add('show');
+}
+
+function renderModalTimeline(status) {
+  const idx = Math.max(0, TIMELINE_STEPS.indexOf(status));
+  const el = document.getElementById('modalTimeline');
+  if (status === 'cancelled') {
+    el.innerHTML = `<div class="admin-tl-step current"><span class="admin-tl-dot"></span><span>ملغاة</span></div>`;
+    return;
+  }
+  el.innerHTML = TIMELINE_STEPS.map((step, i) => `
+    <div class="admin-tl-step ${i < idx ? 'done' : ''} ${i === idx ? 'current' : ''}">
+      <span class="admin-tl-dot"></span>
+      <span>${STATUS_LABELS[step]}</span>
+    </div>
+  `).join('');
+}
+
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('show');
+  state.selectedId = null;
+}
+
+async function saveDriver() {
+  if (!state.selectedId) return;
+  const driver_name = document.getElementById('driverName').value.trim();
+  const driver_phone = document.getElementById('driverPhone').value.trim();
+
+  // Assigning a driver to a "new" request moves it to "assigned" automatically.
+  const current = state.requests.find(r => r.id === state.selectedId);
+  const nextStatus = (current && current.status === 'new' && driver_name) ? 'assigned' : current?.status;
+
+  const { error } = await supabaseClient
+    .from('trip_requests')
+    .update({ driver_name, driver_phone, status: nextStatus })
+    .eq('id', state.selectedId);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+  await loadRequests();
+  const refreshed = state.requests.find(r => r.id === state.selectedId);
+  if (refreshed) openDetail(refreshed.id);
+}
+
+async function updateStatus(newStatus) {
+  if (!state.selectedId) return;
+  const { error } = await supabaseClient
+    .from('trip_requests')
+    .update({ status: newStatus })
+    .eq('id', state.selectedId);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+  await loadRequests();
+  const refreshed = state.requests.find(r => r.id === state.selectedId);
+  if (refreshed) openDetail(refreshed.id);
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('loginForm').addEventListener('submit', handleLogin);
+  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modalBackdrop') closeModal();
+  });
+  document.getElementById('assignDriverBtn').addEventListener('click', saveDriver);
+  document.querySelectorAll('.admin-status-actions button').forEach(b => {
+    b.addEventListener('click', () => updateStatus(b.dataset.status));
+  });
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    state.searchTerm = e.target.value.trim();
+    renderTable();
+  });
+  document.querySelectorAll('.admin-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.admin-filter').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.activeFilter = btn.dataset.status;
+      renderTable();
+    });
+  });
+
+  // Restore an existing session on reload instead of forcing re-login every time.
+  const { data } = await supabaseClient.auth.getSession();
+  if (data.session) {
+    state.session = data.session;
+    await enterDashboard();
+  }
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    state.session = session;
+  });
+});
