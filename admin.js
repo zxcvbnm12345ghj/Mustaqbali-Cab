@@ -228,6 +228,22 @@ function closeModal() {
   state.selectedId = null;
 }
 
+// Surfaces a save failure directly in the modal instead of only logging it
+// to the console — silently swallowing errors here was the root cause of
+// driver assignments appearing to "work" for the admin while never
+// reaching the customer.
+function showAdminError(message) {
+  const el = document.getElementById('modalError');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.classList.add('show');
+  } else {
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+}
+
 async function saveDriver() {
   if (!state.selectedId) return;
   const driver_name = document.getElementById('driverName').value.trim();
@@ -237,8 +253,23 @@ async function saveDriver() {
   const driver_plate = document.getElementById('driverPlate').value.trim();
   const ratingRaw = document.getElementById('driverRating').value;
   const etaRaw = document.getElementById('driverEta').value;
-  const driver_rating = ratingRaw === '' ? null : Number(ratingRaw);
-  const eta_minutes = etaRaw === '' ? null : Number(etaRaw);
+  const ratingNum = ratingRaw === '' ? null : Number(ratingRaw);
+  const etaNum = etaRaw === '' ? null : Number(etaRaw);
+
+  if (ratingNum !== null && Number.isNaN(ratingNum)) {
+    showAdminError('التقييم يجب أن يكون رقماً.');
+    return;
+  }
+  if (etaNum !== null && Number.isNaN(etaNum)) {
+    showAdminError('الوقت المتوقع يجب أن يكون رقماً.');
+    return;
+  }
+
+  // Clamp client-side before sending, so an out-of-range value never even
+  // reaches the database's CHECK constraint (driver_rating 0-5, eta 0-999)
+  // and silently fails the whole update.
+  const driver_rating = ratingNum === null ? null : Math.min(5, Math.max(0, ratingNum));
+  const eta_minutes = etaNum === null ? null : Math.min(999, Math.max(0, Math.round(etaNum)));
 
   // Assigning a driver to a "new" request moves it to "assigned" automatically.
   const current = state.requests.find(r => r.id === state.selectedId);
@@ -254,8 +285,10 @@ async function saveDriver() {
 
   if (error) {
     console.error(error);
+    showAdminError('تعذّر حفظ بيانات السائق: ' + error.message);
     return;
   }
+  showAdminError(null);
   await loadRequests();
   const refreshed = state.requests.find(r => r.id === state.selectedId);
   if (refreshed) openDetail(refreshed.id);
@@ -270,8 +303,10 @@ async function updateStatus(newStatus) {
 
   if (error) {
     console.error(error);
+    showAdminError('تعذّر تحديث الحالة: ' + error.message);
     return;
   }
+  showAdminError(null);
   await loadRequests();
   const refreshed = state.requests.find(r => r.id === state.selectedId);
   if (refreshed) openDetail(refreshed.id);

@@ -566,10 +566,33 @@ async function handleSubmit(e) {
   }
 }
 
-function buildWhatsappLink(driverPhone) {
+/* ============================================================
+   Iraqi phone normalization for wa.me links
+   Admin can type the driver's number in more than one shape (with/
+   without a leading 0, with +964, with spaces/dashes). A naive
+   `.replace(/^0/, '964')` silently produces a wrong or incomplete
+   number for every shape except the exact "07xxxxxxxxx" one — this
+   normalizes all common shapes, and returns null (rather than a
+   broken link) when the input can't be confidently normalized.
+   ============================================================ */
+function normalizeIraqiPhoneForWhatsapp(raw) {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, ''); // strip spaces, dashes, +, etc.
+  if (!digits) return null;
+
+  if (digits.startsWith('00964')) return digits.slice(2);        // 00964xxxxxxxxxx -> 964xxxxxxxxxx
+  if (digits.startsWith('964') && digits.length === 13) return digits; // already correct
+  if (digits.startsWith('0') && digits.length === 11) return '964' + digits.slice(1); // 07xxxxxxxxx
+  if (digits.startsWith('7') && digits.length === 10) return '964' + digits;          // missing leading 0
+
+  return null; // unrecognized shape — caller must hide the button rather than link a wrong number
+}
+
+function buildWhatsappLink(driverPhoneRaw) {
   const s = state.lastSubmission;
-  if (!s) return '#';
-  const target = driverPhone || BUSINESS_WHATSAPP_NUMBER;
+  if (!s) return null;
+  const target = driverPhoneRaw ? normalizeIraqiPhoneForWhatsapp(driverPhoneRaw) : BUSINESS_WHATSAPP_NUMBER;
+  if (!target) return null; // couldn't normalize — caller must not show a broken link
   const svc = SERVICES[s.service_type]?.label || s.service_type;
   const text = encodeURIComponent(
     `مرحباً، لدي طلب رحلة على مستقبلي كاب\n` +
@@ -599,7 +622,14 @@ function renderStatusView() {
   document.getElementById('statusPickup').textContent = s.pickup || '—';
   document.getElementById('statusDropoff').textContent = s.dropoff || '—';
   renderTimeline('new');
-  document.getElementById('whatsappBtnApp').href = buildWhatsappLink();
+  const businessLink = buildWhatsappLink();
+  const waBtnApp = document.getElementById('whatsappBtnApp');
+  if (businessLink) {
+    waBtnApp.href = businessLink;
+    waBtnApp.hidden = false;
+  } else {
+    waBtnApp.hidden = true; // BUSINESS_WHATSAPP_NUMBER not configured — hide rather than link nothing
+  }
 }
 
 function renderTimeline(status) {
@@ -654,8 +684,21 @@ function applyDriverInfo(row) {
     const callBtn = document.getElementById('callDriverBtn');
     const waBtn = document.getElementById('whatsappDriverBtn');
     if (row.driver_phone) {
-      callBtn.href = `tel:${row.driver_phone}`;
-      waBtn.href = buildWhatsappLink(row.driver_phone.replace(/^0/, '964'));
+      const cleanTel = row.driver_phone.replace(/[^\d+]/g, '');
+      callBtn.href = `tel:${cleanTel}`;
+      callBtn.hidden = false;
+      const driverLink = buildWhatsappLink(row.driver_phone);
+      if (driverLink) {
+        waBtn.href = driverLink;
+        waBtn.hidden = false;
+      } else {
+        // Couldn't confidently normalize this number — hide the button
+        // instead of sending the customer to a wrong or dead WhatsApp chat.
+        waBtn.hidden = true;
+      }
+    } else {
+      callBtn.hidden = true;
+      waBtn.hidden = true;
     }
   } else {
     card.classList.add('driver-pending');
@@ -668,6 +711,8 @@ function applyDriverInfo(row) {
 
 function startStatusPolling() {
   stopStatusPolling();
+  pollStatus(); // fire immediately — setInterval alone waits STATUS_POLL_MS
+  // before its first run, leaving the customer on stale data unnecessarily.
   state.statusPollTimer = setInterval(pollStatus, STATUS_POLL_MS);
 }
 function stopStatusPolling() {
