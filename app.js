@@ -2,11 +2,15 @@
 // Same backend contract: submit_trip_request RPC + the new
 // get_trip_request_status RPC for live status polling (see schema.sql v1.1).
 
+// Fallback defaults used only until loadServicePrices() successfully
+// fetches the real, admin-editable prices from Supabase (service_prices
+// table). These numbers are never shown to the customer as final unless
+// the fetch fails — see loadServicePrices().
 const SERVICES = {
-  taxi:      { label: 'تاكسي',            base: 3000,  icon: 'taxi' },
-  private:   { label: 'سيارة خاصة',        base: 8000,  icon: 'private' },
-  courier:   { label: 'توصيل طرود',        base: 2000,  icon: 'courier' },
-  intercity: { label: 'رحلات بين المدن',   base: 20000, icon: 'intercity' },
+  taxi:      { label: 'تكسي',            base: 3000,  perKm: 500, icon: 'taxi' },
+  private:   { label: 'خصوصي',           base: 8000,  perKm: 800, icon: 'private' },
+  courier:   { label: 'توصيل أغراض',      base: 2000,  perKm: 400, icon: 'courier' },
+  intercity: { label: 'بين المحافظات',    base: 20000, perKm: 350, icon: 'intercity' },
 };
 
 const ICONS = {
@@ -19,15 +23,23 @@ const ICONS = {
 const BUSINESS_WHATSAPP_NUMBER = '9647700000000'; // TODO: replace with the real company WhatsApp number
 const BAGHDAD = { lat: 33.3152, lng: 44.3661 };
 const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
-const TIMELINE_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'السائق بالطريق', arrived: 'تم الوصول', completed: 'مكتملة' };
+const TIMELINE_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة' };
 const STATUS_POLL_MS = 6000;
 const RECENT_KEY = 'mustaqbali_recent_locations';
+// Straight-line (haversine) distance underestimates real road distance.
+// This fixed correction factor approximates typical road-vs-straight-line
+// ratios until a paid routing API (Google/Mapbox Directions) is configured
+// — see README's "أفكار للتوسع لاحقاً" section, which already flags this.
+const ROAD_DISTANCE_FACTOR = 1.3;
 
 const state = {
   currentService: null,
   pickupLatLng: null,
+  dropoffLatLng: null,
+  mapTargetMode: 'pickup', // 'pickup' | 'dropoff' — which marker the next map tap sets
   map: null,
   pickupMarker: null,
+  dropoffMarker: null,
   decorLine: null,
   lastSubmission: null, // { id, request_number, phone, service_type, pickup, dropoff, created_at }
   statusPollTimer: null,
@@ -241,7 +253,13 @@ function initMap() {
       if (skel) skel.classList.add('hide');
     });
 
-    state.map.on('click', (e) => setPickup(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false }));
+    state.map.on('click', (e) => {
+      if (state.mapTargetMode === 'dropoff') {
+        setDropoff(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
+      } else {
+        setPickup(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
+      }
+    });
 
     setTimeout(() => state.map.invalidateSize(), 250);
     window.addEventListener('resize', () => state.map && state.map.invalidateSize());
@@ -260,6 +278,18 @@ function pickupDivIcon() {
     html: `<svg viewBox="0 0 34 34" fill="none">
       <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E8A94C" stroke="#0A0E1A" stroke-width="1.4"/>
       <circle cx="17" cy="13.5" r="4.6" fill="#0A0E1A"/>
+    </svg>`,
+    iconSize: [40, 52],
+    iconAnchor: [20, 50],
+  });
+}
+
+function dropoffDivIcon() {
+  return L.divIcon({
+    className: 'pickup-pin dropped dropoff-pin',
+    html: `<svg viewBox="0 0 34 34" fill="none">
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#33D6C0" stroke="#0A0E1A" stroke-width="1.4"/>
+      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#0A0E1A"/>
     </svg>`,
     iconSize: [40, 52],
     iconAnchor: [20, 50],
@@ -287,7 +317,7 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
         el.classList.add('dropped');
       }
     }
-    drawDecorRoute(lat, lng);
+    drawRoute();
     if (fly) state.map.flyTo([lat, lng], 15, { duration: 1.1 });
   }
 
@@ -296,14 +326,59 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
   validateField('pickup');
 }
 
-function drawDecorRoute(lat, lng) {
-  if (!state.map) return;
-  const offset = [lat + 0.01, lng + 0.014];
+function setDropoff(lat, lng, { reverseGeocode = false, fly = true } = {}) {
+  state.dropoffLatLng = { lat, lng };
+  document.getElementById('dropoffLat').value = lat;
+  document.getElementById('dropoffLng').value = lng;
+
+  if (state.map) {
+    if (!state.dropoffMarker) {
+      state.dropoffMarker = L.marker([lat, lng], { icon: dropoffDivIcon(), draggable: true }).addTo(state.map);
+      state.dropoffMarker.on('dragend', () => {
+        const p = state.dropoffMarker.getLatLng();
+        setDropoff(p.lat, p.lng, { reverseGeocode: true, fly: false });
+      });
+    } else {
+      state.dropoffMarker.setLatLng([lat, lng]);
+      const el = state.dropoffMarker.getElement();
+      if (el) {
+        el.classList.remove('dropped');
+        void el.offsetWidth;
+        el.classList.add('dropped');
+      }
+    }
+    drawRoute();
+    if (fly) state.map.flyTo([lat, lng], 15, { duration: 1.1 });
+  }
+
+  if (reverseGeocode) reverseGeocodeDropoff(lat, lng);
+  updatePriceBar();
+}
+
+// Draws the visible line between pickup and dropoff when both are set;
+// falls back to the short decorative flourish (original behavior) when
+// only pickup is known yet. This is a straight line on the map — it is
+// NOT a routed path (no driving-directions API is configured) — but the
+// distance used for pricing already accounts for that via
+// ROAD_DISTANCE_FACTOR, so the price itself is a fair approximation even
+// though the drawn line is straight.
+function drawRoute() {
+  if (!state.map || !state.pickupLatLng) return;
   if (state.decorLine) state.map.removeLayer(state.decorLine);
-  state.decorLine = L.polyline([[lat, lng], offset], {
+
+  const from = [state.pickupLatLng.lat, state.pickupLatLng.lng];
+  const to = state.dropoffLatLng
+    ? [state.dropoffLatLng.lat, state.dropoffLatLng.lng]
+    : [state.pickupLatLng.lat + 0.01, state.pickupLatLng.lng + 0.014]; // decorative fallback
+
+  state.decorLine = L.polyline([from, to], {
     className: 'decor-route',
     weight: 4,
   }).addTo(state.map);
+
+  if (state.dropoffLatLng) {
+    state.map.fitBounds(L.latLngBounds([from, to]), { padding: [70, 70], maxZoom: 15 });
+  }
 }
 
 async function reverseGeocodePickup(lat, lng) {
@@ -317,6 +392,49 @@ async function reverseGeocodePickup(lat, lng) {
   } catch (err) {
     if (!original) input.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
+}
+
+async function reverseGeocodeDropoff(lat, lng) {
+  const input = document.getElementById('dropoff');
+  const original = input.value;
+  input.placeholder = ' ';
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar`);
+    const data = await res.json();
+    input.value = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  } catch (err) {
+    if (!original) input.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+}
+
+// Forward-geocodes whatever the customer typed into the dropoff field so
+// distance-based pricing works even if they never touch the map. Only
+// runs when we don't already have dropoff coordinates from a map tap/drag
+// (those are more precise and shouldn't be overwritten by a text search).
+async function geocodeDropoff(query) {
+  if (!query || state.dropoffLatLng) return;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=ar&countrycodes=iq`);
+    const data = await res.json();
+    if (data && data[0]) {
+      setDropoff(parseFloat(data[0].lat), parseFloat(data[0].lon), { reverseGeocode: false, fly: false });
+      // setDropoff() overwrites the input with our own value only via
+      // reverseGeocode; since that's false here, the customer's typed
+      // text is preserved as-is instead of being replaced.
+    }
+  } catch (err) {
+    console.error('dropoff geocoding failed', err);
+  }
+}
+
+// Great-circle distance in kilometers between two coordinates.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function locateMe(auto = false) {
@@ -382,13 +500,57 @@ function selectService(key) {
 function updatePriceBar() {
   if (!state.currentService) return;
   const svc = SERVICES[state.currentService];
+  if (!svc) return;
+
+  let distanceKm = null;
+  let total = svc.base;
+  if (state.pickupLatLng && state.dropoffLatLng) {
+    const straightKm = haversineKm(
+      state.pickupLatLng.lat, state.pickupLatLng.lng,
+      state.dropoffLatLng.lat, state.dropoffLatLng.lng
+    );
+    distanceKm = straightKm * ROAD_DISTANCE_FACTOR;
+    total = svc.base + distanceKm * svc.perKm;
+  }
+
   const priceEl = document.getElementById('priceEstimate');
+  const distanceTag = document.getElementById('distanceTag');
   priceEl.style.opacity = '0';
   setTimeout(() => {
-    priceEl.textContent = `${svc.base} دينار تقريباً`;
+    if (distanceKm != null) {
+      priceEl.textContent = `${Math.round(total).toLocaleString('en-US')} دينار`;
+      distanceTag.hidden = false;
+      distanceTag.textContent = `المسافة التقريبية: ${distanceKm.toFixed(1)} كم`;
+    } else {
+      priceEl.textContent = `${Math.round(svc.base).toLocaleString('en-US')} دينار (سعر أساسي بدون وجهة)`;
+      distanceTag.hidden = true;
+    }
     priceEl.style.opacity = '1';
   }, 100);
   document.getElementById('bookBtnLabel').textContent = `اطلب ${svc.label} الآن`;
+}
+
+// Fetches real, admin-editable prices from Supabase and overwrites the
+// SERVICES fallback defaults in place — every function that reads
+// SERVICES[...] (chips, price bar, submit) automatically picks up the
+// real values because they all read from this same shared object.
+async function loadServicePrices() {
+  try {
+    const { data, error } = await supabaseClient.from('service_prices').select('*');
+    if (error || !data) return;
+    data.forEach(row => {
+      if (SERVICES[row.service_type]) {
+        SERVICES[row.service_type].label = row.label;
+        SERVICES[row.service_type].base = Number(row.base_price);
+        SERVICES[row.service_type].perKm = Number(row.price_per_km);
+      }
+    });
+    buildQuickServiceChips();
+    buildServiceSwitch();
+    updatePriceBar();
+  } catch (err) {
+    console.error('failed to load service prices, using fallback defaults', err);
+  }
 }
 
 /* ============================================================
@@ -822,6 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMap();
   registerServiceWorker();
   renderRecentLocations();
+  loadServicePrices();
 
   sheet = new BottomSheet(
     document.getElementById('sheet'),
@@ -841,14 +1004,34 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('requestForm').reset();
     ['pickup', 'customerName', 'phone'].forEach(id => setFieldError(id === 'customerName' ? 'customerName' : id, null));
     clearMsg();
+    state.dropoffLatLng = null;
+    if (state.dropoffMarker) { state.map.removeLayer(state.dropoffMarker); state.dropoffMarker = null; }
+    document.getElementById('dropoffLat').value = '';
+    document.getElementById('dropoffLng').value = '';
     backToHome();
   });
-  ['pickup', 'dropoff'].forEach(id => {
-    document.getElementById(id).addEventListener('input', updatePriceBar);
+  document.getElementById('pickup').addEventListener('input', updatePriceBar);
+  document.getElementById('dropoff').addEventListener('input', () => {
+    state.dropoffLatLng = null; // typed text invalidates any previously map-picked coordinate
+    document.getElementById('dropoffLat').value = '';
+    document.getElementById('dropoffLng').value = '';
+    updatePriceBar();
+  });
+  document.getElementById('dropoff').addEventListener('blur', (e) => {
+    const q = e.target.value.trim();
+    if (q) geocodeDropoff(q);
   });
   document.getElementById('pickup').addEventListener('blur', () => validateField('pickup'));
   document.getElementById('customerName').addEventListener('blur', () => validateField('customerName'));
   document.getElementById('phone').addEventListener('blur', () => validateField('phone'));
+
+  document.querySelectorAll('.mt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mapTargetMode = btn.dataset.target;
+      document.querySelectorAll('.mt-btn').forEach(b => b.classList.toggle('active', b === btn));
+      haptic();
+    });
+  });
 
   locateMe(true);
 });

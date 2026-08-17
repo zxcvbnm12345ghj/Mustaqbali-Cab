@@ -57,12 +57,21 @@
       <div class="admin-stat-card done"><b id="statDone">0</b><span>مكتملة</span></div>
     </div>
 
+    <div class="admin-prices">
+      <div class="admin-prices-head">
+        <p class="section-label" style="margin:0;">الأسعار</p>
+        <button type="button" class="admin-btn" id="savePricesBtn" style="width:auto; padding:9px 16px;">حفظ الأسعار</button>
+      </div>
+      <div class="admin-price-grid" id="priceGrid"></div>
+      <div class="admin-error" id="priceError"></div>
+    </div>
+
     <div class="admin-toolbar">
       <input type="text" class="admin-search" id="searchInput" placeholder="بحث بالاسم، الجوال، أو رقم الطلب...">
       <button type="button" class="admin-filter active" data-status="all">الكل</button>
       <button type="button" class="admin-filter" data-status="new">جديد</button>
       <button type="button" class="admin-filter" data-status="assigned">تم التعيين</button>
-      <button type="button" class="admin-filter" data-status="en_route">السائق بالطريق</button>
+      <button type="button" class="admin-filter" data-status="en_route">قيد التنفيذ</button>
       <button type="button" class="admin-filter" data-status="arrived">تم الوصول</button>
       <button type="button" class="admin-filter" data-status="completed">مكتملة</button>
       <button type="button" class="admin-filter" data-status="cancelled">ملغاة</button>
@@ -154,7 +163,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script src="admin.js"></script>
+<script src="js/config.js"></script>
+<script src="js/admin.js"></script>
 </body>
 </html>

@@ -4,9 +4,9 @@
 // grants nothing; the admins table is the real gate. This file only
 // controls what the UI *shows*, never what the database *allows*.
 
-const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'السائق بالطريق', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
+const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
 const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
-const SERVICE_LABELS = { taxi: 'تاكسي', private: 'سيارة خاصة', courier: 'توصيل طرود', intercity: 'رحلات بين المدن' };
+const SERVICE_LABELS = { taxi: 'تكسي', private: 'خصوصي', courier: 'توصيل أغراض', intercity: 'بين المحافظات' };
 
 const state = {
   session: null,
@@ -14,6 +14,7 @@ const state = {
   activeFilter: 'all',
   searchTerm: '',
   selectedId: null,
+  prices: {}, // service_type -> { label, base_price, price_per_km }
 };
 
 /* ============================================================
@@ -74,6 +75,73 @@ async function enterDashboard() {
   document.getElementById('adminShell').classList.add('active');
   document.getElementById('adminEmail').textContent = state.session?.user?.email || '';
   await loadRequests();
+  await loadPrices();
+}
+
+/* ============================================================
+   Pricing — real, DB-driven, admin-editable (service_prices table)
+   ============================================================ */
+async function loadPrices() {
+  const { data, error } = await supabaseClient.from('service_prices').select('*');
+  if (error) {
+    console.error(error);
+    return;
+  }
+  state.prices = {};
+  (data || []).forEach(row => { state.prices[row.service_type] = row; });
+  renderPriceGrid();
+}
+
+function renderPriceGrid() {
+  const grid = document.getElementById('priceGrid');
+  if (!grid) return;
+  grid.innerHTML = Object.values(state.prices).map(p => `
+    <div class="admin-price-card" data-service="${escapeAttr(p.service_type)}">
+      <b>${escapeHtml(p.label)}</b>
+      <div class="admin-price-row">
+        <label>السعر الأساسي (دينار)</label>
+        <input type="number" min="0" step="1" class="price-base" value="${escapeAttr(p.base_price)}">
+      </div>
+      <div class="admin-price-row">
+        <label>سعر الكيلومتر (دينار)</label>
+        <input type="number" min="0" step="1" class="price-perkm" value="${escapeAttr(p.price_per_km)}">
+      </div>
+    </div>
+  `).join('');
+}
+
+async function savePrices() {
+  const errEl = document.getElementById('priceError');
+  errEl.classList.remove('show');
+  const cards = document.querySelectorAll('.admin-price-card');
+  const updates = [];
+  for (const card of cards) {
+    const service_type = card.dataset.service;
+    const baseRaw = card.querySelector('.price-base').value;
+    const perKmRaw = card.querySelector('.price-perkm').value;
+    const base_price = Number(baseRaw);
+    const price_per_km = Number(perKmRaw);
+    if (Number.isNaN(base_price) || Number.isNaN(price_per_km) || base_price < 0 || price_per_km < 0) {
+      errEl.textContent = 'الأسعار يجب أن تكون أرقاماً موجبة.';
+      errEl.classList.add('show');
+      return;
+    }
+    updates.push({ service_type, base_price, price_per_km });
+  }
+
+  for (const u of updates) {
+    const { error } = await supabaseClient
+      .from('service_prices')
+      .update({ base_price: u.base_price, price_per_km: u.price_per_km })
+      .eq('service_type', u.service_type);
+    if (error) {
+      console.error(error);
+      errEl.textContent = 'تعذّر حفظ الأسعار: ' + error.message;
+      errEl.classList.add('show');
+      return;
+    }
+  }
+  await loadPrices();
 }
 
 /* ============================================================
@@ -323,6 +391,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target.id === 'modalBackdrop') closeModal();
   });
   document.getElementById('assignDriverBtn').addEventListener('click', saveDriver);
+  document.getElementById('savePricesBtn').addEventListener('click', savePrices);
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.addEventListener('click', () => updateStatus(b.dataset.status));
   });

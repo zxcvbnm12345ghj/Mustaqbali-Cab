@@ -95,6 +95,12 @@
 
         <div class="svc-switch" id="svcSwitch"></div>
 
+        <div class="map-target-toggle" id="mapTargetToggle">
+          <button type="button" class="mt-btn active" data-target="pickup">📍 تحديد الانطلاق على الخريطة</button>
+          <button type="button" class="mt-btn" data-target="dropoff">🏁 تحديد الوجهة على الخريطة</button>
+        </div>
+        <div class="distance-tag" id="distanceTag" hidden></div>
+
         <form id="requestForm" novalidate>
           <div class="float-field">
             <div class="field-inline-app">
@@ -113,6 +119,9 @@
           <div class="float-field">
             <input type="text" id="dropoff" placeholder=" " maxlength="300" autocomplete="off">
             <label for="dropoff">الوجهة</label>
+            <span class="field-hint">اكتب العنوان أو اختره من الخريطة بزر "تحديد على الخريطة" أعلاه</span>
+            <input type="hidden" id="dropoffLat">
+            <input type="hidden" id="dropoffLng">
           </div>
 
           <div class="float-field">
@@ -139,11 +148,11 @@
           </div>
 
           <div class="price-bar">
-            <span>السعر التقديري</span>
-            <b id="priceEstimate">3000 دينار تقريباً</b>
+            <span>السعر</span>
+            <b id="priceEstimate">— دينار</b>
           </div>
 
-          <button type="submit" class="app-btn" id="bookSubmitBtn"><span id="bookBtnLabel">اطلب تاكسي الآن</span></button>
+          <button type="submit" class="app-btn" id="bookSubmitBtn"><span id="bookBtnLabel">اطلب تكسي الآن</span></button>
           <div class="app-msg" id="appMsg"></div>
         </form>
       </section>
@@ -220,10 +229,9 @@
 
 <div class="app-toast" id="appToast"></div>
 
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="app.css">
-
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

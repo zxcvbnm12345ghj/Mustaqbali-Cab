@@ -304,6 +304,45 @@ $$;
 grant execute on function get_trip_request_status(text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------
+-- 11b) service_prices -- real, DB-driven, admin-editable pricing.
+--      base_price + (distance_km * price_per_km) = the price shown to
+--      the customer. Public (anon) can only SELECT this — never write
+--      to it; only an admin can UPDATE it. Rows are fixed to the four
+--      existing services, so no INSERT/DELETE policy is needed.
+-- ---------------------------------------------------------
+create table if not exists service_prices (
+  service_type   text primary key check (service_type in ('taxi','private','courier','intercity')),
+  label          text not null,
+  base_price     numeric not null default 0 check (base_price >= 0),
+  price_per_km   numeric not null default 0 check (price_per_km >= 0),
+  updated_at     timestamptz not null default now()
+);
+
+insert into service_prices (service_type, label, base_price, price_per_km) values
+  ('taxi',      'تكسي',            3000, 500),
+  ('private',   'خصوصي',           8000, 800),
+  ('courier',   'توصيل أغراض',      2000, 400),
+  ('intercity', 'بين المحافظات',    20000, 350)
+on conflict (service_type) do nothing;
+
+drop trigger if exists trg_service_prices_updated_at on service_prices;
+create trigger trg_service_prices_updated_at
+  before update on service_prices
+  for each row execute function bump_updated_at();
+
+alter table service_prices enable row level security;
+
+drop policy if exists "public read service_prices" on service_prices;
+create policy "public read service_prices" on service_prices
+  for select using (true);
+
+drop policy if exists "admin update service_prices" on service_prices;
+create policy "admin update service_prices" on service_prices
+  for update using (is_admin()) with check (is_admin());
+
+grant select on service_prices to anon, authenticated;
+
+-- ---------------------------------------------------------
 -- 12) Row Level Security
 -- ---------------------------------------------------------
 alter table trip_requests enable row level security;
