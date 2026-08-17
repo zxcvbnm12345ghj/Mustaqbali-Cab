@@ -3,17 +3,19 @@
 // Deliberately does NOT cache Supabase, map tiles, or geocoding requests —
 // trip data must always be live/network, never served stale from cache.
 
-const CACHE_NAME = 'mustaqbali-shell-v1';
+const CACHE_NAME = 'mustaqbali-shell-v2';
+// Flat repo layout: style.css, app.css, app.js, config.js, and the icon
+// PNGs all live in the project root — no css/, js/, or icons/ subfolders.
 const SHELL_ASSETS = [
   '/index.html',
-  '/css/style.css',
-  '/css/app.css',
-  '/js/config.js',
-  '/js/app.js',
+  '/style.css',
+  '/app.css',
+  '/config.js',
+  '/app.js',
   '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -42,18 +44,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first, cache-fallback. This is the actual fix: the previous
+  // "cache-first" strategy (`return cached || network`) served a stale
+  // cached copy of app.css/app.js immediately whenever one existed —
+  // which is exactly what breaks the UI right after every deploy for any
+  // returning visitor, since their browser already has an old shell
+  // cached and the old CSS/JS no longer matches the new HTML. Preferring
+  // the network response (when available) means every visit picks up the
+  // latest deployed files; the cache is now purely an offline fallback.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
