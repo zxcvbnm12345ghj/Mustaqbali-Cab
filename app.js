@@ -242,7 +242,7 @@ function initMap() {
       zoomAnimation: true,
     });
 
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -266,7 +266,7 @@ function initMap() {
   } catch (err) {
     console.error('Map failed to load', err);
     document.getElementById('map').style.background =
-      'radial-gradient(120% 90% at 15% -10%, #16204A 0%, #0A0E1A 45%)';
+      'radial-gradient(120% 90% at 15% -10%, #F8FBFF 0%, #FFFFFF 45%)';
     const skel = document.getElementById('mapSkeleton');
     if (skel) skel.classList.add('hide');
   }
@@ -276,8 +276,8 @@ function pickupDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E8A94C" stroke="#0A0E1A" stroke-width="1.4"/>
-      <circle cx="17" cy="13.5" r="4.6" fill="#0A0E1A"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E5B85C" stroke="#FFFFFF" stroke-width="1.4"/>
+      <circle cx="17" cy="13.5" r="4.6" fill="#263746"/>
     </svg>`,
     iconSize: [40, 52],
     iconAnchor: [20, 50],
@@ -288,8 +288,8 @@ function dropoffDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped dropoff-pin',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#33D6C0" stroke="#0A0E1A" stroke-width="1.4"/>
-      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#0A0E1A"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#4AADE8" stroke="#FFFFFF" stroke-width="1.4"/>
+      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#263746"/>
     </svg>`,
     iconSize: [40, 52],
     iconAnchor: [20, 50],
