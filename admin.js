@@ -91,7 +91,10 @@ function subscribeToNewRequests() {
       playAlertSound();
       loadRequests();
     })
-    .subscribe();
+    .subscribe((status) => {
+      // تشخيص مؤقت — يمكن حذف هذا السطر لاحقاً بعد التأكد من عمل Realtime
+      alert('Realtime status: ' + status);
+    });
 }
 
 function playAlertSound() {
