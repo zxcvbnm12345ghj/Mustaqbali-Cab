@@ -80,9 +80,9 @@ async function enterDashboard() {
 }
 
 /* ============================================================
-   Realtime — auto-refresh + alert sound on new trip_requests
-   Added on top of existing manual-refresh behavior; does not
-   change or remove any existing function.
+   Realtime — auto-refresh + alert sound on new trip_requests.
+   Additive only: does not alter any existing function, markup,
+   styling, or login behavior.
    ============================================================ */
 function subscribeToNewRequests() {
   supabaseClient
@@ -91,10 +91,7 @@ function subscribeToNewRequests() {
       playAlertSound();
       loadRequests();
     })
-    .subscribe((status) => {
-      // تشخيص مؤقت — يمكن حذف هذا السطر لاحقاً بعد التأكد من عمل Realtime
-      alert('Realtime status: ' + status);
-    });
+    .subscribe();
 }
 
 function playAlertSound() {
