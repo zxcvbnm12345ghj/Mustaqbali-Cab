@@ -76,6 +76,35 @@ async function enterDashboard() {
   document.getElementById('adminEmail').textContent = state.session?.user?.email || '';
   await loadRequests();
   await loadPrices();
+  subscribeToNewRequests();
+}
+
+/* ============================================================
+   Realtime — auto-refresh + alert sound on new trip_requests
+   Added on top of existing manual-refresh behavior; does not
+   change or remove any existing function.
+   ============================================================ */
+function subscribeToNewRequests() {
+  supabaseClient
+    .channel('trip_requests_admin')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trip_requests' }, () => {
+      playAlertSound();
+      loadRequests();
+    })
+    .subscribe();
+}
+
+function playAlertSound() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.frequency.value = 880;
+  gain.gain.setValueAtTime(0.3, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.6);
 }
 
 /* ============================================================
