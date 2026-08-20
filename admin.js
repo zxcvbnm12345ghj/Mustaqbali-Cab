@@ -85,6 +85,12 @@ async function enterDashboard() {
    styling, or login behavior.
    ============================================================ */
 function subscribeToNewRequests() {
+  // RLS على trip_requests يعتمد على is_admin()، واتصال Realtime لا يحمل
+  // تلقائياً توكن جلسة المسؤول — يجب تمريره صراحة وإلا يُرفض الحدث بصمت.
+  if (state.session?.access_token) {
+    supabaseClient.realtime.setAuth(state.session.access_token);
+  }
+
   supabaseClient
     .channel('trip_requests_admin')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trip_requests' }, () => {
@@ -446,5 +452,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   supabaseClient.auth.onAuthStateChange((_event, session) => {
     state.session = session;
+    if (session?.access_token) {
+      supabaseClient.realtime.setAuth(session.access_token);
+    }
   });
 });
