@@ -44,16 +44,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first, cache-fallback. This is the actual fix: the previous
-  // "cache-first" strategy (`return cached || network`) served a stale
-  // cached copy of app.css/app.js immediately whenever one existed —
-  // which is exactly what breaks the UI right after every deploy for any
-  // returning visitor, since their browser already has an old shell
-  // cached and the old CSS/JS no longer matches the new HTML. Preferring
-  // the network response (when available) means every visit picks up the
-  // latest deployed files; the cache is now purely an offline fallback.
+  // Network-first, cache-fallback. `cache: 'no-store'` on the fetch itself
+  // is the actual fix here: without it, this request can still be quietly
+  // satisfied by the browser's own HTTP cache (not this Service Worker's
+  // Cache Storage) whenever a same-URL response is still considered fresh
+  // by ordinary HTTP caching rules — which is exactly what kept serving a
+  // stale admin.js after redeploys even though this handler "looks" like
+  // it always goes to the network. Forcing no-store means every request
+  // this handler makes truly reaches the server. The Cache Storage fallback
+  // below is unaffected and still works for offline use.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then((response) => {
         if (response.ok) {
           const clone = response.clone();
