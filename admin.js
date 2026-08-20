@@ -63,6 +63,7 @@ async function handleLogin(e) {
 }
 
 async function handleLogout() {
+  stopRequestPolling();
   await supabaseClient.auth.signOut();
   state.session = null;
   state.requests = [];
@@ -76,28 +77,57 @@ async function enterDashboard() {
   document.getElementById('adminEmail').textContent = state.session?.user?.email || '';
   await loadRequests();
   await loadPrices();
-  subscribeToNewRequests();
+  startRequestPolling();
 }
 
 /* ============================================================
-   Realtime — auto-refresh + alert sound on new trip_requests.
-   Additive only: does not alter any existing function, markup,
-   styling, or login behavior.
+   Polling — checks for new trip_requests every 3s (no Realtime).
+   Auto-refreshes the table and plays an alert sound once per new
+   request. Additive only: no other function, markup, styling, or
+   login behavior is touched. Telegram notifications continue to
+   be handled entirely server-side (Supabase Edge Function +
+   Database Trigger) — no bot token or chat id here.
    ============================================================ */
-function subscribeToNewRequests() {
-  // Broadcast بدل postgres_changes — أكثر استقراراً مع RLS المبني على
-  // is_admin()، ويعتمد على setAuth() فعلياً (مطلوب لقنوات Broadcast الخاصة).
-  if (state.session?.access_token) {
-    supabaseClient.realtime.setAuth(state.session.access_token);
-  }
+let pollIntervalId = null;
+let lastCheckedAt = null;
+const notifiedRequestIds = new Set();
 
-  supabaseClient
-    .channel('admin-notifications', { config: { private: true } })
-    .on('broadcast', { event: 'INSERT' }, () => {
-      playAlertSound();
-      loadRequests();
-    })
-    .subscribe();
+function startRequestPolling() {
+  lastCheckedAt = new Date().toISOString();
+  notifiedRequestIds.clear();
+  if (pollIntervalId) clearInterval(pollIntervalId);
+  pollIntervalId = setInterval(checkForNewRequests, 3000);
+}
+
+function stopRequestPolling() {
+  if (pollIntervalId) {
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
+  }
+}
+
+async function checkForNewRequests() {
+  const { data, error } = await supabaseClient
+    .from('trip_requests')
+    .select('id, created_at')
+    .gt('created_at', lastCheckedAt)
+    .order('created_at', { ascending: true });
+
+  if (error || !data || data.length === 0) return;
+
+  let hasNew = false;
+  data.forEach((r) => {
+    if (!notifiedRequestIds.has(r.id)) {
+      notifiedRequestIds.add(r.id);
+      hasNew = true;
+    }
+    if (r.created_at > lastCheckedAt) lastCheckedAt = r.created_at;
+  });
+
+  if (hasNew) {
+    playAlertSound();
+    loadRequests();
+  }
 }
 
 function playAlertSound() {
@@ -452,8 +482,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   supabaseClient.auth.onAuthStateChange((_event, session) => {
     state.session = session;
-    if (session?.access_token) {
-      supabaseClient.realtime.setAuth(session.access_token);
-    }
   });
 });
