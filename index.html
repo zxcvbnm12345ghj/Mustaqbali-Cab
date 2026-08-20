@@ -152,7 +152,12 @@
             <b id="priceEstimate">— دينار</b>
           </div>
 
-          <button type="submit" class="app-btn" id="bookSubmitBtn"><span id="bookBtnLabel">اطلب تكسي الآن</span></button>
+          <label class="consent-check" for="consentCheck">
+            <input type="checkbox" id="consentCheck">
+            <span>أقرّ بصحة المعلومات المدخلة، وأتحمل مسؤولية أي معلومات غير صحيحة، وأوافق على شروط وأحكام الخدمة.</span>
+          </label>
+
+          <button type="submit" class="app-btn" id="bookSubmitBtn" disabled><span id="bookBtnLabel">اطلب تكسي الآن</span></button>
           <div class="app-msg" id="appMsg"></div>
         </form>
       </section>
@@ -233,5 +238,20 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<style>
+  .consent-check{display:flex;align-items:flex-start;gap:8px;margin:10px 0;font-size:13px;line-height:1.5;color:#1a73c7;cursor:pointer;}
+  .consent-check input{margin-top:2px;width:16px;height:16px;accent-color:#4A90D9;flex-shrink:0;}
+</style>
+<script>
+  (function () {
+    var consentCheck = document.getElementById('consentCheck');
+    var submitBtn = document.getElementById('bookSubmitBtn');
+    if (consentCheck && submitBtn) {
+      consentCheck.addEventListener('change', function () {
+        submitBtn.disabled = !consentCheck.checked;
+      });
+    }
+  })();
+</script>
 </body>
 </html>
