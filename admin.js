@@ -81,20 +81,22 @@ async function enterDashboard() {
 }
 
 /* ============================================================
-   Polling — checks for new trip_requests every 3s (no Realtime).
-   Auto-refreshes the table and plays an alert sound once per new
-   request. Additive only: no other function, markup, styling, or
-   login behavior is touched. Telegram notifications continue to
-   be handled entirely server-side (Supabase Edge Function +
-   Database Trigger) — no bot token or chat id here.
+   Polling — checks for new trip_requests every 3s (no Realtime,
+   no Broadcast). Uses request IDs (not client-clock timestamps)
+   to detect new rows, so it isn't affected by any time skew
+   between the user's device and the Supabase server. Additive
+   only: no other function, markup, styling, or login behavior
+   is touched.
    ============================================================ */
 let pollIntervalId = null;
-let lastCheckedAt = null;
-const notifiedRequestIds = new Set();
+const seenRequestIds = new Set();
 
 function startRequestPolling() {
-  lastCheckedAt = new Date().toISOString();
-  notifiedRequestIds.clear();
+  // Seed with whatever loadRequests() already fetched, so existing rows
+  // never trigger a sound — only genuinely new ones after this point do.
+  seenRequestIds.clear();
+  state.requests.forEach((r) => seenRequestIds.add(r.id));
+
   if (pollIntervalId) clearInterval(pollIntervalId);
   pollIntervalId = setInterval(checkForNewRequests, 3000);
 }
@@ -109,25 +111,18 @@ function stopRequestPolling() {
 async function checkForNewRequests() {
   const { data, error } = await supabaseClient
     .from('trip_requests')
-    .select('id, created_at')
-    .gt('created_at', lastCheckedAt)
-    .order('created_at', { ascending: true });
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(30);
 
-  if (error || !data || data.length === 0) return;
+  if (error || !data) return;
 
-  let hasNew = false;
-  data.forEach((r) => {
-    if (!notifiedRequestIds.has(r.id)) {
-      notifiedRequestIds.add(r.id);
-      hasNew = true;
-    }
-    if (r.created_at > lastCheckedAt) lastCheckedAt = r.created_at;
-  });
+  const newIds = data.filter((r) => !seenRequestIds.has(r.id));
+  if (newIds.length === 0) return;
 
-  if (hasNew) {
-    playAlertSound();
-    loadRequests();
-  }
+  newIds.forEach((r) => seenRequestIds.add(r.id));
+  playAlertSound();
+  loadRequests();
 }
 
 function playAlertSound() {

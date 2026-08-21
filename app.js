@@ -945,6 +945,142 @@ function registerServiceWorker() {
 }
 
 /* ============================================================
+   PWA Install Prompt — captures beforeinstallprompt and shows a
+   small branded card inviting the visitor to install the app.
+   Self-contained (styles injected via JS): does not touch
+   index.html, app.css, or style.css. Additive only — no existing
+   function or markup is changed.
+   ============================================================ */
+const PWA_INSTALLED_KEY = 'mustaqbali_pwa_installed';
+const PWA_DISMISSED_KEY = 'mustaqbali_pwa_install_dismissed_at';
+const PWA_DISMISS_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 يوماً
+let deferredInstallPrompt = null;
+
+function injectInstallCardStyles() {
+  if (document.getElementById('pwaInstallStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'pwaInstallStyles';
+  style.textContent = `
+    #pwaInstallCard {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #0A0E1A;
+      color: #fff;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      border: 1px solid rgba(232,169,76,0.35);
+      font-family: inherit;
+      direction: rtl;
+      transform: translateY(120%);
+      transition: transform 0.3s ease;
+    }
+    #pwaInstallCard.show { transform: translateY(0); }
+    #pwaInstallCard .pwa-icon {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #E8A94C, #33D6C0);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #pwaInstallCard .pwa-text { flex: 1; min-width: 0; }
+    #pwaInstallCard .pwa-text b { display: block; font-size: 14px; }
+    #pwaInstallCard .pwa-text span { display: block; font-size: 12px; opacity: 0.75; margin-top: 2px; }
+    #pwaInstallCard .pwa-install-btn {
+      flex-shrink: 0;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #0A0E1A;
+      background: linear-gradient(135deg, #E8A94C, #33D6C0);
+      cursor: pointer;
+    }
+    #pwaInstallCard .pwa-close-btn {
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.55);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function showInstallCard() {
+  if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') return;
+  const dismissedAt = Number(localStorage.getItem(PWA_DISMISSED_KEY) || 0);
+  if (dismissedAt && Date.now() - dismissedAt < PWA_DISMISS_COOLDOWN_MS) return;
+  if (document.getElementById('pwaInstallCard')) return;
+
+  injectInstallCardStyles();
+
+  const card = document.createElement('div');
+  card.id = 'pwaInstallCard';
+  card.innerHTML = `
+    <span class="pwa-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
+    </span>
+    <span class="pwa-text">
+      <b>ثبّت تطبيق مستقبلي</b>
+      <span>وصول أسرع بدون فتح المتصفح في كل مرة</span>
+    </span>
+    <button type="button" class="pwa-install-btn" id="pwaInstallBtn">تثبيت التطبيق</button>
+    <button type="button" class="pwa-close-btn" id="pwaCloseBtn" aria-label="إغلاق">✕</button>
+  `;
+  document.body.appendChild(card);
+  requestAnimationFrame(() => card.classList.add('show'));
+
+  document.getElementById('pwaInstallBtn').addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (outcome === 'accepted') {
+      localStorage.setItem(PWA_INSTALLED_KEY, '1');
+    }
+    hideInstallCard();
+  });
+
+  document.getElementById('pwaCloseBtn').addEventListener('click', () => {
+    localStorage.setItem(PWA_DISMISSED_KEY, String(Date.now()));
+    hideInstallCard();
+  });
+}
+
+function hideInstallCard() {
+  const card = document.getElementById('pwaInstallCard');
+  if (!card) return;
+  card.classList.remove('show');
+  setTimeout(() => card.remove(), 300);
+}
+
+function initPwaInstallPrompt() {
+  if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') return;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallCard();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem(PWA_INSTALLED_KEY, '1');
+    deferredInstallPrompt = null;
+    hideInstallCard();
+  });
+}
+
+/* ============================================================
    iOS keyboard / viewport handling
    Uses the VisualViewport API (supported on iOS Safari 13+ and all
    modern Android browsers) to detect the on-screen keyboard opening
@@ -983,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildServiceSwitch();
   initMap();
   registerServiceWorker();
+  initPwaInstallPrompt();
   renderRecentLocations();
   loadServicePrices();
 
