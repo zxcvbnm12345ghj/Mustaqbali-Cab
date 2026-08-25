@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>مستقبلي كاب | Mustaqbali Cab</title>
 <meta name="description" content="مستقبلي كاب: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
 <meta name="theme-color" content="#0A0E1A">
@@ -19,7 +19,33 @@
 </head>
 <body class="app-body">
 
+<div class="welcome-screen" id="welcomeScreen" hidden>
+  <div class="welcome-content">
+    <span class="welcome-logo">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
+    </span>
+    <h1>مستقبلي كاب</h1>
+    <p class="welcome-greeting">أهلاً بك في مستقبلي كاب</p>
+    <p class="welcome-sub">احجز رحلتك بسهولة وأمان.</p>
+
+    <div class="welcome-actions">
+      <button type="button" class="app-btn welcome-install-btn" id="welcomeInstallBtn" hidden>
+        <span>📲</span> تثبيت التطبيق
+      </button>
+      <button type="button" class="app-btn" id="welcomeStartBtn">
+        <span>🚀</span> ابدأ الآن
+      </button>
+    </div>
+
+    <div class="welcome-footer">
+      <p>© 2026 مستقبلي كاب — جميع الحقوق محفوظة</p>
+      <p>تطوير وإدارة: محمد غازي</p>
+    </div>
+  </div>
+</div>
+
 <div class="app-shell">
+
   <!-- Full-screen map -->
   <div id="map"></div>
   <div class="map-skeleton" id="mapSkeleton" aria-hidden="true"></div>
@@ -52,7 +78,7 @@
   </button>
 
   <!-- Bottom sheet -->
-  <div class="sheet" id="sheet" data-height="half">
+  <div class="sheet" id="sheet">
     <div class="sheet-handle-area" id="sheetHandleArea">
       <div class="sheet-handle"></div>
     </div>
@@ -65,11 +91,6 @@
           <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           <span>إلى أين تذهب؟</span>
         </button>
-
-        <div id="recentLocations" class="recent-locations" hidden>
-          <p class="section-label">أماكن مؤخرة</p>
-          <div class="recent-list" id="recentList"></div>
-        </div>
 
         <p class="section-label">اختر خدمتك</p>
         <div class="quick-services" id="quickServices">
@@ -95,6 +116,8 @@
 
         <div class="svc-switch" id="svcSwitch"></div>
 
+        <div class="drivers-list-app" id="driversListApp" hidden></div>
+
         <div class="map-target-toggle" id="mapTargetToggle">
           <button type="button" class="mt-btn active" data-target="pickup">📍 تحديد الانطلاق على الخريطة</button>
           <button type="button" class="mt-btn" data-target="dropoff">🏁 تحديد الوجهة على الخريطة</button>
@@ -112,6 +135,7 @@
               </button>
             </div>
             <span class="field-error" id="errPickup"></span>
+            <span class="field-hint" id="pickupAreaHint" hidden></span>
             <input type="hidden" id="pickupLat">
             <input type="hidden" id="pickupLng">
           </div>
@@ -222,17 +246,238 @@
         <div class="status-actions">
           <a href="#" class="app-btn whatsapp" id="whatsappBtnApp" target="_blank" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
-            تواصل مع مستقبلي كاب
+            دعم مستقبلي كاب
           </a>
-          <button type="button" class="app-btn secondary" id="newRequestBtn">طلب رحلة جديدة</button>
+          <button type="button" class="app-btn" id="newRequestBtn">طلب رحلة جديدة</button>
         </div>
+      </section>
+
+      <!-- ORDERS view (طلباتي) — current + past requests, by phone -->
+      <section class="sheet-view" data-view="orders">
+        <h2 class="sheet-title">طلباتي</h2>
+        <div class="orders-list" id="ordersList"></div>
+        <div class="orders-empty" id="ordersEmpty" hidden>
+          <span class="orders-empty-ic">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <p>لا توجد طلبات بعد</p>
+          <button type="button" class="app-btn" data-back="home">اطلب رحلة الآن</button>
+        </div>
+      </section>
+
+      <!-- SUPPORT view (الدعم) -->
+      <section class="sheet-view" data-view="support">
+        <h2 class="sheet-title">الدعم</h2>
+
+        <div class="more-support-actions">
+          <a href="tel:07718828710" class="more-support-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            اتصال 07718828710
+          </a>
+          <a href="https://wa.me/9647718828710?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%D8%8C%20%D8%A3%D8%AD%D8%AA%D8%A7%D8%AC%20%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9" class="more-support-item" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
+            واتساب
+          </a>
+        </div>
+
+        <button type="button" class="help-header" id="helpToggleBtn" aria-expanded="false" aria-controls="helpAccordionWrap">
+          <span class="qa-icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="16" cy="12" r="1" fill="currentColor"/></svg>
+          </span>
+          <span class="help-header-label">مساعد مستقبلي — الأسئلة الشائعة</span>
+          <svg class="help-chevron-main" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+
+        <div class="help-accordion-wrap" id="helpAccordionWrap">
+          <div class="help-accordion" id="helpAccordion">
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>كيف أطلب رحلة؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>اختر الخدمة، حدد موقع الانطلاق، أدخل بياناتك ثم أرسل الطلب.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>كيف أتابع حالة طلبي؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>يمكنك متابعة حالة الرحلة مباشرة من تبويب "طلباتي" بعد إرسال الطلب.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>كيف أتواصل مع الدعم؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>تواصل مع دعم مستقبلي كاب على الرقم 07718828710.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>ما هي الخدمات المتوفرة؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>تكسي، خصوصي، دليفري، بين المحافظات، حمل، ستاركس.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>كيف أثبت التطبيق؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>اضغط زر "تثبيت" في أعلى الشاشة، وستظهر لك خطوات التثبيت المناسبة لجهازك تلقائياً.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>كيف أتواصل مع السائق؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>بعد تعيين السائق يمكنك الاتصال أو التواصل عبر واتساب مباشرة.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>هل يمكنني إلغاء الطلب؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>نعم، تواصل مع الدعم في أسرع وقت ممكن لإلغاء الطلب قبل تنفيذه.</p></div></div>
+            </div>
+
+            <div class="help-item">
+              <button type="button" class="help-q" aria-expanded="false">
+                <span>ماذا أفعل إذا واجهت مشكلة؟</span>
+                <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="help-a-wrap"><div class="help-a"><p>تواصل مباشرة مع دعم مستقبلي كاب وسيتم مساعدتك بأسرع وقت.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MORE view -->
+      <section class="sheet-view" data-view="more">
+        <h2 class="sheet-title">المزيد</h2>
+
+        <div class="more-list">
+          <button type="button" class="more-item" id="moreInstallBtn" hidden>
+            <span class="more-item-icon">📲</span>
+            <span class="more-item-label">تثبيت التطبيق</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+
+          <button type="button" class="more-item" id="moreAssistantBtn">
+            <span class="more-item-icon">❓</span>
+            <span class="more-item-label">مساعد مستقبلي</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+
+          <button type="button" class="more-item" data-more-toggle="about" aria-expanded="false">
+            <span class="more-item-icon">ℹ️</span>
+            <span class="more-item-label">عن مستقبلي كاب</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+          <div class="more-panel" id="morePanel-about" hidden>
+            <p>مستقبلي كاب منصة عراقية لطلب التكسي، السيارة الخاصة، توصيل الطرود، والرحلات بين المحافظات — من تطبيق واحد وبضع نقرات فقط.</p>
+          </div>
+
+          <button type="button" class="more-item" data-more-toggle="terms" aria-expanded="false">
+            <span class="more-item-icon">📜</span>
+            <span class="more-item-label">الشروط والأحكام</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+          <div class="more-panel" id="morePanel-terms" hidden>
+            <p>باستخدامك تطبيق مستقبلي كاب فإنك توافق على تزويدنا ببيانات صحيحة عند تقديم الطلب، وعلى أن المنصة تربط الزبون بمزوّدي خدمة النقل ولا تتحمل مسؤولية سلوك الطرفين خارج نطاق الطلب. تُحدَّث هذه الشروط دورياً.</p>
+          </div>
+
+          <button type="button" class="more-item" data-more-toggle="privacy" aria-expanded="false">
+            <span class="more-item-icon">🔒</span>
+            <span class="more-item-label">سياسة الخصوصية</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+          <div class="more-panel" id="morePanel-privacy" hidden>
+            <p>نجمع فقط البيانات اللازمة لتنفيذ طلبك (الاسم، رقم الهاتف، الموقع) ولا نشاركها مع أي طرف خارج نطاق تنفيذ الرحلة. يمكنك التواصل معنا لطلب حذف بياناتك في أي وقت.</p>
+          </div>
+        </div>
+
+        <div class="rights-card">
+          <p class="rights-title">© حقوق المنصة</p>
+          <p>© 2026 مستقبلي كاب — جميع الحقوق محفوظة</p>
+          <p>تطوير وإدارة: محمد غازي</p>
+        </div>
+      </section>
+
+      <!-- PROFILE view (بياناتي) -->
+      <section class="sheet-view" data-view="profile">
+        <h2 class="sheet-title">بياناتي</h2>
+        <p class="section-label" style="margin-top:-8px;">تُستخدم هذه البيانات لتعبئة نموذج الطلب تلقائياً في كل مرة</p>
+
+        <div class="float-field">
+          <input type="text" id="profileName" placeholder=" " maxlength="100" autocomplete="name">
+          <label for="profileName">الاسم الكامل</label>
+        </div>
+
+        <div class="float-field">
+          <input type="tel" id="profilePhone" placeholder=" " maxlength="20" autocomplete="tel" inputmode="tel">
+          <label for="profilePhone">رقم الهاتف</label>
+          <span class="field-hint">مثال: 07xxxxxxxxx</span>
+        </div>
+
+        <button type="button" class="app-btn" id="profileSaveBtn">حفظ البيانات</button>
+        <div class="app-msg" id="profileMsg"></div>
       </section>
 
     </div>
   </div>
 </div>
 
+<nav class="bottom-nav" id="bottomNav">
+  <button type="button" class="bnav-item active" id="bnavHome" data-nav="home">
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 16.5V10a1 1 0 0 1 .4-.8l6.6-5a2 2 0 0 1 2.4 0l6.6 5a1 1 0 0 1 .4.8v6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16.5h18M6 16.5v-3a1 1 0 0 1 1-1h1.5M18 16.5v-3a1 1 0 0 0-1-1h-1.5M9 12.5h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="18.5" r="1.3" fill="currentColor"/><circle cx="17" cy="18.5" r="1.3" fill="currentColor"/></svg></span>
+    <span>الرئيسية</span>
+  </button>
+  <button type="button" class="bnav-item" id="bnavRequests" data-nav="requests">
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5 9 4l6 2 5-1.5v14L15 20l-6-2-5 1.5v-14Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r="2.3" stroke="currentColor" stroke-width="1.7"/><path d="M9 12.3V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+    <span>طلباتي</span>
+  </button>
+  <button type="button" class="bnav-item" id="bnavSupport" data-nav="support">
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13v-1a8 8 0 0 1 16 0v1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><rect x="3" y="13" width="4" height="6" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="17" y="13" width="4" height="6" rx="1.6" stroke="currentColor" stroke-width="1.7"/><path d="M19 19v.5a3 3 0 0 1-3 3h-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+    <span>الدعم</span>
+  </button>
+  <button type="button" class="bnav-item" id="bnavProfile" data-nav="profile">
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+    <span>بياناتي</span>
+  </button>
+  <button type="button" class="bnav-item" id="bnavMore" data-nav="more">
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></span>
+    <span>المزيد</span>
+  </button>
+</nav>
+
 <div class="app-toast" id="appToast"></div>
+
+<!-- iOS/iPad "Add to Home Screen" instructions — a real modal dialog,
+     shown ONLY on demand when the install button is tapped on a device
+     with no native install prompt available (see triggerInstall() in
+     app.js). Never shown automatically, never duplicated elsewhere. -->
+<div class="ios-modal-backdrop" id="iosInstallModal" hidden>
+  <div class="ios-modal" role="dialog" aria-modal="true" aria-labelledby="iosModalTitle">
+    <button type="button" class="ios-modal-close" id="iosModalCloseBtn" aria-label="إغلاق">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="ios-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0-12l-4 4m4-4l4 4M5 21h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h3 id="iosModalTitle">تثبيت التطبيق على iPhone</h3>
+    <ol class="ios-modal-steps">
+      <li><span class="step-num">1</span><span>اضغط زر المشاركة <b>Share</b></span></li>
+      <li><span class="step-num">2</span><span>اختر "إضافة إلى الشاشة الرئيسية" <b>Add to Home Screen</b></span></li>
+      <li><span class="step-num">3</span><span>اضغط "إضافة" <b>Add</b></span></li>
+    </ol>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

@@ -16,6 +16,12 @@ html, body.app-body{
   overscroll-behavior: none;
   position: fixed;
   width: 100%;
+  /* Blocks double-tap-to-zoom and pinch-to-zoom of the whole page at the
+     CSS level (Android in particular honors this even when it doesn't
+     fully respect the viewport meta tag). This does NOT affect Leaflet's
+     own map pinch-zoom (the map container sets its own touch-action) or
+     the bottom sheet's vertical scroll (it sets touch-action: pan-y). */
+  touch-action: manipulation;
 }
 
 .app-shell{
@@ -37,24 +43,21 @@ html, body.app-body{
   will-change: transform;
 }
 .leaflet-tile-pane{
-  /* No dark tint filter — CARTO's light_all tiles are used as-is so the
-     map itself reads as light, not just the UI drawn on top of it. */
+  /* CARTO Voyager tiles are used as-is (parks, water, and roads already
+     read with clear, distinct colors) — a light saturation/contrast lift
+     keeps the map feeling modern and vivid instead of washed out. */
+  filter: saturate(1.18) contrast(1.04);
 }
-.leaflet-control-attribution{
-  background: rgba(255,255,255,0.8) !important;
-  color: var(--text-faint) !important;
-  font-size: 10px !important;
-  backdrop-filter: blur(6px);
-}
-.leaflet-control-attribution a{ color: var(--text-muted) !important; }
+/* No attribution control is created (attributionControl:false in
+   app.js), so no map logo/watermark ever appears in the corner. */
 .leaflet-control-zoom{ display:none; }
 .leaflet-fade-anim .leaflet-tile{ will-change: opacity; }
 
 .map-skeleton{
   position: absolute; inset:0; z-index: 2; pointer-events:none;
   background:
-    radial-gradient(60% 45% at 30% 35%, rgba(229,184,92,0.08), transparent 60%),
-    radial-gradient(50% 40% at 75% 65%, rgba(74,173,232,0.07), transparent 60%),
+    radial-gradient(60% 45% at 30% 35%, rgba(229,184,92,0.12), transparent 60%),
+    radial-gradient(50% 40% at 75% 65%, rgba(29,111,209,0.1), transparent 60%),
     var(--bg-deep);
   opacity: 1;
   transition: opacity .5s ease;
@@ -106,17 +109,19 @@ html, body.app-body{
 .app-topbar > *{ pointer-events: auto; }
 
 .brand-chip{
-  display:flex; align-items:center; gap:8px;
-  background: rgba(255,255,255,0.75);
+  display:flex; align-items:center; gap:9px;
+  background: rgba(255,255,255,0.8);
   backdrop-filter: blur(16px);
   border: 1px solid var(--surface-brd);
   border-radius: 100px;
-  padding: 7px 14px 7px 7px;
+  padding: 7px 16px 7px 7px;
+  min-height: 44px;
   box-shadow: var(--shadow-deep);
   font-weight: 800; font-size: 14.5px;
+  letter-spacing: 0.01em;
 }
-.brand-chip .brand-mark{ width:30px; height:30px; border-radius:9px; background: linear-gradient(135deg, var(--gold), var(--teal)); display:flex; align-items:center; justify-content:center; }
-.brand-chip .brand-mark svg{ width:16px; height:16px; }
+.brand-chip .brand-mark{ width:32px; height:32px; border-radius:10px; background: linear-gradient(135deg, var(--gold), var(--teal)); display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 10px -4px rgba(29,111,209,0.45); }
+.brand-chip .brand-mark svg{ width:17px; height:17px; }
 
 .fab{
   width: 48px; height: 48px;
@@ -143,19 +148,22 @@ html, body.app-body{
   z-index: 20;
 }
 
-/* ---------------- Bottom sheet (drag engine) ----------------
-   Snap points, expressed as vh of the layout viewport:
-     peek = 25vh · half = 50vh · full = 85vh
-   The engine (app.js) sets --sheet-h directly while dragging for a
-   1:1 finger-tracking feel, and falls back to the data-height presets
-   below (with a spring transition) once the finger lifts. ---------- */
+/* ---------------- Bottom panel (fixed, non-draggable) ----------------
+   Modern ride-hailing-app style: one constant height, no swipe/drag,
+   no peek/half/full snapping. Navigation between sections happens only
+   via taps (bottom nav + buttons); content that doesn't fit scrolls
+   internally within .sheet-scroll. --sheet-h is only ever touched
+   temporarily by the keyboard-avoidance handler in app.js, which
+   restores it immediately once the keyboard closes. Height is tuned to
+   roughly the middle of the screen so the map stays clearly visible
+   above it. ---------- */
 .sheet{
   position: absolute;
   inset-inline: 0;
-  bottom: 0;
+  bottom: var(--bnav-h, 60px);
   z-index: 30;
-  height: var(--sheet-h, 50vh);
-  max-height: 92svh;
+  height: var(--sheet-h, 52vh);
+  max-height: 62svh;
   min-height: 110px;
   display: flex;
   flex-direction: column;
@@ -165,30 +173,21 @@ html, body.app-body{
   border-bottom: none;
   border-top-right-radius: 26px;
   border-top-left-radius: 26px;
-  box-shadow: 0 -18px 50px -18px rgba(50,90,120,0.18);
-  transition: height .38s cubic-bezier(.19,1,.22,1);
-  touch-action: none;
+  box-shadow: 0 -18px 50px -18px rgba(20,83,158,0.18);
 }
-.sheet[data-height="peek"]{ --sheet-h: 25vh; }
-.sheet[data-height="half"]{ --sheet-h: 50vh; }
-.sheet[data-height="full"]{ --sheet-h: 85vh; }
-.sheet.dragging{ transition: none; }
 
 .sheet-handle-area{
   flex-shrink: 0;
   padding-top: 10px;
   padding-bottom: 4px;
-  cursor: grab;
-  touch-action: none;
+  pointer-events: none; /* decorative only — the sheet no longer drags */
 }
 .sheet-handle{
-  width: 40px; height: 5px;
+  width: 36px; height: 4px;
   border-radius: 100px;
-  background: rgba(255,255,255,0.22);
+  background: rgba(20,50,80,0.14);
   margin: 0 auto;
-  transition: background .2s, width .2s;
 }
-.sheet.dragging .sheet-handle{ background: var(--gold); width: 52px; }
 
 .sheet-scroll{
   flex: 1;
@@ -211,7 +210,7 @@ html, body.app-body{
   padding: 8px 0; margin-bottom: 6px;
   transition: transform .15s, color .15s;
 }
-.sheet-back:active{ transform: translateX(3px); color: var(--gold-text); }
+.sheet-back:active{ transform: translateX(3px); color: var(--teal-text); }
 .sheet-back svg{ width:16px; height:16px; }
 
 /* ---- Home view: search bar + recent + quick service chips ---- */
@@ -229,28 +228,17 @@ html, body.app-body{
   min-height: 56px;
 }
 .where-to:active{ transform: scale(0.98); background: var(--surface-hi); }
-.where-to.expanded{ border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-dim); }
-.where-to svg{ color: var(--gold); flex-shrink:0; width:20px; height:20px; }
-
-.recent-locations{ margin-bottom: 18px; }
-.recent-list{ display:flex; flex-direction:column; gap:2px; }
-.recent-item{
-  display:flex; align-items:center; gap:12px;
-  padding: 12px 6px;
-  border-bottom: 1px solid var(--surface-brd);
-  transition: background .15s;
-}
-.recent-item:last-child{ border-bottom:none; }
-.recent-item:active{ background: var(--surface); }
-.recent-item .ic{ width:34px; height:34px; border-radius:10px; background: var(--surface-hi); display:flex; align-items:center; justify-content:center; color: var(--text-faint); flex-shrink:0; }
-.recent-item .ic svg{ width:16px; height:16px; }
-.recent-item div{ min-width:0; }
-.recent-item b{ display:block; font-size:13.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.recent-item span{ font-size:11.5px; color: var(--text-faint); }
+.where-to.expanded{ border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+.where-to svg{ color: var(--teal); flex-shrink:0; width:20px; height:20px; }
 
 .section-label{
   font-size: 12.5px; font-weight:700; color: var(--text-faint);
   text-transform: uppercase; letter-spacing:0.04em; margin: 0 0 12px;
+  display:flex; align-items:center; gap:6px;
+}
+.section-label::before{
+  content:''; width:4px; height:4px; border-radius:50%;
+  background: var(--gold); flex-shrink:0;
 }
 
 .quick-services{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
@@ -267,21 +255,39 @@ html, body.app-body{
 }
 .qs-chip::before{
   content:''; position:absolute; inset:0; opacity:0;
-  background: linear-gradient(150deg, var(--gold-dim), var(--teal-dim));
+  background: linear-gradient(150deg, var(--teal-dim), var(--gold-dim));
   transition: opacity .2s;
 }
-.qs-chip:active{ transform: scale(0.90); }
+.qs-chip:active{ transform: scale(0.90); border-color: rgba(29,111,209,0.32); }
 .qs-chip:active::before, .qs-chip:hover::before{ opacity: 1; }
 .qs-chip .ic{
-  width: 44px; height: 44px; border-radius: 13px;
+  width: 46px; height: 46px; border-radius: 14px;
   display:flex; align-items:center; justify-content:center;
-  background: linear-gradient(150deg, var(--gold-dim), var(--teal-dim));
-  color: var(--gold-text);
+  background: linear-gradient(150deg, var(--teal-dim), var(--gold-dim));
+  color: var(--teal-text);
+  box-shadow: inset 0 0 0 1px rgba(29,111,209,0.12);
   position: relative; z-index:1;
   transition: transform .2s cubic-bezier(.34,1.56,.64,1);
 }
 .qs-chip:active .ic{ transform: scale(1.1) rotate(-4deg); }
 .qs-chip span{ font-size: 11.5px; font-weight:700; color: var(--text-muted); line-height:1.3; text-align:center; position:relative; z-index:1; }
+
+/* ---- Per-service accent colors (taxi / delivery / etc.) — modern,
+   harmonious palette applied to the icon tile on Home and the active
+   pill in the booking service switcher. ---- */
+.qs-chip[data-service="taxi"] .ic{ background: linear-gradient(150deg, #FFE9B8, #F3C465); color:#8A5A00; }
+.qs-chip[data-service="private"] .ic{ background: linear-gradient(150deg, #CFE3FF, #7FAEF2); color:#1D4E9E; }
+.qs-chip[data-service="courier"] .ic{ background: linear-gradient(150deg, #FFD9C2, #F5A26B); color:#A34A0A; }
+.qs-chip[data-service="intercity"] .ic{ background: linear-gradient(150deg, #E3D8FF, #B49BF0); color:#5A3AAE; }
+.qs-chip[data-service="cargo"] .ic{ background: linear-gradient(150deg, #DDEFE0, #8FCB9B); color:#1F6D34; }
+.qs-chip[data-service="starx"] .ic{ background: linear-gradient(150deg, #FFD8E6, #F290B4); color:#B02463; }
+
+.svc-pill[data-service="taxi"].active{ background: linear-gradient(180deg, #F3C465, #D9A83E); box-shadow: 0 6px 16px -6px rgba(217,168,62,0.55); }
+.svc-pill[data-service="private"].active{ background: linear-gradient(180deg, #7FAEF2, #3E7FD9); box-shadow: 0 6px 16px -6px rgba(62,127,217,0.55); }
+.svc-pill[data-service="courier"].active{ background: linear-gradient(180deg, #F5A26B, #D97B3E); box-shadow: 0 6px 16px -6px rgba(217,123,62,0.55); }
+.svc-pill[data-service="intercity"].active{ background: linear-gradient(180deg, #B49BF0, #8A63D9); box-shadow: 0 6px 16px -6px rgba(138,99,217,0.55); }
+.svc-pill[data-service="cargo"].active{ background: linear-gradient(180deg, #8FCB9B, #4FA562); box-shadow: 0 6px 16px -6px rgba(79,165,98,0.55); }
+.svc-pill[data-service="starx"].active{ background: linear-gradient(180deg, #F290B4, #D9508A); box-shadow: 0 6px 16px -6px rgba(217,80,138,0.55); }
 
 .qs-skel{
   height: 88px; border-radius: 18px;
@@ -301,25 +307,105 @@ html, body.app-body{
 .promo-card b{ display:block; font-size:13.5px; margin-bottom:2px; }
 .promo-card span{ font-size:12px; color: var(--text-muted); }
 
+/* ---- Quick-access row (تثبيت / المساعد / الدعم) — top of home view ---- */
+.quick-access-row{
+  display:flex; gap:8px;
+  margin-bottom: 16px;
+}
+.qa-btn{
+  flex:1; min-width:0;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  min-height: 50px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+  font-size: 12px; font-weight:800;
+  white-space: nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-decoration:none;
+  transition: transform .15s, border-color .2s, box-shadow .2s, background .2s;
+}
+.qa-btn > span:last-child{ overflow:hidden; text-overflow:ellipsis; }
+.qa-btn:active{ transform: scale(0.94); background: var(--surface-hi); }
+.qa-btn:hover, .qa-btn:focus-visible{
+  border-color: rgba(229,184,92,0.5);
+  box-shadow: 0 0 0 3px var(--gold-dim);
+}
+.qa-btn:focus-visible{ outline:none; }
+.qa-btn.open{ border-color: rgba(29,111,209,0.35); background: var(--teal-dim); color: var(--teal-text); }
+.qa-icon{
+  width:22px; height:22px; border-radius:8px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(135deg, var(--gold-dim), var(--teal-dim));
+  color: var(--teal-text);
+}
+.qa-icon svg{ width:13px; height:13px; }
+
+/* ---- "مساعد مستقبلي" — FAQ accordion content (home view) ---- */
+.help-accordion-wrap{
+  display:grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .3s cubic-bezier(.4,0,.2,1);
+}
+.help-accordion-wrap.open{ grid-template-rows: 1fr; margin-bottom: 16px; }
+.help-accordion{ overflow:hidden; display:flex; flex-direction:column; gap:9px; }
+.help-item{
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.help-item.open{ border-color: rgba(29,111,209,0.32); box-shadow: 0 6px 16px -10px rgba(29,111,209,0.35); }
+.help-q{
+  width:100%;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background: transparent;
+  padding: 14px 16px;
+  font-size: 13.5px; font-weight:700; color: var(--text);
+  text-align: right;
+  min-height: 50px;
+}
+.help-q:active{ background: var(--surface-hi); }
+.help-chevron{
+  width:16px; height:16px; flex-shrink:0; color: var(--teal);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+}
+.help-item.open .help-chevron{ transform: rotate(180deg); }
+.help-a-wrap{
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .28s cubic-bezier(.4,0,.2,1);
+}
+.help-item.open .help-a-wrap{ grid-template-rows: 1fr; }
+.help-a{ overflow: hidden; }
+.help-a p{
+  margin:0; padding: 0 16px 16px;
+  font-size: 12.5px; line-height:1.7; color: var(--text-muted);
+}
+
 /* ---- Skeleton shimmer (shared) ---- */
 @keyframes skel-shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
 
-/* ---- Booking view ---- */
-.svc-switch{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:20px; scroll-snap-type: x proximity; }
-.svc-switch::-webkit-scrollbar{ display:none; }
+/* ---- Booking view ----
+   Service pills are pinned in a wrapping row — every service is always
+   fully visible with no horizontal drag/swipe needed. */
+.svc-switch{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
 .svc-pill{
-  flex-shrink:0; scroll-snap-align:start;
-  display:flex; align-items:center; gap:8px;
-  padding: 10px 16px;
+  flex: 1 1 auto;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding: 10px 14px;
   border-radius: 100px;
   background: var(--surface);
   border: 1px solid var(--surface-brd);
   font-size: 13px; font-weight:700; color: var(--text-muted);
   min-height: 44px;
+  white-space: nowrap;
   transition: all .2s cubic-bezier(.34,1.56,.64,1);
 }
 .svc-pill:active{ transform: scale(0.94); }
-.svc-pill.active{ background: linear-gradient(180deg,var(--gold-soft),var(--gold)); color:#1A1204; border-color:transparent; box-shadow: 0 6px 16px -6px rgba(229,184,92,0.6); }
+.svc-pill.active{ background: linear-gradient(180deg,var(--teal-soft),var(--teal)); color:#fff; border-color:transparent; box-shadow: 0 6px 16px -6px rgba(29,111,209,0.6); }
 .svc-pill svg{ width:16px; height:16px; }
 
 .map-target-toggle{ display:flex; gap:8px; margin-bottom:14px; }
@@ -328,11 +414,11 @@ html, body.app-body{
   background: var(--surface); border:1px solid var(--surface-brd); color: var(--text-muted);
   transition: all .2s;
 }
-.mt-btn.active{ background: linear-gradient(180deg,var(--gold-soft),var(--gold)); color:#1A1204; border-color:transparent; }
+.mt-btn.active{ background: linear-gradient(180deg,var(--teal-soft),var(--teal)); color:#fff; border-color:transparent; }
 .distance-tag{
   display:flex; align-items:center; justify-content:center; gap:6px;
   font-size:12px; font-weight:700; color: var(--teal-text); background: var(--teal-dim);
-  border:1px solid rgba(74,173,232,0.3); border-radius:100px; padding:8px 14px; margin-bottom:14px;
+  border:1px solid rgba(29,111,209,0.3); border-radius:100px; padding:8px 14px; margin-bottom:14px;
 }
 
 /* ---- Floating-label fields ---- */
@@ -359,12 +445,12 @@ html, body.app-body{
 }
 .float-field input:focus,
 .float-field input:not(:placeholder-shown){
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-dim);
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-dim);
 }
 .float-field input:focus + label,
 .float-field input:not(:placeholder-shown) + label{
-  top: 8px; font-size: 11px; color: var(--gold-text); font-weight:700;
+  top: 8px; font-size: 11px; color: var(--teal-text); font-weight:700;
 }
 .float-field.has-icon-btn label{ right: 16px; }
 .float-field .field-hint{ display:block; margin-top:6px; font-size:11.5px; color: var(--text-faint); padding-inline:2px; }
@@ -386,7 +472,7 @@ html, body.app-body{
   font-size:12px; font-weight:700;
   color: var(--teal-text);
   background: var(--teal-dim);
-  border: 1px solid rgba(74,173,232,0.3);
+  border: 1px solid rgba(29,111,209,0.3);
   border-radius: 10px;
   min-height: 40px;
   transition: transform .15s;
@@ -415,9 +501,9 @@ html, body.app-body{
   border-radius: 16px;
   font-size: 15.5px; font-weight:800;
   min-height: 56px;
-  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
-  color: #1A1204;
-  box-shadow: 0 12px 30px -10px rgba(229,184,92,0.55);
+  background: linear-gradient(180deg, var(--teal-soft), var(--teal));
+  color: #fff;
+  box-shadow: 0 12px 30px -10px rgba(29,111,209,0.55);
   transition: transform .12s, box-shadow .2s, opacity .2s;
 }
 .app-btn:active{ transform: scale(0.96); }
@@ -441,8 +527,8 @@ html, body.app-body{
 .submitting-view{ display:flex; flex-direction:column; align-items:center; text-align:center; padding: 40px 10px; }
 .spinner-ring{
   width:52px; height:52px; border-radius:50%;
-  border: 3px solid rgba(255,255,255,0.12);
-  border-top-color: var(--gold);
+  border: 3px solid rgba(20,50,80,0.12);
+  border-top-color: var(--teal);
   animation: spin 0.9s linear infinite;
   margin-bottom:20px;
 }
@@ -467,7 +553,7 @@ html, body.app-body{
 .tla-step:not(:last-child)::after{
   content:''; position:absolute; top:11px; right:calc(-50% + 12px);
   width:calc(100% - 24px); height:3px; border-radius:2px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(20,50,80,0.12);
   overflow: hidden;
 }
 .tla-step.done:not(:last-child)::after{
@@ -500,7 +586,7 @@ html, body.app-body{
   border-radius: 18px; padding: 16px; margin-bottom: 12px;
   transition: border-color .3s, background .3s;
 }
-.driver-card-app.driver-live{ border-color: rgba(229,184,92,0.35); background: linear-gradient(120deg, var(--gold-dim), transparent); }
+.driver-card-app.driver-live{ border-color: rgba(229,184,92,0.4); background: linear-gradient(120deg, var(--gold-dim), transparent); box-shadow: 0 6px 18px -10px rgba(229,184,92,0.5); }
 .driver-avatar{
   width:52px; height:52px; border-radius:50%; flex-shrink:0;
   background: var(--gold-dim); color: var(--gold-text);
@@ -516,6 +602,89 @@ html, body.app-body{
 .driver-info > span{ font-size:12.5px; color: var(--text-faint); }
 .driver-meta{ display:flex; align-items:center; gap:8px; margin-top:5px; flex-wrap:wrap; }
 .driver-meta span{ font-size:11px; font-weight:700; color: var(--text-muted); background: var(--surface-hi); padding:3px 9px; border-radius:100px; }
+.driver-meta span.badge-live{ background: rgba(56,161,105,0.12); color: #2F855A; }
+.driver-meta span.badge-busy{ background: var(--gold-dim); color: var(--gold-text); }
+.driver-meta span.badge-offline{ background: rgba(201,68,53,0.12); color: #C94435; }
+.driver-meta span.badge-waiting{ background: var(--gold-dim); color: var(--gold-text); }
+.driver-meta span.badge-onjob{ background: rgba(201,68,53,0.12); color: #C94435; }
+.driver-meta span.badge-done{ background: var(--teal-dim, rgba(29,111,209,0.12)); color: var(--teal-text); }
+
+/* ============================================================
+   "طلباتي" (Orders) — current + past requests, real data via
+   get_customer_trip_history (migration_v1.3.sql). Blue stays the
+   primary accent; gold/green/red are only small status-badge tints.
+   ============================================================ */
+.orders-list{ display:flex; flex-direction:column; gap:12px; margin-bottom: 10px; }
+.order-card{
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+}
+.order-card-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.order-card-svc{ font-size:13.5px; font-weight:800; color: var(--text); margin-bottom:4px; }
+.order-card-route{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12.5px; color: var(--text-muted); margin-bottom:8px; }
+.order-card-route .order-arrow{ color: var(--text-faint); }
+.order-card-time{ font-size:11.5px; color: var(--text-faint); margin-bottom:10px; }
+.order-track-btn{ width:100%; padding:10px; font-size:13px; }
+
+.orders-empty{ display:flex; flex-direction:column; align-items:center; text-align:center; padding: 34px 10px 10px; }
+.orders-empty-ic{
+  width:56px; height:56px; border-radius:50%; margin-bottom:16px;
+  background: var(--surface-hi); color: var(--text-faint);
+  display:flex; align-items:center; justify-content:center;
+}
+.orders-empty-ic svg{ width:24px; height:24px; }
+.orders-empty p{ font-size:14px; color: var(--text-muted); margin: 0 0 20px; }
+
+/* ============================================================
+   Map service-area labels — small, non-interactive orientation
+   pills for the confirmed south Mosul/Nineveh towns (see
+   SERVICE_AREA_LABELS + addServiceAreaLabels() in app.js). Low
+   opacity, sit behind pickup/dropoff pins, never intercept a tap.
+   ============================================================ */
+.area-label-icon{ pointer-events: none !important; }
+.area-label-pill{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size: 11px; font-weight:800;
+  color: var(--teal-text);
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(29,111,209,0.28);
+  box-shadow: 0 4px 12px -6px rgba(20,50,80,0.35);
+  padding: 4px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(4px);
+}
+.area-label-dot{
+  width:6px; height:6px; border-radius:50%; flex-shrink:0;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
+}
+/* Secondary, smaller village-level labels (see VILLAGE_LABELS in app.js) —
+   intentionally lighter/smaller than .area-label-pill above so the 3 main
+   city labels (حمام العليل، الشورة، القيارة) stay visually dominant and
+   the map never looks cluttered. Only rendered from a closer zoom level
+   (see VILLAGE_LABEL_MIN_ZOOM). */
+.village-label-pill{
+  display:inline-flex; align-items:center; gap:4px;
+  font-size: 9.5px; font-weight:700;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(29,111,209,0.18);
+  box-shadow: 0 2px 8px -5px rgba(20,50,80,0.3);
+  padding: 2px 7px;
+  border-radius: 100px;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(3px);
+}
+.village-label-dot{
+  width:4px; height:4px; border-radius:50%; flex-shrink:0;
+  background: var(--teal);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9);
+}
 .driver-rating{ color: var(--gold-text) !important; }
 .driver-pending .driver-avatar{ animation: tla-pulse-soft 1.8s ease-in-out infinite; }
 @keyframes tla-pulse-soft{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
@@ -530,11 +699,12 @@ html, body.app-body{
   transition: transform .15s;
 }
 .driver-action-btn:active{ transform: scale(0.95); }
-.driver-action-btn.call{ background: var(--teal-dim); color: var(--teal-text); border:1px solid rgba(74,173,232,0.3); }
+.driver-action-btn.call{ background: var(--teal-dim); color: var(--teal-text); border:1px solid rgba(29,111,209,0.3); }
 .driver-action-btn.whatsapp{ background: rgba(34,182,125,0.16); color:#34D399; border:1px solid rgba(34,182,125,0.32); }
+.driver-action-btn.request{ background: linear-gradient(180deg, var(--teal-soft), var(--teal)); color:#fff; border:1px solid transparent; font-family:inherit; cursor:pointer; }
 
 .trip-summary-app{ margin-bottom:18px; }
-.tsa-row{ display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px dashed rgba(255,255,255,0.08); font-size:13px; }
+.tsa-row{ display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px dashed rgba(20,50,80,0.14); font-size:13px; }
 .tsa-row:last-child{ border-bottom:none; }
 .tsa-row span{ color: var(--text-faint); flex-shrink:0; }
 .tsa-row b{ text-align:left; font-weight:600; }
@@ -565,10 +735,200 @@ body.kb-open .sheet{ transition: none; }
 
 /* ---------------- Responsive ---------------- */
 @media (min-width: 640px){
-  .sheet{ inset-inline: auto; left: 50%; width: 420px; transform: translateX(-50%); border-radius: 26px; border-bottom:1px solid var(--surface-brd); bottom: 18px; box-shadow: var(--shadow-deep); }
+  .sheet{ inset-inline: auto; left: 50%; width: 420px; transform: translateX(-50%); border-radius: 26px; border-bottom:1px solid var(--surface-brd); bottom: calc(var(--bnav-h, 60px) + 18px); box-shadow: var(--shadow-deep); }
   .sheet[data-height="full"]{ --sheet-h: 78vh; }
   .recenter-fab{ inset-inline-end: calc(50% - 210px + 16px); }
 }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* ---------------- iOS "Add to Home Screen" modal (#iosInstallModal) ----------------
+   A real centered dialog with a backdrop — shown ONLY on demand when the
+   install button is tapped and no native install prompt exists (iOS
+   Safari). Never auto-shown, never duplicated elsewhere in the UI. */
+.ios-modal-backdrop{
+  position: fixed; inset: 0; z-index: 20000;
+  background: rgba(10,20,35,0.5);
+  backdrop-filter: blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  padding: 24px;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.ios-modal-backdrop[hidden]{ display:none; }
+.ios-modal-backdrop.show{ opacity: 1; }
+.ios-modal{
+  width:100%; max-width: 340px;
+  background: var(--bg-deep);
+  border-radius: 22px;
+  padding: 28px 22px 24px;
+  box-shadow: var(--shadow-deep);
+  position: relative;
+  text-align: center;
+  transform: scale(0.92);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.ios-modal-backdrop.show .ios-modal{ transform: scale(1); }
+.ios-modal-close{
+  position:absolute; top:14px; left:14px;
+  width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--surface-hi); color: var(--text-muted); flex-shrink:0;
+}
+.ios-modal-close svg{ width:14px; height:14px; }
+.ios-modal-icon{
+  width:52px; height:52px; margin: 0 auto 14px;
+  border-radius:16px;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  display:flex; align-items:center; justify-content:center;
+  box-shadow: 0 8px 20px -8px rgba(29,111,209,0.5);
+}
+.ios-modal-icon svg{ width:24px; height:24px; }
+.ios-modal h3{ font-family: var(--f-display); font-size:16px; margin: 0 0 18px; }
+.ios-modal-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:13px; text-align:right; }
+.ios-modal-steps li{ display:flex; align-items:center; gap:11px; font-size:13px; line-height:1.5; }
+.ios-modal-steps b{ color: var(--teal-text); font-weight:700; }
+.step-num{
+  width:24px; height:24px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--gold-dim); color: var(--gold-text);
+  font-size:12px; font-weight:800;
+}
+
+/* ============================================================
+   Bottom navigation bar — fixed, always on top, never moves with
+   the sheet drag, never changes size. Active tab gets a light gold
+   accent; blue stays the base color everywhere else.
+   ============================================================ */
+:root{ --bnav-h: 60px; }
+.bottom-nav{
+  position: fixed;
+  left:0; right:0; bottom:0;
+  z-index: 50;
+  display:flex; align-items:stretch;
+  height: calc(var(--bnav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--surface-brd);
+  box-shadow: 0 -8px 24px -14px rgba(20,83,158,0.18);
+}
+.bnav-item{
+  flex:1;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  font-size: 11px; font-weight:700;
+  color: var(--text-muted);
+  transition: color .15s;
+}
+.bnav-icon{ font-size:19px; line-height:1; }
+.bnav-icon svg{ width:22px; height:22px; }
+.bnav-item.active{ color: var(--gold-text); }
+.bnav-item.active .bnav-icon{ filter: drop-shadow(0 0 6px rgba(229,184,92,0.4)); }
+.bnav-item:active{ transform: scale(0.95); }
+
+/* ============================================================
+   In-place FAQ section header (replaces the old quick-access-row
+   assistant pill — same toggle target, now a full-width section
+   title that lives permanently in Home so it's always in the same
+   findable place).
+   ============================================================ */
+.help-header{
+  display:flex; align-items:center; gap:10px;
+  width:100%;
+  padding: 14px 14px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+  font-size: 13.5px; font-weight:800;
+  transition: border-color .2s, background .2s;
+}
+.help-header:active{ background: var(--surface-hi); }
+.help-header.open{ border-color: rgba(229,184,92,0.45); background: var(--gold-dim); color: var(--gold-text); }
+.help-header-label{ flex:1; text-align:start; }
+.help-chevron-main{ width:18px; height:18px; flex-shrink:0; transition: transform .2s; }
+.help-header.open .help-chevron-main{ transform: rotate(180deg); }
+
+/* ============================================================
+   "More" view — accordion list + rights card
+   ============================================================ */
+.more-list{ display:flex; flex-direction:column; gap:8px; margin-bottom: 20px; }
+.more-item{
+  display:flex; align-items:center; gap:10px;
+  width:100%; padding: 14px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  font-size: 14px; font-weight:700; color: var(--text);
+  transition: border-color .15s;
+}
+.more-item:active{ background: var(--surface-hi); }
+.more-item[aria-expanded="true"]{ border-color: rgba(229,184,92,0.45); background: var(--gold-dim); }
+.more-item-icon{ font-size:16px; flex-shrink:0; }
+.more-item-label{ flex:1; text-align: start; }
+.more-item-chevron{ color: var(--text-faint); transition: transform .2s; }
+.more-item[aria-expanded="true"] .more-item-chevron{ transform: rotate(90deg); }
+.more-panel{
+  padding: 4px 14px 14px;
+  margin-top: -6px;
+  font-size: 13px; line-height:1.7; color: var(--text-muted);
+}
+.more-support-actions{ display:flex; flex-direction:column; gap:6px; }
+.more-support-item{
+  display:flex; align-items:center; gap:9px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+}
+.more-support-item:active{ background: var(--surface-hi); }
+
+.rights-card{
+  border-radius: 16px;
+  padding: 18px;
+  text-align:center;
+  background: var(--gold-dim);
+  border: 1px solid rgba(229,184,92,0.35);
+}
+.rights-title{ font-weight:800; font-size:14px; color: var(--gold-text); margin: 0 0 8px; }
+.rights-card p{ margin: 2px 0; font-size: 12.5px; color: var(--text-muted); }
+
+/* ============================================================
+   Welcome screen — first-visit only splash
+   ============================================================ */
+.welcome-screen{
+  position: fixed; inset:0; z-index: 200;
+  display:flex; align-items:center; justify-content:center;
+  padding: 24px;
+  background: linear-gradient(160deg, #0A0E1A 0%, #14213A 55%, #0A0E1A 100%);
+}
+/* Without this, [hidden] gets silently overridden by the display:flex
+   rule above (an author-stylesheet rule always wins over the browser's
+   default [hidden]{display:none} UA rule) — meaning screen.hidden = true
+   in app.js had no visual effect at all. This is what made "ابدأ الآن"
+   look broken even though the JS logic itself was correct. */
+.welcome-screen[hidden]{ display: none; }
+.welcome-content{
+  width:100%; max-width: 380px;
+  text-align:center;
+  color:#fff;
+}
+.welcome-logo{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:76px; height:76px; margin-bottom: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  box-shadow: 0 12px 30px -10px rgba(229,184,92,0.5);
+}
+.welcome-logo svg{ width: 38px; height: 38px; }
+.welcome-content h1{ font-size: 24px; font-weight: 900; margin: 0 0 10px; }
+.welcome-greeting{ font-size: 15.5px; font-weight:700; margin: 0 0 4px; color: var(--gold); }
+.welcome-sub{ font-size: 13.5px; color: rgba(255,255,255,0.7); margin: 0 0 28px; }
+.welcome-actions{ display:flex; flex-direction:column; gap:10px; margin-bottom: 30px; }
+.welcome-actions .app-btn{ width:100%; }
+.welcome-install-btn{ background: linear-gradient(180deg, var(--gold), #C99B3E); }
+.welcome-footer p{ margin:2px 0; font-size: 11.5px; color: rgba(255,255,255,0.45); }

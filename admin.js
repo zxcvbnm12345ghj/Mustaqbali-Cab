@@ -6,7 +6,11 @@
 
 const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
 const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
-const SERVICE_LABELS = { taxi: 'تكسي', private: 'خصوصي', courier: 'توصيل أغراض', intercity: 'بين المحافظات' };
+// cargo/starx were missing from this map (pre-existing gap — the six
+// service types have existed in the DB/customer app since v1.1). Only
+// adding the two missing keys here; taxi/private/courier/intercity are
+// untouched so no existing label anywhere in the admin panel changes.
+const SERVICE_LABELS = { taxi: 'تكسي', private: 'خصوصي', courier: 'توصيل أغراض', intercity: 'بين المحافظات', cargo: 'حمل', starx: 'ستاركس' };
 
 const state = {
   session: null,
@@ -77,6 +81,7 @@ async function enterDashboard() {
   document.getElementById('adminEmail').textContent = state.session?.user?.email || '';
   await loadRequests();
   await loadPrices();
+  await loadDriverStats();
   startRequestPolling();
 }
 
@@ -202,6 +207,195 @@ async function savePrices() {
     }
   }
   await loadPrices();
+}
+
+/* ============================================================
+   Driver stats — real counts (today/selected-day + total) per
+   driver. Read-only reporting: queries the same trip_requests and
+   drivers tables the rest of this admin panel already reads (same
+   RLS/is_admin() policies, no schema changes). Matched by phone
+   number (drivers.phone = trip_requests.driver_phone), since
+   trip_requests has no driver_id foreign key — the admin assigns a
+   driver to a request by typing their name/phone in the modal, not
+   by picking from the roster. This never writes to, or reads from,
+   the separate queue/rotation system (drivers.request_count,
+   select_driver(), get_front_driver(), get_service_drivers()) —
+   those stay exactly as they are.
+   ============================================================ */
+const driverStatsState = {
+  selectedDate: null, // 'YYYY-MM-DD', local calendar date
+};
+
+function todayDateStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// [start, end) ISO bounds for a local calendar date, so "today" always
+// means the admin's own local day rather than the UTC day.
+function dayBoundsIso(dateStr) {
+  const start = new Date(`${dateStr}T00:00:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+async function loadDriversRoster() {
+  const { data, error } = await supabaseClient
+    .from('drivers')
+    .select('id, name, phone, service_type, active')
+    .order('name', { ascending: true });
+  if (error) {
+    console.error(error);
+    return null;
+  }
+  return data || [];
+}
+
+/* ============================================================
+   Add new driver — writes straight into the drivers table (same
+   table loadDriversRoster() above already reads). Purely additive:
+   does not touch trip_requests, the queue/rotation system
+   (drivers.request_count, select_driver(), get_front_driver(),
+   get_service_drivers()), booking, services, or map/location.
+   ============================================================ */
+function populateDriverServiceSelect() {
+  const sel = document.getElementById('newDriverService');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">اختر الخدمة</option>' +
+    Object.entries(SERVICE_LABELS).map(([key, label]) =>
+      `<option value="${escapeAttr(key)}">${escapeHtml(label)}</option>`
+    ).join('');
+}
+
+async function addDriver() {
+  const errEl = document.getElementById('driverAddError');
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('show'); }
+
+  const nameEl = document.getElementById('newDriverName');
+  const phoneEl = document.getElementById('newDriverPhone');
+  const carTypeEl = document.getElementById('newDriverCarType');
+  const serviceEl = document.getElementById('newDriverService');
+
+  const name = nameEl.value.trim();
+  const phone = phoneEl.value.trim();
+  const car_type = carTypeEl.value.trim();
+  const service_type = serviceEl.value;
+
+  if (!name || !phone || !service_type) {
+    if (errEl) {
+      errEl.textContent = 'الاسم، رقم الجوال، والخدمة حقول مطلوبة.';
+      errEl.classList.add('show');
+    }
+    return;
+  }
+
+  const btn = document.getElementById('addDriverBtn');
+  if (btn) btn.disabled = true;
+
+  const { error } = await supabaseClient
+    .from('drivers')
+    .insert({ name, phone, service_type, vehicle_type: car_type || null, active: true });
+
+  if (btn) btn.disabled = false;
+
+  if (error) {
+    console.error(error);
+    if (errEl) {
+      errEl.textContent = 'تعذّر إضافة السائق: ' + error.message;
+      errEl.classList.add('show');
+    }
+    return;
+  }
+
+  nameEl.value = '';
+  phoneEl.value = '';
+  carTypeEl.value = '';
+  serviceEl.value = '';
+
+  // New driver should appear immediately in the roster/stats table below.
+  await loadDriverStats(driverStatsState.selectedDate);
+}
+
+// A real count() query against trip_requests — never an estimate, never
+// a cached/local number. dateStr omitted = all-time total.
+async function countDriverRequests(phone, dateStr) {
+  if (!phone) return 0;
+  let query = supabaseClient
+    .from('trip_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('driver_phone', phone);
+
+  if (dateStr) {
+    const { startIso, endIso } = dayBoundsIso(dateStr);
+    query = query.gte('created_at', startIso).lt('created_at', endIso);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    console.error(error);
+    return 0;
+  }
+  return count || 0;
+}
+
+async function loadDriverStats(dateStr) {
+  const selectedDate = dateStr || driverStatsState.selectedDate || todayDateStr();
+  driverStatsState.selectedDate = selectedDate;
+
+  const dateInput = document.getElementById('driverStatsDate');
+  if (dateInput) {
+    dateInput.value = selectedDate;
+    dateInput.max = todayDateStr();
+  }
+  const colLabel = document.getElementById('driverStatsDateColLabel');
+  if (colLabel) {
+    colLabel.textContent = selectedDate === todayDateStr() ? 'طلبات اليوم' : `طلبات ${selectedDate}`;
+  }
+
+  const body = document.getElementById('driverStatsBody');
+  const empty = document.getElementById('driverStatsEmpty');
+  const loading = document.getElementById('driverStatsLoading');
+  if (empty) empty.style.display = 'none';
+  if (loading) { loading.style.display = 'block'; loading.textContent = 'جارٍ الحساب...'; }
+  if (body) body.innerHTML = '';
+
+  const drivers = await loadDriversRoster();
+
+  if (drivers === null) {
+    if (loading) loading.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'تعذّر تحميل السائقين. تأكد من صلاحيات حسابك.'; }
+    return;
+  }
+
+  if (drivers.length === 0) {
+    if (loading) loading.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'لا يوجد سائقون مسجّلون بعد.'; }
+    return;
+  }
+
+  const rows = await Promise.all(drivers.map(async (d) => {
+    const [dayCount, totalCount] = await Promise.all([
+      countDriverRequests(d.phone, selectedDate),
+      countDriverRequests(d.phone),
+    ]);
+    return { ...d, dayCount, totalCount };
+  }));
+
+  if (loading) loading.style.display = 'none';
+  if (!body) return;
+
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.name)}${r.active ? '' : ' <span class="opt">(غير نشط)</span>'}</td>
+      <td>${escapeHtml(r.phone)}</td>
+      <td>${escapeHtml(SERVICE_LABELS[r.service_type] || r.service_type)}</td>
+      <td>${r.dayCount}</td>
+      <td>${r.totalCount}</td>
+    </tr>
+  `).join('');
 }
 
 /* ============================================================
@@ -420,6 +614,10 @@ async function saveDriver() {
   await loadRequests();
   const refreshed = state.requests.find(r => r.id === state.selectedId);
   if (refreshed) openDetail(refreshed.id);
+  // Driver assignment can change which driver a request counts toward —
+  // refresh the stats table so the numbers stay accurate. Non-blocking:
+  // doesn't delay the modal/detail view refresh above.
+  loadDriverStats(driverStatsState.selectedDate);
 }
 
 async function updateStatus(newStatus) {
@@ -452,6 +650,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('assignDriverBtn').addEventListener('click', saveDriver);
   document.getElementById('savePricesBtn').addEventListener('click', savePrices);
+  document.getElementById('driverStatsDate').addEventListener('change', (e) => {
+    if (e.target.value) loadDriverStats(e.target.value);
+  });
+  document.getElementById('driverStatsTodayBtn').addEventListener('click', () => loadDriverStats(todayDateStr()));
+  document.getElementById('driverStatsRefreshBtn').addEventListener('click', () => loadDriverStats(driverStatsState.selectedDate));
+  populateDriverServiceSelect();
+  document.getElementById('addDriverBtn').addEventListener('click', addDriver);
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.addEventListener('click', () => updateStatus(b.dataset.status));
   });

@@ -7,6 +7,67 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
+<style>
+  /* ============================================================
+     Driver stats section — additive only. Reuses the same design
+     tokens (--teal, --gold, --surface, etc.) already used across
+     the admin panel's other cards, assumed defined in style.css.
+     Does not touch the queue/rotation system, booking, or the
+     customer app in any way — read-only reporting over existing
+     admin-visible tables (drivers + trip_requests).
+     ============================================================ */
+  .admin-driver-stats{
+    background: var(--surface, #fff);
+    border: 1px solid var(--surface-brd, rgba(20,50,80,0.1));
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 22px;
+  }
+  .admin-driver-stats-head{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap: wrap; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .admin-driver-stats-controls{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
+  .admin-date-input{
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--surface-brd, rgba(20,50,80,0.16));
+    background: var(--bg-deep, #fff);
+    color: var(--text, #14243a);
+    font-size: 13.5px;
+    font-family: inherit;
+  }
+  .admin-btn.ghost{
+    background: transparent;
+    color: var(--teal-text, #1D6FD1);
+    border: 1px solid var(--surface-brd, rgba(29,111,209,0.3));
+    box-shadow: none;
+  }
+  .admin-driver-stats-hint{
+    font-size: 12px; color: var(--text-faint, #8091A0);
+    margin: 4px 0 14px;
+  }
+  .admin-driver-stats-wrap{ overflow-x:auto; }
+  #driverStatsTable th, #driverStatsTable td{ white-space: nowrap; }
+  /* ------------------------------------------------------------
+     Add-driver row — reuses .admin-date-input/.admin-btn tokens
+     above so it visually matches the rest of this card. Additive
+     only; nothing else in this stylesheet is touched.
+     ------------------------------------------------------------ */
+  .admin-driver-add{
+    display:flex; align-items:center; flex-wrap: wrap; gap:8px;
+    margin-bottom: 10px;
+  }
+  .admin-driver-add input,
+  .admin-driver-add select{
+    flex: 1 1 150px;
+    min-width: 120px;
+  }
+  .admin-driver-add select.admin-date-input{
+    font-family: inherit;
+  }
+</style>
 </head>
 <body class="admin-body">
 
@@ -64,6 +125,47 @@
       </div>
       <div class="admin-price-grid" id="priceGrid"></div>
       <div class="admin-error" id="priceError"></div>
+    </div>
+
+    <div class="admin-driver-stats">
+      <div class="admin-driver-stats-head">
+        <p class="section-label" style="margin:0;">إحصائيات السائقين</p>
+        <div class="admin-driver-stats-controls">
+          <input type="date" id="driverStatsDate" class="admin-date-input">
+          <button type="button" class="admin-btn ghost" id="driverStatsTodayBtn" style="width:auto; padding:8px 14px;">اليوم</button>
+          <button type="button" class="admin-btn" id="driverStatsRefreshBtn" style="width:auto; padding:8px 16px;">تحديث</button>
+        </div>
+      </div>
+      <p class="admin-driver-stats-hint">أعداد حقيقية من طلبات trip_requests الفعلية، مطابقة برقم جوال كل سائق (drivers.phone = trip_requests.driver_phone).</p>
+
+      <!-- Add new driver — inserts directly into drivers table, then
+           refreshes the roster/stats below. Does not touch trip_requests,
+           the queue/rotation system, booking, services, or map/location. -->
+      <div class="admin-driver-add" id="driverAddForm">
+        <input type="text" id="newDriverName" class="admin-date-input" placeholder="اسم السائق" maxlength="100">
+        <input type="text" id="newDriverPhone" class="admin-date-input" placeholder="رقم الجوال" maxlength="20">
+        <input type="text" id="newDriverCarType" class="admin-date-input" placeholder="نوع المركبة" maxlength="100">
+        <select id="newDriverService" class="admin-date-input"></select>
+        <button type="button" class="admin-btn" id="addDriverBtn" style="width:auto; padding:8px 16px;">إضافة سائق</button>
+      </div>
+      <div class="admin-error" id="driverAddError" style="margin-bottom:10px;"></div>
+
+      <div class="admin-driver-stats-wrap">
+        <table class="admin-table" id="driverStatsTable">
+          <thead>
+            <tr>
+              <th>السائق</th>
+              <th>الجوال</th>
+              <th>الخدمة</th>
+              <th id="driverStatsDateColLabel">طلبات اليوم</th>
+              <th>إجمالي الطلبات</th>
+            </tr>
+          </thead>
+          <tbody id="driverStatsBody"></tbody>
+        </table>
+        <div class="admin-empty" id="driverStatsEmpty" style="display:none;">لا يوجد سائقون مسجّلون بعد.</div>
+        <div class="admin-empty" id="driverStatsLoading" style="display:none;">جارٍ الحساب...</div>
+      </div>
     </div>
 
     <div class="admin-toolbar">

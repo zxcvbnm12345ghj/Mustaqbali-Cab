@@ -243,3 +243,42 @@ table.admin-table{ width:100%; border-collapse: collapse; min-width: 720px; }
   .admin-main{ padding: 18px 14px 50px; }
   .admin-topbar{ padding: 14px 16px; }
 }
+
+/* ---- Drivers panel (admin.html #driversPanel) ---- */
+.admin-field select{
+  width:100%; background: var(--surface); border:1px solid var(--surface-brd);
+  border-radius: 12px; padding: 13px 14px; color: var(--text); font-size:15px;
+}
+.admin-field select:focus{ outline:none; border-color: var(--gold); }
+.driver-add-form{
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 14px;
+  align-items:end; margin-bottom: 18px;
+}
+.driver-add-form .admin-field{ margin-bottom:0; }
+.driver-add-form .admin-error{ grid-column: 1 / -1; margin-top:0; }
+
+.drivers-list{ display:flex; flex-direction:column; gap: 18px; }
+.driver-group .section-label{ margin-bottom:8px; }
+.driver-group-empty{ font-size:12.5px; color: var(--text-faint); }
+
+.driver-row{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background: var(--bg-deep-2); border:1px solid var(--surface-brd); border-radius: 14px;
+  padding: 10px 14px; margin-bottom:8px;
+}
+.driver-row.inactive{ opacity:.55; }
+.driver-row-pos{
+  flex-shrink:0; width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--gold-dim); color: var(--gold-text); font-weight:800; font-size:12.5px;
+}
+.driver-row-info{ flex:1; min-width:140px; }
+.driver-row-info b{ display:block; font-size:13.5px; }
+.driver-row-info span{ font-size:11.5px; color: var(--text-muted); }
+.driver-row-count{
+  flex-shrink:0; font-size:11.5px; font-weight:700; color: var(--teal-text);
+  background: var(--teal-dim); padding:4px 10px; border-radius:100px; white-space:nowrap;
+}
+.driver-toggle{ display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color: var(--text-muted); cursor:pointer; flex-shrink:0; }
+.driver-toggle input{ width:16px; height:16px; accent-color: var(--success); }
+.driver-delete-btn{ flex-shrink:0; width:auto !important; padding:7px 12px !important; font-size:12px !important; margin-top:0 !important; }
