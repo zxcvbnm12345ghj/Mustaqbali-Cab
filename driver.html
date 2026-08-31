@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>مستقبلي كاب — للسائقين</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="driver.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="driver-body">
+
+  <!-- Invalid/missing token — shown instead of everything else below -->
+  <div class="driver-screen" id="driverInvalidScreen" hidden>
+    <div class="driver-card">
+      <div class="driver-brand">
+        <span class="brand-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 11l1.4-4.3A2 2 0 0 1 8.3 5.3h7.4a2 2 0 0 1 1.9 1.4L19 11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="11" width="18" height="6" rx="2" stroke="#fff" stroke-width="1.6"/></svg></span>
+        <span>مستقبلي كاب</span>
+      </div>
+      <h1>رابط غير صالح</h1>
+      <p class="driver-muted">هذا الرابط غير صحيح أو منتهي. تواصل مع الإدارة للحصول على رابطك الخاص.</p>
+    </div>
+  </div>
+
+  <!-- Main screen -->
+  <div class="driver-screen" id="driverMainScreen" hidden>
+    <div class="driver-card">
+      <div class="driver-brand">
+        <span class="brand-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 11l1.4-4.3A2 2 0 0 1 8.3 5.3h7.4a2 2 0 0 1 1.9 1.4L19 11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="11" width="18" height="6" rx="2" stroke="#fff" stroke-width="1.6"/></svg></span>
+        <span>مستقبلي كاب — للسائقين</span>
+      </div>
+
+      <div class="driver-status-row">
+        <span class="driver-status-dot" id="driverStatusDot"></span>
+        <span id="driverStatusText">جاري التحقق من صلاحية الموقع (GPS)…</span>
+      </div>
+
+      <p class="driver-muted" id="driverLastSent">لم يُرسَل أي موقع بعد</p>
+
+      <button type="button" class="driver-btn" id="driverToggleBtn">إيقاف مؤقت</button>
+
+      <p class="driver-fineprint">
+        يرسل هذا التطبيق موقعك الحالي فقط لغرض ترتيب طلبات الزبائن حسب الأقرب.
+        لا يُشارك اسمك أو رقمك مع أي شخص عبر هذه الصفحة. أبقِ الصفحة مفتوحة أثناء العمل.
+      </p>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="driver.js"></script>
+</body>
+</html>

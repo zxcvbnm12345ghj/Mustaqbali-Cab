@@ -12,6 +12,63 @@ const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
 // untouched so no existing label anywhere in the admin panel changes.
 const SERVICE_LABELS = { taxi: 'تكسي', private: 'خصوصي', courier: 'توصيل أغراض', intercity: 'بين المحافظات', cargo: 'حمل', starx: 'ستاركس' };
 
+/* ============================================================
+   Push notifications — additive only. Registers admin-sw.js
+   (completely separate from driver-sw.js/sw.js), subscribes via the
+   browser's Push API, and saves the subscription via
+   save_admin_push_subscription() — which itself re-checks is_admin()
+   server-side, so this button grants nothing on its own; it only
+   works for an already-authenticated admin, same as every other
+   action in this file. Does not touch polling, playAlertSound(), or
+   any existing function — push is a second, independent channel on
+   top of the existing in-tab 3s-poll alert, not a replacement.
+   ============================================================ */
+const VAPID_PUBLIC_KEY = 'BA_mwRbHk_BXqtt8PKCma9oaAbuQVAoYNvNvtTmq2L8bcWTPakSgiU4AuDZKpo6NCpKCRzXM2gFaZ5QIA6s5_ww';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function setupAdminPushNotifications() {
+  const btn = document.getElementById('enablePushBtn');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (btn) { btn.textContent = 'الإشعارات غير مدعومة بهذا المتصفح'; btn.disabled = true; }
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.register('admin-sw.js');
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') {
+      if (btn) btn.textContent = 'تم رفض إذن الإشعارات';
+      return;
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+
+    const { error } = await supabaseClient.rpc('save_admin_push_subscription', {
+      p_subscription: subscription.toJSON(),
+    });
+    if (error) throw error;
+
+    if (btn) { btn.textContent = '🔔 الإشعارات مفعّلة'; btn.disabled = true; }
+  } catch (err) {
+    console.error('admin push setup failed', err);
+    if (btn) btn.textContent = 'تعذّر تفعيل الإشعارات';
+  }
+}
+
 const state = {
   session: null,
   requests: [],
@@ -82,6 +139,7 @@ async function enterDashboard() {
   await loadRequests();
   await loadPrices();
   await loadDriverStats();
+  await loadAds();
   startRequestPolling();
 }
 
@@ -639,6 +697,287 @@ async function updateStatus(newStatus) {
 }
 
 /* ============================================================
+   Customer Ads — إدارة الإعلانات (additive only). Direct CRUD on
+   customer_ads (same pattern as drivers/service_prices — admin-only
+   RLS policies in migrations/migration_customer_ads.sql), plus an
+   on-demand push via the new queue_customer_ads_push() RPC. Does not
+   touch trip_requests, drivers, GPS, or the existing admin/driver
+   push tables/queue in any way.
+   ============================================================ */
+const adsState = {
+  ads: [],
+  editingId: null,
+};
+
+const AD_TYPE_LABELS = { scheduled: 'مجدول', daily: 'يومي' };
+
+async function loadAds() {
+  const { data, error } = await supabaseClient
+    .from('customer_ads')
+    .select('*')
+    .order('priority', { ascending: true })
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error(error);
+    return;
+  }
+  adsState.ads = data || [];
+  renderAdsTable();
+}
+
+function formatAdSchedule(ad) {
+  if (ad.ad_type === 'daily') {
+    const start = ad.daily_start_time ? ad.daily_start_time.slice(0, 5) : null;
+    const end = ad.daily_end_time ? ad.daily_end_time.slice(0, 5) : null;
+    const timeRange = (start && end) ? `${start} - ${end}` : 'طوال اليوم';
+    const dateRange = (ad.starts_at || ad.ends_at)
+      ? ` (${ad.starts_at ? formatDate(ad.starts_at) : '—'} → ${ad.ends_at ? formatDate(ad.ends_at) : '—'})`
+      : '';
+    return `يومياً ${timeRange}${dateRange}`;
+  }
+  if (!ad.starts_at && !ad.ends_at) return 'بدون حدود زمنية';
+  return `${ad.starts_at ? formatDate(ad.starts_at) : '—'} → ${ad.ends_at ? formatDate(ad.ends_at) : '—'}`;
+}
+
+function renderAdsTable() {
+  const body = document.getElementById('adsBody');
+  const empty = document.getElementById('adsEmpty');
+  if (!body) return;
+
+  if (!adsState.ads.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = adsState.ads.map(ad => `
+    <tr data-ad-id="${escapeAttr(ad.id)}">
+      <td>${escapeHtml(ad.title)}</td>
+      <td><span class="ads-type-badge ${escapeAttr(ad.ad_type)}">${escapeHtml(AD_TYPE_LABELS[ad.ad_type] || ad.ad_type)}</span></td>
+      <td>${escapeHtml(formatAdSchedule(ad))}</td>
+      <td>${escapeHtml(ad.display_seconds)} ث</td>
+      <td><span class="ads-active-badge ${ad.active ? '' : 'off'}" data-ad-toggle="${escapeAttr(ad.id)}" style="cursor:pointer;">${ad.active ? 'نشط' : 'موقوف'}</span></td>
+      <td class="ads-row-actions">
+        <button type="button" class="primary" data-ad-edit="${escapeAttr(ad.id)}">تعديل</button>
+        <button type="button" class="danger" data-ad-delete="${escapeAttr(ad.id)}">حذف</button>
+      </td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-ad-edit]').forEach(btn => {
+    btn.addEventListener('click', () => openAdModal(adsState.ads.find(a => a.id === btn.dataset.adEdit)));
+  });
+  body.querySelectorAll('[data-ad-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteAd(btn.dataset.adDelete));
+  });
+  body.querySelectorAll('[data-ad-toggle]').forEach(el => {
+    el.addEventListener('click', () => toggleAdActive(el.dataset.adToggle));
+  });
+}
+
+async function toggleAdActive(id) {
+  const ad = adsState.ads.find(a => a.id === id);
+  if (!ad) return;
+  const { error } = await supabaseClient
+    .from('customer_ads')
+    .update({ active: !ad.active })
+    .eq('id', id);
+  if (error) {
+    console.error(error);
+    return;
+  }
+  await loadAds();
+}
+
+// ISO timestamptz (UTC, e.g. "2026-06-01T10:00:00+00:00") -> value a
+// <input type="datetime-local"> understands ("YYYY-MM-DDTHH:mm", in the
+// admin's own local time — the browser already renders/parses that
+// input in local time, so no separate timezone math is needed here).
+function isoToDatetimeLocalValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// <input type="datetime-local"> value -> ISO string for Postgres
+// timestamptz, or null if left empty (both bounds are optional).
+function datetimeLocalValueToIso(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function toggleAdTypeFields() {
+  const type = document.getElementById('adType').value;
+  document.getElementById('adScheduledFields').hidden = type !== 'scheduled';
+  document.getElementById('adDailyFields').hidden = type !== 'daily';
+}
+
+function openAdModal(ad) {
+  adsState.editingId = ad ? ad.id : null;
+  document.getElementById('adModalTitle').textContent = ad ? 'تعديل إعلان' : 'إضافة إعلان';
+  document.getElementById('adTitle').value = ad?.title || '';
+  document.getElementById('adBody').value = ad?.body || '';
+  document.getElementById('adImageUrl').value = ad?.image_url || '';
+  document.getElementById('adLinkUrl').value = ad?.link_url || '';
+  document.getElementById('adDisplaySeconds').value = ad?.display_seconds ?? 6;
+  document.getElementById('adType').value = ad?.ad_type || 'scheduled';
+  document.getElementById('adStartsAt').value = isoToDatetimeLocalValue(ad?.starts_at);
+  document.getElementById('adEndsAt').value = isoToDatetimeLocalValue(ad?.ends_at);
+  document.getElementById('adDailyStart').value = ad?.daily_start_time ? ad.daily_start_time.slice(0, 5) : '';
+  document.getElementById('adDailyEnd').value = ad?.daily_end_time ? ad.daily_end_time.slice(0, 5) : '';
+  document.getElementById('adActive').checked = ad ? !!ad.active : true;
+  toggleAdTypeFields();
+
+  const deleteBtn = document.getElementById('deleteAdBtn');
+  const pushBtn = document.getElementById('sendAdPushBtn');
+  if (deleteBtn) deleteBtn.hidden = !ad;
+  if (pushBtn) pushBtn.hidden = !ad;
+
+  const errEl = document.getElementById('adModalError');
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('show'); }
+  const pushMsgEl = document.getElementById('adPushMsg');
+  if (pushMsgEl) { pushMsgEl.textContent = ''; pushMsgEl.classList.remove('show'); }
+
+  document.getElementById('adModalBackdrop').classList.add('show');
+}
+
+function closeAdModal() {
+  document.getElementById('adModalBackdrop').classList.remove('show');
+  adsState.editingId = null;
+}
+
+function showAdModalError(message) {
+  const el = document.getElementById('adModalError');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.classList.add('show');
+  } else {
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+}
+
+async function saveAd() {
+  showAdModalError(null);
+
+  const title = document.getElementById('adTitle').value.trim();
+  const bodyText = document.getElementById('adBody').value.trim();
+  const image_url = document.getElementById('adImageUrl').value.trim();
+  const link_url = document.getElementById('adLinkUrl').value.trim();
+  const displayRaw = document.getElementById('adDisplaySeconds').value;
+  const ad_type = document.getElementById('adType').value;
+  const starts_at = datetimeLocalValueToIso(document.getElementById('adStartsAt').value);
+  const ends_at = datetimeLocalValueToIso(document.getElementById('adEndsAt').value);
+  const dailyStartRaw = document.getElementById('adDailyStart').value;
+  const dailyEndRaw = document.getElementById('adDailyEnd').value;
+  const active = document.getElementById('adActive').checked;
+
+  if (!title) {
+    showAdModalError('العنوان مطلوب.');
+    return;
+  }
+  const display_seconds = Number(displayRaw);
+  if (Number.isNaN(display_seconds) || display_seconds < 2 || display_seconds > 60) {
+    showAdModalError('مدة العرض يجب أن تكون رقماً بين 2 و60 ثانية.');
+    return;
+  }
+  if (starts_at && ends_at && new Date(starts_at) > new Date(ends_at)) {
+    showAdModalError('تاريخ البداية يجب أن يكون قبل تاريخ النهاية.');
+    return;
+  }
+  if (ad_type === 'daily' && dailyStartRaw && dailyEndRaw === '') {
+    showAdModalError('حدّد وقت النهاية اليومي أيضاً، أو اترك كلا الحقلين فارغين.');
+    return;
+  }
+
+  const payload = {
+    title,
+    body: bodyText || null,
+    image_url: image_url || null,
+    link_url: link_url || null,
+    display_seconds,
+    ad_type,
+    starts_at,
+    ends_at,
+    daily_start_time: ad_type === 'daily' && dailyStartRaw ? dailyStartRaw : null,
+    daily_end_time: ad_type === 'daily' && dailyEndRaw ? dailyEndRaw : null,
+    active,
+  };
+
+  const saveBtn = document.getElementById('saveAdBtn');
+  if (saveBtn) saveBtn.disabled = true;
+
+  const query = adsState.editingId
+    ? supabaseClient.from('customer_ads').update(payload).eq('id', adsState.editingId)
+    : supabaseClient.from('customer_ads').insert(payload);
+  const { error } = await query;
+
+  if (saveBtn) saveBtn.disabled = false;
+
+  if (error) {
+    console.error(error);
+    showAdModalError('تعذّر حفظ الإعلان: ' + error.message);
+    return;
+  }
+
+  await loadAds();
+  closeAdModal();
+}
+
+async function deleteAd(id) {
+  if (!id) return;
+  if (!confirm('حذف هذا الإعلان نهائياً؟')) return;
+  const { error } = await supabaseClient.from('customer_ads').delete().eq('id', id);
+  if (error) {
+    console.error(error);
+    alert('تعذّر حذف الإعلان: ' + error.message);
+    return;
+  }
+  if (adsState.editingId === id) closeAdModal();
+  await loadAds();
+}
+
+// "Push إعلاني للزبائن عند الحاجة" — on demand only, never automatic.
+// Queues into the brand-new ad_push_queue (see migration_customer_ads.sql);
+// a separate scheduled Edge Function (send-customer-ads-push.ts) delivers
+// it. Never touches push_notifications_queue (admin/driver).
+async function sendAdPush() {
+  if (!adsState.editingId) return;
+  const ad = adsState.ads.find(a => a.id === adsState.editingId);
+  if (!ad) return;
+
+  const pushMsgEl = document.getElementById('adPushMsg');
+  const pushBtn = document.getElementById('sendAdPushBtn');
+  if (pushMsgEl) { pushMsgEl.textContent = ''; pushMsgEl.classList.remove('show'); }
+  if (pushBtn) pushBtn.disabled = true;
+
+  const { error } = await supabaseClient.rpc('queue_customer_ads_push', {
+    p_ad_id: ad.id,
+    p_title: ad.title,
+    p_body: ad.body || ad.title,
+    p_url: ad.link_url || '/index.html',
+  });
+
+  if (pushBtn) pushBtn.disabled = false;
+
+  if (error) {
+    console.error(error);
+    showAdModalError('تعذّر جدولة الإشعار: ' + error.message);
+    return;
+  }
+  if (pushMsgEl) {
+    pushMsgEl.textContent = 'تم جدولة الإشعار — سيصل للزبائن المشتركين خلال ثوانٍ.';
+    pushMsgEl.classList.add('show');
+  }
+}
+
+/* ============================================================
    Init
    ============================================================ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -649,7 +988,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target.id === 'modalBackdrop') closeModal();
   });
   document.getElementById('assignDriverBtn').addEventListener('click', saveDriver);
+  document.getElementById('enablePushBtn')?.addEventListener('click', setupAdminPushNotifications);
   document.getElementById('savePricesBtn').addEventListener('click', savePrices);
+  document.getElementById('addAdBtn')?.addEventListener('click', () => openAdModal(null));
+  document.getElementById('adModalCloseBtn')?.addEventListener('click', closeAdModal);
+  document.getElementById('adModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target.id === 'adModalBackdrop') closeAdModal();
+  });
+  document.getElementById('adType')?.addEventListener('change', toggleAdTypeFields);
+  document.getElementById('saveAdBtn')?.addEventListener('click', saveAd);
+  document.getElementById('deleteAdBtn')?.addEventListener('click', () => deleteAd(adsState.editingId));
+  document.getElementById('sendAdPushBtn')?.addEventListener('click', sendAdPush);
   document.getElementById('driverStatsDate').addEventListener('change', (e) => {
     if (e.target.value) loadDriverStats(e.target.value);
   });

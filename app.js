@@ -42,6 +42,11 @@ const state = {
   currentService: null,
   pickupLatLng: null,
   dropoffLatLng: null,
+  // Set once we've attempted an automatic GPS fix for the customer's
+  // pickup point, so we only ever try this once per visit — never
+  // re-prompting or overwriting a point the customer already set
+  // manually (typed address, map tap, marker drag, or the "موقعي" button).
+  autoLocateAttempted: false,
   mapTargetMode: 'pickup', // 'pickup' | 'dropoff' — which marker the next map tap sets
   map: null,
   pickupMarker: null,
@@ -51,6 +56,7 @@ const state = {
   statusPollTimer: null,
   lastKnownStatus: null,
   featuredDriverId: null, // id of the driver currently shown on the booking card, captured at booking time
+  featuredDriverPhone: null, // phone of that same driver — sent to submit_trip_request so the pick is a real assignment, not cosmetic
 };
 
 /* ============================================================
@@ -337,6 +343,25 @@ function showNearestPickupArea(lat, lng) {
   }
 }
 
+// Same zone list as showNearestPickupArea() above, but WITHOUT the 8km
+// display cutoff and returning just the name — used purely for
+// zone-priority driver sorting (see sortRosterByZone below), never for
+// anything shown directly to the customer. Always resolves to one of
+// the 10 real, existing points; never invents a zone.
+function nearestZoneName(lat, lng) {
+  const candidates = [...SERVICE_AREA_LABELS, ...VILLAGE_LABELS];
+  let closest = null;
+  let closestKm = Infinity;
+  candidates.forEach((area) => {
+    const km = haversineKm(lat, lng, area.lat, area.lng);
+    if (km < closestKm) {
+      closestKm = km;
+      closest = area;
+    }
+  });
+  return closest ? closest.name : null;
+}
+
 function setDropoff(lat, lng, { reverseGeocode = false, fly = true } = {}) {
   state.dropoffLatLng = { lat, lng };
   document.getElementById('dropoffLat').value = lat;
@@ -576,6 +601,18 @@ function openBooking(serviceKey) {
   sheet.setSnap('full');
   applyProfileToBookingForm();
   haptic();
+
+  // Auto-detect the customer's pickup location once per visit, the
+  // moment they open the request form — the right time to ask per
+  // Android/iOS guidance (in context, not on cold page load), and
+  // silent (auto=true) so a denial or slow fix never shows an error;
+  // the pickup field simply stays open for manual entry as before.
+  // Skipped entirely if a pickup point is already set, so this never
+  // overwrites a manually typed address, map tap, or marker drag.
+  if (!state.pickupLatLng && !state.autoLocateAttempted) {
+    state.autoLocateAttempted = true;
+    locateMe(true);
+  }
 }
 
 function backToHome() {
@@ -651,6 +688,41 @@ function rosterStatusInfo(status, isFront) {
 // confirmed submission (handleSubmit → select_driver, unchanged) ever
 // rotates anyone. So the official request always auto-routes to
 // whoever's turn it actually is, regardless of who the customer called.
+// Display-order-only sort: نفس المنطقة أولًا → الأقرب جغرافيًا → باقي
+// المناطق. Never touches the database, `last_served_at`, or
+// select_driver()'s rotation — it only reorders the array right before
+// rendering. The "طلب" button still always targets whoever
+// get_front_driver() says is actually next (frontId), completely
+// independent of this display order, so the fair-rotation queue is
+// unaffected no matter how the cards are arranged on screen.
+// A driver's location is ignored (treated as unknown) once it's older
+// than STALE_LOCATION_MS — they simply fall back to the "باقي المناطق"
+// group in original queue order, instead of showing a false position.
+const STALE_LOCATION_MS = 10 * 60 * 1000; // 10 minutes
+
+function sortRosterByZone(roster, customerLat, customerLng) {
+  if (customerLat == null || customerLng == null) return roster;
+  const customerZone = nearestZoneName(customerLat, customerLng);
+  const now = Date.now();
+
+  const enriched = roster.map((row, idx) => {
+    const hasFreshLoc =
+      row.driver_lat != null && row.driver_lng != null && row.location_updated_at &&
+      (now - new Date(row.location_updated_at).getTime()) <= STALE_LOCATION_MS;
+    const driverZone = hasFreshLoc ? nearestZoneName(row.driver_lat, row.driver_lng) : null;
+    const distanceKm = hasFreshLoc ? haversineKm(customerLat, customerLng, row.driver_lat, row.driver_lng) : Infinity;
+    return { row, idx, sameZone: hasFreshLoc && driverZone === customerZone, distanceKm };
+  });
+
+  enriched.sort((a, b) => {
+    if (a.sameZone !== b.sameZone) return a.sameZone ? -1 : 1;
+    if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
+    return a.idx - b.idx; // stable fallback — preserves the existing queue order
+  });
+
+  return enriched.map((e) => e.row);
+}
+
 async function loadServiceDrivers(serviceType) {
   const wrap = document.getElementById('driversListApp');
   if (!wrap) return;
@@ -671,19 +743,32 @@ async function loadServiceDrivers(serviceType) {
     const frontId = (!frontRes.error && frontRes.data && frontRes.data.id) ? frontRes.data.id : null;
     const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر مستقبلي كاب`);
 
-    const cardsHtml = roster.map((row) => {
+    // GPS is the basis; zones are priority-only (see sortRosterByZone).
+    // Falls back to the roster's original (queue) order untouched when
+    // the customer hasn't set a pickup point yet.
+    const sortedRoster = state.pickupLatLng
+      ? sortRosterByZone(roster, state.pickupLatLng.lat, state.pickupLatLng.lng)
+      : roster;
+
+    const cardsHtml = sortedRoster.map((row) => {
       const isFront = frontId && row.id === frontId;
       const info = rosterStatusInfo(row.status, isFront);
       const vehicleTypeLabel = row.vehicle_type || SERVICES[serviceType]?.label || 'مركبة';
       const cleanTel = (row.phone || '').replace(/[^\d+]/g, '');
       const waTarget = normalizeIraqiPhoneForWhatsapp(row.phone);
-      const hasActions = cleanTel || waTarget || isFront;
+      // "طلب" is only offered on an actually available driver (status
+      // === 'active') — someone already on a job ("في مهمة") or offline
+      // cannot be picked for a real, immediate assignment. This is
+      // independent of isFront/queue position: any available driver in
+      // the GPS/zone-sorted list can be chosen, not only the front one.
+      const canRequest = row.status === 'active';
+      const hasActions = cleanTel || waTarget || canRequest;
 
       const actionsHtml = hasActions ? `
         <div class="driver-actions">
           ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال بالسائق">${CALL_ICON_SVG} اتصال</a>` : ''}
           ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب السائق">${WA_ICON_SVG} واتساب</a>` : ''}
-          ${isFront ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
+          ${canRequest ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
         </div>
       ` : '';
 
@@ -759,6 +844,175 @@ async function loadServicePrices() {
     updatePriceBar();
   } catch (err) {
     console.error('failed to load service prices, using fallback defaults', err);
+  }
+}
+
+/* ============================================================
+   Customer ads carousel — additive only. Reads active/in-schedule
+   ads via the get_active_customer_ads() RPC (see
+   migrations/migration_customer_ads.sql) and rotates them in the
+   home view, right below the existing promo-card. Does not touch
+   booking, pricing, the map, or any GPS/location code.
+   ============================================================ */
+const adsState = {
+  ads: [],
+  index: 0,
+  timer: null,
+};
+
+function stopAdsRotation() {
+  if (adsState.timer) {
+    clearTimeout(adsState.timer);
+    adsState.timer = null;
+  }
+}
+
+function renderAdsDots() {
+  const dots = document.getElementById('adsDots');
+  if (!dots) return;
+  if (adsState.ads.length <= 1) {
+    dots.hidden = true;
+    dots.innerHTML = '';
+    return;
+  }
+  dots.hidden = false;
+  dots.innerHTML = adsState.ads.map((_, i) =>
+    `<span class="ads-dot${i === adsState.index ? ' active' : ''}"></span>`
+  ).join('');
+}
+
+function showAdSlide(i) {
+  const track = document.getElementById('adsTrack');
+  if (!track) return;
+  adsState.index = ((i % adsState.ads.length) + adsState.ads.length) % adsState.ads.length;
+  track.style.transform = `translateX(${adsState.index * 100}%)`;
+  renderAdsDots();
+}
+
+function scheduleNextAdSlide() {
+  stopAdsRotation();
+  if (adsState.ads.length <= 1) return;
+  const current = adsState.ads[adsState.index];
+  const seconds = Number(current?.display_seconds) > 0 ? Number(current.display_seconds) : 6;
+  adsState.timer = setTimeout(() => {
+    showAdSlide(adsState.index + 1);
+    scheduleNextAdSlide();
+  }, seconds * 1000);
+}
+
+function renderAdsCarousel() {
+  const carousel = document.getElementById('adsCarousel');
+  const track = document.getElementById('adsTrack');
+  if (!carousel || !track) return;
+
+  if (!adsState.ads.length) {
+    carousel.hidden = true;
+    track.innerHTML = '';
+    stopAdsRotation();
+    return;
+  }
+
+  track.innerHTML = adsState.ads.map(ad => {
+    const img = ad.image_url
+      ? `<img class="ad-slide-img" src="${escapeHtmlAttr(ad.image_url)}" alt="" loading="lazy">`
+      : '';
+    const hasText = ad.title || ad.body;
+    const body = hasText
+      ? `<div class="ad-slide-body">${ad.title ? `<b>${escapeHtmlText(ad.title)}</b>` : ''}${ad.body ? `<span>${escapeHtmlText(ad.body)}</span>` : ''}</div>`
+      : '';
+    const tag = ad.link_url ? 'a' : 'div';
+    const href = ad.link_url ? ` href="${escapeHtmlAttr(ad.link_url)}" target="_blank" rel="noopener noreferrer"` : '';
+    return `<${tag} class="ad-slide"${href} data-ad-id="${escapeHtmlAttr(ad.id)}">${img}${body}</${tag}>`;
+  }).join('');
+
+  carousel.hidden = false;
+  adsState.index = 0;
+  track.style.transform = 'translateX(0%)';
+  renderAdsDots();
+  scheduleNextAdSlide();
+}
+
+// Small, local escaping helpers (app.js has no existing escapeHtml —
+// that lives only in admin.js) — kept minimal and scoped to ads only.
+function escapeHtmlText(str) {
+  return String(str == null ? '' : str)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+function escapeHtmlAttr(str) {
+  return escapeHtmlText(str).replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+async function loadCustomerAds() {
+  try {
+    const { data, error } = await supabaseClient.rpc('get_active_customer_ads');
+    if (error || !data) return;
+    adsState.ads = data;
+    renderAdsCarousel();
+  } catch (err) {
+    console.error('failed to load customer ads', err);
+  }
+}
+
+/* ============================================================
+   Customer ads push opt-in — additive only. Registers the SAME
+   sw.js already used for the app shell (registerServiceWorker()
+   above already does this on page load; this just reuses that
+   registration rather than creating a second one), subscribes via
+   the browser's Push API using the SAME public VAPID key already
+   used elsewhere in this project, and saves the subscription via
+   save_customer_push_subscription() — a brand-new RPC that only
+   writes to the brand-new customer_push_subscriptions table. Does
+   not touch driver/admin push in any way.
+   ============================================================ */
+// Public VAPID key — safe to embed client-side by design (matches the
+// same key already used in admin.js/driver.js; the private key never
+// leaves the Edge Function's environment).
+const CUSTOMER_VAPID_PUBLIC_KEY = 'BA_mwRbHk_BXqtt8PKCma9oaAbuQVAoYNvNvtTmq2L8bcWTPakSgiU4AuDZKpo6NCpKCRzXM2gFaZ5QIA6s5_ww';
+
+function urlBase64ToUint8ArrayForAds(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function setupCustomerPushNotifications() {
+  const btn = document.getElementById('enableCustomerPushBtn');
+  const label = btn ? btn.querySelector('.more-item-label') : null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (label) label.textContent = 'الإشعارات غير مدعومة بهذا المتصفح';
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') {
+      if (label) label.textContent = 'تم رفض إذن الإشعارات';
+      return;
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8ArrayForAds(CUSTOMER_VAPID_PUBLIC_KEY),
+      });
+    }
+
+    const { error } = await supabaseClient.rpc('save_customer_push_subscription', {
+      p_subscription: subscription.toJSON(),
+    });
+    if (error) throw error;
+
+    if (label) label.textContent = 'الإشعارات مفعّلة 🔔';
+    if (btn) btn.disabled = true;
+    haptic();
+  } catch (err) {
+    console.error('customer push setup failed', err);
+    if (label) label.textContent = 'تعذّر تفعيل الإشعارات';
   }
 }
 
@@ -879,27 +1133,28 @@ async function handleSubmit(e) {
         p_dropoff_location: dropoff || null,
         p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         p_notes: notes || null,
+        // The driver the customer actually tapped "طلب" on (if any) —
+        // the RPC re-validates this driver is still active for this
+        // service at the moment of insert and, only if so, assigns them
+        // to the trip immediately (status → 'assigned'). If the driver
+        // is gone/inactive by now, or nothing was picked, this is simply
+        // null and behavior is identical to before (status stays 'new').
+        p_selected_driver_phone: state.featuredDriverPhone || null,
       })
       .single();
 
     if (error) throw error;
 
-    // The ONLY point where a driver actually rotates in the queue and
-    // gets counted: a real trip_request row now exists in the database.
-    // Tapping call/WhatsApp earlier on the featured driver card never
-    // reaches this line. Never block or fail the customer's confirmed
-    // request over this housekeeping step — await it locally so its own
-    // errors (network hiccup, driver deleted meanwhile, etc.) are caught
-    // and logged right here, and can never bubble up into the outer
-    // catch below and falsely report the whole request as failed.
-    if (state.featuredDriverId) {
-      try {
-        await supabaseClient.rpc('select_driver', { p_driver_id: state.featuredDriverId });
-      } catch (rotateErr) {
-        console.error('select_driver failed (driver rotation skipped, request itself still succeeded):', rotateErr);
-      }
-      state.featuredDriverId = null;
-    }
+    // ⚠️ Design change (see migration 3 / FINAL_DESIGN.md): the queue
+    // bump (last_served_at + request_count) now happens ATOMICALLY
+    // *inside* submit_trip_request itself — for BOTH the case where the
+    // customer picked a specific driver AND the new case where nobody
+    // was picked and the RPC auto-assigns the front-of-queue driver
+    // server-side. A separate select_driver() call here would DOUBLE-
+    // bump the same driver for the same booking, corrupting fairness
+    // stats. So this call is intentionally gone — do not re-add it.
+    state.featuredDriverId = null;
+    state.featuredDriverPhone = null;
 
     state.lastSubmission = {
       id: data.id,
@@ -1270,16 +1525,48 @@ function hideInstallCard() {
 // useful, immediately, on every platform.
 async function triggerInstall() {
   if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    if (outcome === 'accepted') {
-      localStorage.setItem(PWA_INSTALLED_KEY, '1');
+    const capturedPrompt = deferredInstallPrompt;
+    // The captured beforeinstallprompt event can go stale (Chrome
+    // invalidates it after enough time passes, or if it was already
+    // used once) — calling .prompt()/.userChoice on a stale event
+    // throws, and with no catch here that error used to abort this
+    // whole async function silently: no native dialog, no toast, no
+    // fallback — the button just sat there looking broken. Wrapping
+    // this in try/catch guarantees the tap always does something
+    // visible, on every path.
+    try {
+      capturedPrompt.prompt();
+      const { outcome } = await capturedPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installAvailable = false;
+      hideInstallCard();
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+      if (outcome === 'accepted') {
+        localStorage.setItem(PWA_INSTALLED_KEY, '1');
+      } else {
+        // Dismissing the native mini-prompt is easy to do by accident
+        // (small system UI, tap outside it, etc.) and Chrome won't
+        // re-offer this same captured event again — so without this
+        // message, the button simply vanishing looks identical to the
+        // tap having done nothing at all.
+        toast('تم إغلاق نافذة التثبيت — يمكنك التثبيت لاحقًا من قائمة المتصفح (⋮)');
+      }
+    } catch (err) {
+      // Stale/invalid captured event: the native prompt failed to open.
+      // Reset state and fall back to something the tap can still do,
+      // instead of leaving the button visible but inert.
+      deferredInstallPrompt = null;
+      installAvailable = false;
+      hideInstallCard();
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+      if (isIosDevice()) {
+        showIosInstallModal();
+      } else {
+        toast('تعذّر فتح نافذة التثبيت الآن — افتح قائمة المتصفح (⋮) واختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية"');
+      }
     }
-    hideInstallCard();
-    installAvailable = false;
-    syncWelcomeInstallVisibility();
-    syncMoreInstallVisibility();
     return;
   }
   if (isIosDevice()) {
@@ -1376,6 +1663,351 @@ function initIosInstallModal() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) hideIosInstallModal(); // tap on the backdrop itself
   });
+}
+
+/* ============================================================
+   In-app browser detection (Facebook / Messenger / Instagram /
+   TikTok / Threads and similar embedded WebViews) — these don't
+   reliably support real PWA installation: Android in-app WebViews
+   generally never fire beforeinstallprompt, and iOS in-app browsers
+   don't expose a working "Add to Home Screen" the way Safari does.
+   Detecting this and helping the visitor reach a real browser is
+   what makes install actually work afterwards.
+
+   Behavior per platform/app, as requested:
+   - Android (any detected in-app browser): a clear "فتح في المتصفح"
+     button attempts Chrome via an Android intent:// URL; if Chrome
+     isn't available the intent's own browser_fallback_url hands off
+     to the device's default browser at the OS level.
+   - iOS + Instagram/Threads: a button attempts the "x-safari-https://"
+     handoff those two apps' WebViews are known to honor; if it
+     doesn't visibly leave the page, we fall back to the same
+     step-by-step guide used below.
+   - iOS + Facebook/Messenger/TikTok (or any other detected iOS
+     in-app browser): per Apple's WebView sandboxing there is no
+     reliable way to force Safari to open, so we go straight to a
+     clear instructional dialog: tap (⋯) then "Open in Safari".
+
+   Purely additive: does not change triggerInstall(),
+   initPwaInstallPrompt(), the existing iOS install modal, or any
+   other install entry point. Self-contained (styles injected via
+   JS) — does not touch index.html, app.css, style.css, or
+   Supabase/schema.
+   ============================================================ */
+const INAPP_DISMISSED_KEY = 'mustaqbali_inapp_browser_dismissed_at';
+const INAPP_DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // يوم واحد
+
+const INAPP_LABELS = {
+  facebook: 'فيسبوك',
+  messenger: 'ماسنجر',
+  instagram: 'إنستغرام',
+  threads: 'Threads',
+  tiktok: 'تيك توك',
+  line: 'Line',
+  wechat: 'WeChat',
+  snapchat: 'سناب شات',
+  twitter: 'X (Twitter)'
+};
+
+// Returns a short app key ('facebook', 'messenger', 'instagram',
+// 'threads', 'tiktok', ...) for the in-app browser hosting this page,
+// or null when the page is running in a normal browser. Order matters:
+// Instagram/Threads/Messenger user agents can also contain the generic
+// Facebook "FBAN/FBAV" tokens, so the more specific apps are checked
+// first.
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Instagram/i.test(ua)) return 'instagram';
+  if (/Threads|Barcelona/i.test(ua)) return 'threads';
+  if (/Messenger/i.test(ua)) return 'messenger';
+  if (/FBAN|FBAV|FB_IAB|FBIOS|FBSV/i.test(ua)) return 'facebook';
+  if (/musical_ly|BytedanceWebview|TikTok/i.test(ua)) return 'tiktok';
+  if (/Line\//i.test(ua)) return 'line';
+  if (/MicroMessenger/i.test(ua)) return 'wechat';
+  if (/Snapchat/i.test(ua)) return 'snapchat';
+  if (/Twitter/i.test(ua)) return 'twitter';
+  return null;
+}
+
+function isInAppBrowser() {
+  return detectInAppBrowser() !== null;
+}
+
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+// Builds an Android "intent://" URL that asks the OS to hand the
+// current page to Chrome specifically, while also carrying a
+// browser_fallback_url — if Chrome isn't installed/resolvable,
+// Android itself falls back to opening the URL in the device's
+// default browser, with no extra JS needed for that part.
+function buildAndroidChromeIntentUrl(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    const scheme = u.protocol.replace(':', '');
+    const withoutScheme = u.href.replace(/^https?:\/\//, '');
+    const fallback = encodeURIComponent(u.href);
+    return `intent://${withoutScheme}#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${fallback};end;`;
+  } catch {
+    return null;
+  }
+}
+
+function attemptOpenInExternalBrowserAndroid() {
+  const targetUrl = window.location.href;
+  const intentUrl = buildAndroidChromeIntentUrl(targetUrl);
+  if (!intentUrl) {
+    window.location.href = targetUrl;
+    return;
+  }
+
+  // Primary attempt: hand off to Chrome (with the OS-level fallback to
+  // the default browser described above).
+  window.location.href = intentUrl;
+
+  // Secondary, client-side safety net: some in-app WebViews block
+  // "intent://" navigation outright rather than letting the OS resolve
+  // it, in which case we're still on the same page a moment later. A
+  // plain reload of the https URL is the only remaining fallback
+  // reachable from JS in that case.
+  setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+      window.location.href = targetUrl;
+    }
+  }, 1200);
+}
+
+// Builds the "x-safari-https://" / "x-safari-http://" URL that
+// Instagram's and Threads' iOS WebViews are known to honor as a
+// handoff to Safari. Facebook, Messenger, and TikTok's iOS WebViews do
+// not reliably honor this, which is why they skip straight to the
+// manual instructions below instead.
+function buildIosSafariUrl(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    if (u.protocol === 'https:') return 'x-safari-https://' + u.href.slice('https://'.length);
+    if (u.protocol === 'http:') return 'x-safari-http://' + u.href.slice('http://'.length);
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+function attemptForceSafariIOS() {
+  const targetUrl = window.location.href;
+  const safariUrl = buildIosSafariUrl(targetUrl);
+  if (safariUrl) {
+    window.location.href = safariUrl;
+  }
+  // If the handoff didn't actually leave the page, fall back to the
+  // same clear step-by-step guide used for Facebook/Messenger/TikTok.
+  setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+      showIosManualOpenGuide();
+    }
+  }, 1200);
+}
+
+function injectInAppBrowserStyles() {
+  if (document.getElementById('inAppBrowserStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'inAppBrowserStyles';
+  style.textContent = `
+    #inAppBrowserCard {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      top: calc(env(safe-area-inset-top) + 12px);
+      z-index: 2147483000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--bg-deep, #fff);
+      color: var(--text, #263746);
+      box-shadow: var(--shadow-deep, 0 10px 28px -12px rgba(50,90,120,0.35));
+      border: 1px solid var(--surface-brd, #DCEAF3);
+      font-family: inherit;
+      direction: rtl;
+      transform: translateY(-140%);
+      transition: transform 0.3s ease;
+    }
+    #inAppBrowserCard.show { transform: translateY(0); }
+    #inAppBrowserCard .inapp-icon { flex-shrink: 0; font-size: 20px; line-height: 1; }
+    #inAppBrowserCard .inapp-text { flex: 1; min-width: 0; }
+    #inAppBrowserCard .inapp-text b { display: block; font-size: 14px; }
+    #inAppBrowserCard .inapp-text span { display: block; font-size: 12px; opacity: 0.75; margin-top: 2px; }
+    #inAppBrowserCard .inapp-open-btn {
+      flex-shrink: 0;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(180deg, var(--teal-soft, #4A90D9), var(--teal, #1D6FD1));
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #inAppBrowserCard .inapp-close-btn {
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-faint, #8091A0);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    #inAppGuideBackdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483100;
+      background: rgba(10,20,35,0.55);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    #inAppGuideBackdrop.show { opacity: 1; pointer-events: auto; }
+    #inAppGuideBackdrop .inapp-guide-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-deep, #fff);
+      color: var(--text, #263746);
+      border-radius: 20px 20px 0 0;
+      padding: 22px 20px calc(env(safe-area-inset-bottom) + 20px);
+      direction: rtl;
+      font-family: inherit;
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+    }
+    #inAppGuideBackdrop.show .inapp-guide-card { transform: translateY(0); }
+    #inAppGuideBackdrop .inapp-guide-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+    #inAppGuideBackdrop .inapp-guide-head h3 { font-size: 16px; margin: 0; }
+    #inAppGuideBackdrop .inapp-guide-close {
+      border: none;
+      background: transparent;
+      font-size: 18px;
+      color: var(--text-faint, #8091A0);
+      cursor: pointer;
+      padding: 4px;
+      flex-shrink: 0;
+    }
+    #inAppGuideBackdrop ol { margin: 0; padding-inline-start: 20px; }
+    #inAppGuideBackdrop li { font-size: 14px; line-height: 1.9; margin-bottom: 6px; }
+    #inAppGuideBackdrop li b { color: var(--teal-text, #1D6FD1); }
+  `;
+  document.head.appendChild(style);
+}
+
+function hideInAppBrowserNotice() {
+  const card = document.getElementById('inAppBrowserCard');
+  if (!card) return;
+  card.classList.remove('show');
+  setTimeout(() => card.remove(), 300);
+}
+
+function hideIosManualOpenGuide() {
+  const backdrop = document.getElementById('inAppGuideBackdrop');
+  if (!backdrop) return;
+  backdrop.classList.remove('show');
+  setTimeout(() => backdrop.remove(), 250);
+}
+
+function showIosManualOpenGuide() {
+  if (document.getElementById('inAppGuideBackdrop')) return;
+  injectInAppBrowserStyles();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'inAppGuideBackdrop';
+  backdrop.innerHTML = `
+    <div class="inapp-guide-card">
+      <div class="inapp-guide-head">
+        <h3>لأفضل تجربة، افتح الرابط في Safari</h3>
+        <button type="button" class="inapp-guide-close" id="inAppGuideCloseBtn" aria-label="إغلاق">✕</button>
+      </div>
+      <ol>
+        <li>اضغط على زر <b>(⋯)</b> الظاهر أعلى الشاشة</li>
+        <li>اختر من القائمة <b>"Open in Safari"</b> (فتح في Safari)</li>
+        <li>بعد فتح الرابط في Safari، يمكنك تثبيت التطبيق من: مشاركة ← إضافة إلى الشاشة الرئيسية</li>
+      </ol>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  requestAnimationFrame(() => backdrop.classList.add('show'));
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) hideIosManualOpenGuide();
+  });
+  document.getElementById('inAppGuideCloseBtn').addEventListener('click', hideIosManualOpenGuide);
+}
+
+function showInAppBrowserNotice(app) {
+  const dismissedAt = Number(localStorage.getItem(INAPP_DISMISSED_KEY) || 0);
+  if (dismissedAt && Date.now() - dismissedAt < INAPP_DISMISS_COOLDOWN_MS) return;
+  if (document.getElementById('inAppBrowserCard')) return;
+
+  injectInAppBrowserStyles();
+
+  const android = isAndroidDevice();
+  const ios = isIosDevice();
+  const label = INAPP_LABELS[app] || 'هذا التطبيق';
+
+  let actionHtml = '';
+  let actionHandler = null;
+
+  if (android) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">فتح في المتصفح</button>`;
+    actionHandler = attemptOpenInExternalBrowserAndroid;
+  } else if (ios && (app === 'instagram' || app === 'threads')) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">فتح في Safari</button>`;
+    actionHandler = attemptForceSafariIOS;
+  } else if (ios) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">عرض التعليمات</button>`;
+    actionHandler = showIosManualOpenGuide;
+  }
+
+  const card = document.createElement('div');
+  card.id = 'inAppBrowserCard';
+  card.innerHTML = `
+    <span class="inapp-icon">⚠️</span>
+    <span class="inapp-text">
+      <b>افتح الرابط في متصفحك</b>
+      <span>أنت تتصفح من داخل تطبيق ${label} — لتجربة كاملة وتثبيت التطبيق بنجاح، يُرجى المتابعة عبر Chrome أو Safari</span>
+    </span>
+    ${actionHtml}
+    <button type="button" class="inapp-close-btn" id="inAppCloseBtn" aria-label="إغلاق">✕</button>
+  `;
+  document.body.appendChild(card);
+  requestAnimationFrame(() => card.classList.add('show'));
+
+  const openBtn = document.getElementById('inAppOpenBtn');
+  if (openBtn && actionHandler) {
+    openBtn.addEventListener('click', actionHandler);
+  }
+
+  document.getElementById('inAppCloseBtn').addEventListener('click', () => {
+    localStorage.setItem(INAPP_DISMISSED_KEY, String(Date.now()));
+    hideInAppBrowserNotice();
+  });
+}
+
+function initInAppBrowserNotice() {
+  const app = detectInAppBrowser();
+  if (!app) return;
+  showInAppBrowserNotice(app);
 }
 
 /* ============================================================
@@ -1799,12 +2431,15 @@ document.addEventListener('DOMContentLoaded', () => {
   registerServiceWorker();
   initPwaInstallPrompt();
   initIosInstallModal();
+  initInAppBrowserNotice();
   initHelpAccordion();
   initBottomNav();
   initProfile();
   initMoreView();
   initWelcomeScreen();
   loadServicePrices();
+  loadCustomerAds();
+  document.getElementById('enableCustomerPushBtn')?.addEventListener('click', setupCustomerPushNotifications);
   // "Recent locations" feature removed — clear any stale data from
   // earlier sessions so nothing lingers unused.
   try { localStorage.removeItem(RECENT_KEY); } catch { /* non-critical */ }
@@ -1833,6 +2468,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('[data-driver-action="request"]');
     if (!btn) return;
     state.featuredDriverId = btn.dataset.driverId;
+    state.featuredDriverPhone = btn.dataset.driverPhone || null;
     sheet.setSnap('full');
     const pickupEl = document.getElementById('pickup');
     pickupEl.scrollIntoView({ behavior: 'smooth', block: 'center' });

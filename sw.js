@@ -65,3 +65,42 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(event.request))
   );
 });
+
+/* ============================================================
+   Push notifications — additive only, added for the customer ads
+   feature ("Push إعلاني للزبائن"). Does not touch install/activate/
+   fetch above, and is fully independent of driver-sw.js/admin-sw.js
+   (separate registrations/scopes) — this only ever shows ad
+   notifications for the customer app itself.
+   ============================================================ */
+self.addEventListener('push', (event) => {
+  let data = { title: 'مستقبلي كاب', body: '', url: '/index.html' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch (_) { /* ignore malformed payloads */ }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/index.html';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes('index.html') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});

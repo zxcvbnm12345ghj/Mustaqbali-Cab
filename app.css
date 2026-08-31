@@ -307,6 +307,61 @@ html, body.app-body{
 .promo-card b{ display:block; font-size:13.5px; margin-bottom:2px; }
 .promo-card span{ font-size:12px; color: var(--text-muted); }
 
+/* ============================================================
+   Customer ads carousel — additive only, sits right below
+   .promo-card in the home view. Populated/rotated by app.js
+   (loadCustomerAds/renderAdsCarousel). Hidden entirely when no
+   active ad exists.
+   ============================================================ */
+.ads-carousel{
+  margin-top: 14px;
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+}
+.ads-track{
+  display: flex;
+  transition: transform .45s cubic-bezier(.4,0,.2,1);
+  will-change: transform;
+}
+.ad-slide{
+  flex: 0 0 100%;
+  min-width: 100%;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.ad-slide-img{
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-hi);
+}
+.ad-slide-body{
+  padding: 12px 14px;
+}
+.ad-slide-body b{ display:block; font-size:13.5px; color: var(--text); margin-bottom:2px; }
+.ad-slide-body span{ display:block; font-size:12px; color: var(--text-muted); line-height:1.5; }
+.ads-dots{
+  position: absolute;
+  bottom: 8px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+.ads-dot{
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: background .2s, width .2s;
+}
+.ads-dot.active{ background: var(--gold); width: 16px; border-radius: 4px; }
+
 /* ---- Quick-access row (تثبيت / المساعد / الدعم) — top of home view ---- */
 .quick-access-row{
   display:flex; gap:8px;

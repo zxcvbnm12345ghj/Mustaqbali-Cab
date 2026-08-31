@@ -104,6 +104,16 @@
           </span>
           <div><b>وصول سريع خلال دقائق</b><span>اطلب الآن وتابع حالة رحلتك من نفس الشاشة</span></div>
         </div>
+
+        <!-- Customer ads carousel — populated by loadCustomerAds() in
+             app.js via the get_active_customer_ads() RPC. Hidden by
+             default; only shown when at least one ad is currently
+             active/in-schedule. Purely additive: does not replace or
+             alter promo-card above. -->
+        <div class="ads-carousel" id="adsCarousel" hidden>
+          <div class="ads-track" id="adsTrack"></div>
+          <div class="ads-dots" id="adsDots" hidden></div>
+        </div>
       </section>
 
       <!-- BOOKING view -->
@@ -371,6 +381,17 @@
           <button type="button" class="more-item" id="moreAssistantBtn">
             <span class="more-item-icon">❓</span>
             <span class="more-item-label">مساعد مستقبلي</span>
+            <span class="more-item-chevron">›</span>
+          </button>
+
+          <!-- Ads push opt-in — additive only. Registers the SAME
+               sw.js already used for the app shell (no second/competing
+               service worker), subscribes via the browser's Push API,
+               and saves the subscription via
+               save_customer_push_subscription() (see app.js). -->
+          <button type="button" class="more-item" id="enableCustomerPushBtn">
+            <span class="more-item-icon">🔔</span>
+            <span class="more-item-label">تفعيل إشعارات العروض</span>
             <span class="more-item-chevron">›</span>
           </button>
 

@@ -1,0 +1,63 @@
+/* Mustaqbali Cab — driver.html styles.
+   Uses the same design tokens as style.css (colors, fonts, radii) so it
+   looks like part of the same product, but has its own tiny layout —
+   it does not load app.css (the full customer-app stylesheet). */
+
+.driver-body{
+  min-height: 100vh;
+  min-height: 100dvh;
+  display:flex; align-items:center; justify-content:center;
+  padding: 20px;
+  background: linear-gradient(180deg, var(--bg-deep-2), var(--bg-deep));
+}
+
+.driver-screen{ width:100%; display:flex; justify-content:center; }
+
+.driver-card{
+  width:100%; max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  box-shadow: var(--shadow-deep);
+  text-align:center;
+}
+
+.driver-brand{
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  font-family: var(--f-display); font-weight:800; font-size:15px;
+  margin-bottom: 26px;
+}
+.driver-brand .brand-mark{
+  width:32px; height:32px; border-radius:10px;
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+
+.driver-card h1{ font-size:18px; margin: 0 0 10px; }
+.driver-muted{ color: var(--text-muted); font-size: 13px; line-height:1.7; margin: 0 0 20px; }
+
+.driver-status-row{
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  font-weight:700; font-size: 14.5px;
+  margin-bottom: 8px;
+}
+.driver-status-dot{
+  width:11px; height:11px; border-radius:50%;
+  background: var(--text-faint);
+  flex-shrink:0;
+  transition: background .25s;
+}
+.driver-status-dot.live{ background: var(--success); box-shadow: 0 0 0 4px rgba(30,142,86,0.16); }
+.driver-status-dot.warn{ background: var(--gold); box-shadow: 0 0 0 4px var(--gold-dim); }
+.driver-status-dot.error{ background: var(--danger); box-shadow: 0 0 0 4px rgba(201,68,53,0.16); }
+
+.driver-btn{
+  width:100%; padding: 14px; border-radius: 12px; font-weight:800; font-size:14.5px;
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color:#1A1204;
+  margin: 18px 0 16px;
+}
+.driver-btn.paused{ background: var(--surface-hi); color: var(--text); border:1px solid var(--surface-brd); }
+
+.driver-fineprint{ font-size: 11px; color: var(--text-faint); line-height:1.7; margin:0; }

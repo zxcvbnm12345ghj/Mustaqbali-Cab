@@ -21,7 +21,7 @@
 create table if not exists trip_requests (
   id                uuid primary key default gen_random_uuid(),
   request_number    text unique,
-  service_type      text not null check (service_type in ('taxi','private','courier','intercity')),
+  service_type      text not null check (service_type in ('taxi','private','courier','intercity','cargo','starx')),
   customer_name     text not null check (char_length(customer_name) <= 100),
   phone             text not null check (char_length(phone) <= 20),
   pickup_location   text not null check (char_length(pickup_location) <= 300),
@@ -54,6 +54,18 @@ begin
     check (status in ('new','assigned','en_route','arrived','completed','cancelled'));
 exception when others then
   raise notice 'status constraint migration skipped: %', sqlerrm;
+end $$;
+
+-- --- Migration: widen service_type to add "cargo" (حمل) and "starx"
+--     (ستاركس -- van/kia group passenger transport), for an already-
+--     deployed table where the original CREATE TABLE already ran. ---
+do $$
+begin
+  alter table trip_requests drop constraint if exists trip_requests_service_type_check;
+  alter table trip_requests add constraint trip_requests_service_type_check
+    check (service_type in ('taxi','private','courier','intercity','cargo','starx'));
+exception when others then
+  raise notice 'service_type constraint migration skipped: %', sqlerrm;
 end $$;
 
 -- --- Migration: add driver profile columns if this is an existing table -
@@ -156,11 +168,24 @@ create trigger trg_bump_updated_at
   for each row execute function bump_updated_at();
 
 -- ---------------------------------------------------------
--- 8) log_trip_status -- writes to trip_status_history on insert/status change
+-- 8) log_trip_status -- writes to trip_status_history on insert/status
+--    change. Must be SECURITY DEFINER: trip_status_history intentionally
+--    has NO insert policy for any role (see section 12) -- it's meant to
+--    be written ONLY by this trigger, never directly. When triggered by
+--    submit_trip_request() (itself SECURITY DEFINER) this already ran
+--    with elevated rights and worked. But an admin's direct
+--    `.update(trip_requests)` from admin.js runs as the authenticated
+--    admin's own role (SECURITY INVOKER) -- so without this trigger
+--    function ALSO being SECURITY DEFINER, its own insert into
+--    trip_status_history was blocked by RLS with "new row violates
+--    row-level security policy for table trip_status_history", even
+--    though the trip_requests status update itself succeeded.
 -- ---------------------------------------------------------
 create or replace function log_trip_status()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   if (tg_op = 'INSERT') or (new.status is distinct from old.status) then
@@ -231,7 +256,7 @@ declare
   v_id uuid;
   v_request_number text;
 begin
-  if p_service_type not in ('taxi','private','courier','intercity') then
+  if p_service_type not in ('taxi','private','courier','intercity','cargo','starx') then
     raise exception 'invalid service_type';
   end if;
   if p_customer_name is null or length(trim(p_customer_name)) = 0 then
@@ -307,23 +332,42 @@ grant execute on function get_trip_request_status(text, text) to anon, authentic
 -- 11b) service_prices -- real, DB-driven, admin-editable pricing.
 --      base_price + (distance_km * price_per_km) = the price shown to
 --      the customer. Public (anon) can only SELECT this — never write
---      to it; only an admin can UPDATE it. Rows are fixed to the four
+--      to it; only an admin can UPDATE it. Rows are fixed to the six
 --      existing services, so no INSERT/DELETE policy is needed.
 -- ---------------------------------------------------------
 create table if not exists service_prices (
-  service_type   text primary key check (service_type in ('taxi','private','courier','intercity')),
+  service_type   text primary key check (service_type in ('taxi','private','courier','intercity','cargo','starx')),
   label          text not null,
   base_price     numeric not null default 0 check (base_price >= 0),
   price_per_km   numeric not null default 0 check (price_per_km >= 0),
   updated_at     timestamptz not null default now()
 );
 
+-- --- Migration: widen service_prices' own CHECK the same way, for an
+--     already-deployed table. ---
+do $$
+begin
+  alter table service_prices drop constraint if exists service_prices_service_type_check;
+  alter table service_prices add constraint service_prices_service_type_check
+    check (service_type in ('taxi','private','courier','intercity','cargo','starx'));
+exception when others then
+  raise notice 'service_prices constraint migration skipped: %', sqlerrm;
+end $$;
+
 insert into service_prices (service_type, label, base_price, price_per_km) values
   ('taxi',      'تكسي',            3000, 500),
   ('private',   'خصوصي',           8000, 800),
-  ('courier',   'توصيل أغراض',      2000, 400),
-  ('intercity', 'بين المحافظات',    20000, 350)
+  ('courier',   'دليفري',          2000, 400),
+  ('intercity', 'بين المحافظات',    20000, 350),
+  ('cargo',     'حمل',             6000, 700),
+  ('starx',     'ستاركس',          4000, 550)
 on conflict (service_type) do nothing;
+
+-- --- Migration: "توصيل أغراض" was renamed to "دليفري" -- update the
+--     label on an already-deployed row (the INSERT above only affects
+--     a brand-new row, never an existing one, because of ON CONFLICT
+--     DO NOTHING). Safe to re-run. ---
+update service_prices set label = 'دليفري' where service_type = 'courier';
 
 drop trigger if exists trg_service_prices_updated_at on service_prices;
 create trigger trg_service_prices_updated_at
@@ -369,6 +413,138 @@ create policy "admin select whatsapp_notifications" on whatsapp_notifications
 drop policy if exists "self select admins" on admins;
 create policy "self select admins" on admins
   for select using (user_id = auth.uid());
+
+-- ---------------------------------------------------------
+-- 13) drivers -- simple driver roster with automatic fair-rotation
+--     queue per service_type. "Front of the queue" = the active
+--     driver with the oldest last_served_at for that service_type;
+--     tapping call/WhatsApp on the featured driver bumps their
+--     last_served_at to now(), sending them to the back of the line
+--     (see select_driver() below). A brand-new driver defaults to
+--     last_served_at = now(), so they start at the BACK of the
+--     queue automatically -- they never jump ahead of anyone already
+--     waiting. This needs no separate "position" column to maintain.
+-- ---------------------------------------------------------
+create table if not exists drivers (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null check (char_length(name) <= 100),
+  phone          text not null check (char_length(phone) <= 20),
+  vehicle_type   text check (char_length(vehicle_type) <= 100),
+  service_type   text not null check (service_type in ('taxi','private','courier','intercity','cargo','starx')),
+  active         boolean not null default true,
+  last_served_at timestamptz not null default now(),
+  request_count  integer not null default 0,
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists idx_drivers_service_active on drivers (service_type, active, last_served_at);
+
+-- --- Migration: widen drivers.service_type too, in case this table was
+--     already deployed from an earlier version of this file. ---
+do $$
+begin
+  alter table drivers drop constraint if exists drivers_service_type_check;
+  alter table drivers add constraint drivers_service_type_check
+    check (service_type in ('taxi','private','courier','intercity','cargo','starx'));
+exception when others then
+  raise notice 'drivers service_type constraint migration skipped: %', sqlerrm;
+end $$;
+
+alter table drivers enable row level security;
+
+-- No anon SELECT policy on this table on purpose: customers never query
+-- `drivers` directly. They only ever see ONE driver at a time (the front
+-- of their service's queue), through the narrow get_front_driver() RPC
+-- below -- never the full roster, never other drivers' details.
+drop policy if exists "admin select drivers" on drivers;
+create policy "admin select drivers" on drivers
+  for select using (is_admin());
+
+drop policy if exists "admin insert drivers" on drivers;
+create policy "admin insert drivers" on drivers
+  for insert with check (is_admin());
+
+drop policy if exists "admin update drivers" on drivers;
+create policy "admin update drivers" on drivers
+  for update using (is_admin()) with check (is_admin());
+
+drop policy if exists "admin delete drivers" on drivers;
+create policy "admin delete drivers" on drivers
+  for delete using (is_admin());
+
+-- ---------------------------------------------------------
+-- 14) get_front_driver() -- the ONLY way anon (the customer app) can
+--     read driver info. Returns just the id + phone number of whichever
+--     active driver is currently at the front of that service's queue
+--     (zero rows if none active yet) -- deliberately NOT the driver's
+--     name or vehicle type: those stay admin-only. The customer app
+--     shows the service type (which it already knows, since the
+--     customer picked it) instead of a driver identity.
+--     v1.2: dropped first because CREATE OR REPLACE cannot change an
+--     existing function's return columns.
+-- ---------------------------------------------------------
+drop function if exists get_front_driver(text);
+
+create or replace function get_front_driver(p_service_type text)
+returns table (id uuid, phone text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select d.id, d.phone
+  from drivers d
+  where d.service_type = p_service_type and d.active = true
+  order by d.last_served_at asc, d.created_at asc
+  limit 1;
+$$;
+
+grant execute on function get_front_driver(text) to anon, authenticated;
+
+-- ---------------------------------------------------------
+-- 15) select_driver() -- rotation + request counting.
+--     v1.2: this is now called from the app ONLY at the moment a real
+--     trip request is actually submitted (submit_trip_request success),
+--     never on a bare call/WhatsApp tap. Tapping call or WhatsApp with
+--     no follow-through must NOT move the driver in the queue.
+-- ---------------------------------------------------------
+create or replace function select_driver(p_driver_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update drivers
+  set last_served_at = now(), request_count = request_count + 1
+  where id = p_driver_id and active = true;
+end;
+$$;
+
+grant execute on function select_driver(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------
+-- 16) get_service_drivers() -- v1.3: returns ALL active drivers for a
+--     service, in current queue order (front of the array = front of
+--     the queue = who get_front_driver() would have returned). Lets
+--     the customer browse and pick any of them, not just the front
+--     one. Same privacy rule as get_front_driver(): never the
+--     driver's name or vehicle type, only id + phone.
+-- ---------------------------------------------------------
+create or replace function get_service_drivers(p_service_type text)
+returns table (id uuid, phone text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select d.id, d.phone
+  from drivers d
+  where d.service_type = p_service_type and d.active = true
+  order by d.last_served_at asc, d.created_at asc;
+$$;
+
+grant execute on function get_service_drivers(text) to anon, authenticated;
 
 -- =========================================================
 -- Post-install manual step (cannot be scripted):

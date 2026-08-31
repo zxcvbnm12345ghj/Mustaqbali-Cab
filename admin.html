@@ -67,6 +67,54 @@
   .admin-driver-add select.admin-date-input{
     font-family: inherit;
   }
+
+  /* ============================================================
+     Ads management — additive only. Reuses the same design tokens
+     and .admin-price-card/.admin-table/.admin-btn/.admin-field/
+     .admin-modal patterns already used elsewhere in this file.
+     Does not touch driver stats, pricing, GPS, or the requests
+     table/modal in any way.
+     ============================================================ */
+  .admin-ads-head{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap: wrap; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .admin-ads-wrap{ overflow-x:auto; }
+  #adsTable th, #adsTable td{ white-space: nowrap; }
+  #adsTable td.ads-col-body{ white-space: normal; max-width: 220px; }
+  .ads-type-badge{
+    display:inline-block; padding:4px 10px; border-radius:100px;
+    font-size:11px; font-weight:700;
+  }
+  .ads-type-badge.scheduled{ background: var(--teal-dim, rgba(29,111,209,0.12)); color: var(--teal-text, #1D6FD1); }
+  .ads-type-badge.daily{ background: var(--gold-dim, rgba(229,184,92,0.12)); color: var(--gold-text, #A87B2E); }
+  .ads-active-badge{
+    display:inline-block; padding:4px 10px; border-radius:100px;
+    font-size:11px; font-weight:700;
+    background: rgba(30,142,86,0.14); color: var(--success, #1E8E56);
+  }
+  .ads-active-badge.off{ background: rgba(201,68,53,0.12); color: var(--danger, #C94435); }
+  .ads-row-actions{ display:flex; gap:6px; flex-wrap:wrap; }
+  .ads-row-actions button{
+    border:1px solid var(--surface-brd, rgba(20,50,80,0.16));
+    background: var(--bg-deep, #fff);
+    color: var(--text, #14243a);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .ads-row-actions button.danger{ color: var(--danger, #C94435); border-color: rgba(201,68,53,0.3); }
+  .ads-row-actions button.primary{ color: var(--teal-text, #1D6FD1); border-color: rgba(29,111,209,0.3); }
+  .admin-ads-schedule-fields{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  @media (max-width: 520px){ .admin-ads-schedule-fields{ grid-template-columns: 1fr; } }
+  .admin-ads-toggle-row{
+    display:flex; align-items:center; gap:8px; margin: 4px 0 14px;
+    font-size: 13px; color: var(--text, #14243a);
+  }
 </style>
 </head>
 <body class="admin-body">
@@ -105,6 +153,7 @@
       <span>مستقبلي — لوحة الإدارة</span>
     </div>
     <div class="admin-user">
+      <button type="button" class="admin-btn ghost" id="enablePushBtn" style="width:auto; padding:8px 14px;">🔔 تفعيل الإشعارات</button>
       <span id="adminEmail"></span>
       <button type="button" class="admin-btn danger" id="logoutBtn" style="width:auto; padding:8px 16px;">تسجيل الخروج</button>
     </div>
@@ -165,6 +214,36 @@
         </table>
         <div class="admin-empty" id="driverStatsEmpty" style="display:none;">لا يوجد سائقون مسجّلون بعد.</div>
         <div class="admin-empty" id="driverStatsLoading" style="display:none;">جارٍ الحساب...</div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         إدارة الإعلانات (Customer Ads) — additive only. Does not touch
+         driver stats, pricing, GPS, or the requests table/modal above
+         or below it in any way.
+         ============================================================ -->
+    <div class="admin-driver-stats" id="adsSection">
+      <div class="admin-ads-head">
+        <p class="section-label" style="margin:0;">إدارة الإعلانات (للزبائن)</p>
+        <button type="button" class="admin-btn" id="addAdBtn" style="width:auto; padding:8px 16px;">+ إضافة إعلان</button>
+      </div>
+      <p class="admin-driver-stats-hint">تظهر هذه الإعلانات فقط داخل تطبيق الزبون، ولا علاقة لها بتطبيق السائق أو الإدارة.</p>
+
+      <div class="admin-ads-wrap">
+        <table class="admin-table" id="adsTable">
+          <thead>
+            <tr>
+              <th>العنوان</th>
+              <th>النوع</th>
+              <th>الفترة</th>
+              <th>مدة العرض</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="adsBody"></tbody>
+        </table>
+        <div class="admin-empty" id="adsEmpty" style="display:none;">لا توجد إعلانات بعد. اضغط "إضافة إعلان" لإنشاء أول إعلان.</div>
       </div>
     </div>
 
@@ -261,6 +340,90 @@
       <button type="button" data-status="completed">مكتملة</button>
       <button type="button" class="cancel" data-status="cancelled">إلغاء</button>
     </div>
+  </div>
+</div>
+
+<!-- AD MODAL — إضافة/تعديل إعلان — additive only, fully separate from
+     the trip detail modal above (different ids/state), never opened
+     at the same time as it. -->
+<div class="admin-modal-backdrop" id="adModalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div>
+        <h2 id="adModalTitle" style="font-size:17px;">إضافة إعلان</h2>
+      </div>
+      <button type="button" class="admin-modal-close" id="adModalCloseBtn">✕</button>
+    </div>
+
+    <div class="admin-field">
+      <label for="adTitle">العنوان</label>
+      <input type="text" id="adTitle" placeholder="مثال: عرض خاص لهذا الأسبوع" maxlength="150">
+    </div>
+    <div class="admin-field">
+      <label for="adBody">النص</label>
+      <input type="text" id="adBody" placeholder="نص الإعلان" maxlength="500">
+    </div>
+    <div class="admin-field">
+      <label for="adImageUrl">رابط الصورة <span class="opt">(اختياري)</span></label>
+      <input type="text" id="adImageUrl" placeholder="https://...">
+    </div>
+    <div class="admin-field">
+      <label for="adLinkUrl">الرابط عند الضغط <span class="opt">(اختياري)</span></label>
+      <input type="text" id="adLinkUrl" placeholder="https://...">
+    </div>
+    <div class="admin-field">
+      <label for="adDisplaySeconds">مدة العرض (بالثواني)</label>
+      <input type="number" id="adDisplaySeconds" min="2" max="60" step="1" value="6">
+    </div>
+
+    <div class="admin-field">
+      <label for="adType">نوع الإعلان</label>
+      <select id="adType">
+        <option value="scheduled">مجدول (فترة تاريخ محددة)</option>
+        <option value="daily">يومي (فترة وقت متكررة كل يوم)</option>
+      </select>
+    </div>
+
+    <div id="adScheduledFields">
+      <div class="admin-ads-schedule-fields">
+        <div class="admin-field">
+          <label for="adStartsAt">تاريخ البداية <span class="opt">(اختياري)</span></label>
+          <input type="datetime-local" id="adStartsAt">
+        </div>
+        <div class="admin-field">
+          <label for="adEndsAt">تاريخ النهاية <span class="opt">(اختياري)</span></label>
+          <input type="datetime-local" id="adEndsAt">
+        </div>
+      </div>
+    </div>
+
+    <div id="adDailyFields" hidden>
+      <div class="admin-ads-schedule-fields">
+        <div class="admin-field">
+          <label for="adDailyStart">وقت البداية اليومي</label>
+          <input type="time" id="adDailyStart">
+        </div>
+        <div class="admin-field">
+          <label for="adDailyEnd">وقت النهاية اليومي</label>
+          <input type="time" id="adDailyEnd">
+        </div>
+      </div>
+      <p class="admin-driver-stats-hint" style="margin-top:-8px;">يمكن أيضاً تحديد تاريخ بداية/نهاية أعلاه لتقييد المدى الزمني الذي يتكرر ضمنه الإعلان اليومي (اختياري).</p>
+    </div>
+
+    <label class="admin-ads-toggle-row" for="adActive">
+      <input type="checkbox" id="adActive" checked style="width:16px; height:16px;">
+      نشط (يظهر للزبائن عند تحقق شروط الجدولة)
+    </label>
+
+    <div class="admin-error" id="adModalError"></div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="admin-btn" id="saveAdBtn" style="width:auto; padding:10px 18px;">حفظ الإعلان</button>
+      <button type="button" class="admin-btn secondary" id="sendAdPushBtn" style="width:auto; padding:10px 18px;" hidden>📣 إرسال إشعار Push للزبائن</button>
+      <button type="button" class="admin-btn danger" id="deleteAdBtn" style="width:auto; padding:10px 18px;" hidden>حذف الإعلان</button>
+    </div>
+    <div class="admin-error" id="adPushMsg" style="background: rgba(30,142,86,0.1); border-color: rgba(30,142,86,0.25); color: var(--success, #1E8E56);"></div>
   </div>
 </div>
 
