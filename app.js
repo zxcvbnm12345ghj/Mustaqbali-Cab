@@ -1096,87 +1096,159 @@ function escapeHtml(str) {
 }
 
 async function handleSubmit(e) {
-  e.preventDefault();
-  clearMsg();
-
-  const name = document.getElementById('customerName').value.trim();
-  const phone = document.getElementById('phone').value.trim();
-  const pickup = document.getElementById('pickup').value.trim();
-  const dropoff = document.getElementById('dropoff').value.trim();
-  const scheduledAt = document.getElementById('scheduledAt').value;
-  const notes = document.getElementById('notes').value.trim();
-  const pickupLat = document.getElementById('pickupLat').value;
-  const pickupLng = document.getElementById('pickupLng').value;
-
-  const validPickup = validateField('pickup');
-  const validName = validateField('customerName');
-  const validPhone = validateField('phone');
-  if (!validPickup || !validName || !validPhone) {
-    haptic(20);
-    const firstInvalid = document.querySelector('.float-field.invalid input');
-    if (firstInvalid) firstInvalid.focus();
-    return;
-  }
-
-  showView('submitting');
-  sheet.setSnap('half');
-
-  // Build the RPC payload OUTSIDE the .rpc() call itself, field by field,
-  // with every risky conversion guarded individually. Previously,
-  // `new Date(scheduledAt).toISOString()` sat inline inside the object
-  // literal passed straight to `.rpc(...)`. If scheduledAt ever held a
-  // value `Date` couldn't parse, `.toISOString()` throws a RangeError
-  // *while the argument object is being built* — i.e. before
-  // `supabaseClient.rpc(...)` is even invoked. That throw was still
-  // caught by the try/catch below (so the user saw the generic "تعذّر
-  // إرسال الطلب" message), but the network request was NEVER sent —
-  // which matches exactly what was seen: the POST never reaching the
-  // API Gateway even though the RPC itself works fine. Same risk
-  // applied to Number(pickupLat/pickupLng): a non-numeric string
-  // silently becomes NaN, which is technically harmless (JSON-encodes
-  // to null) but worth normalizing explicitly rather than relying on
-  // that side effect.
-  let p_scheduled_at = null;
-  if (scheduledAt) {
-    const parsed = new Date(scheduledAt);
-    if (isNaN(parsed.getTime())) {
-      console.error('submit_trip_request: scheduledAt could not be parsed, sending null instead:', scheduledAt);
-    } else {
-      p_scheduled_at = parsed.toISOString();
-    }
-  }
-  const parsedPickupLat = pickupLat && Number.isFinite(Number(pickupLat)) ? Number(pickupLat) : null;
-  const parsedPickupLng = pickupLng && Number.isFinite(Number(pickupLng)) ? Number(pickupLng) : null;
-
-  const submitPayload = {
-    p_service_type: state.currentService,
-    p_customer_name: name,
-    p_phone: phone,
-    p_pickup_location: pickup,
-    p_pickup_lat: parsedPickupLat,
-    p_pickup_lng: parsedPickupLng,
-    p_dropoff_location: dropoff || null,
-    p_scheduled_at,
-    p_notes: notes || null,
-    // The driver the customer actually tapped "طلب" on (if any) —
-    // the RPC re-validates this driver is still active for this
-    // service at the moment of insert and, only if so, assigns them
-    // to the trip immediately (status → 'assigned'). If the driver
-    // is gone/inactive by now, or nothing was picked, this is simply
-    // null and behavior is identical to before (status stays 'new').
-    p_selected_driver_phone: state.featuredDriverPhone || null,
-  };
-
+  // ============================================================
+  // DIAGNOSTIC INSTRUMENTATION (temporary — see console.log/[SUBMIT] lines)
+  // ------------------------------------------------------------
+  // ROOT CAUSE FOUND: the previous version's try/catch only wrapped the
+  // code from `showView('submitting')` onward. Every statement BEFORE
+  // that — e.preventDefault(), clearMsg(), all eight
+  // document.getElementById(...).value reads, and the three
+  // validateField() calls — sat OUTSIDE any try/catch. If ANY of those
+  // throws (e.g. a getElementById() call returns null because an input
+  // id doesn't match the live HTML, so `.value` throws
+  // "Cannot read properties of null"), the exception is never caught:
+  // it becomes a silent unhandled promise rejection (async function),
+  // execution of handleSubmit stops dead right there, and:
+  //   - no code after it ever runs, so .rpc() is never called → no POST,
+  //     ever, in the API Gateway — matches exactly what you're seeing.
+  //   - no NEW message is shown either, since showMsg() is also further
+  //     down — so whatever "تعذّر إرسال الطلب" text was already on
+  //     screen from an earlier attempt just stays there, looking
+  //     identical every time and making it seem like the same
+  //     "network" failure is recurring.
+  // The whole function is now wrapped in ONE try/catch from the very
+  // first line, with a `step` tracker updated before each statement.
+  // Whatever throws, we now catch it, log exactly which step it was on
+  // plus the real error, and show the user feedback instead of hanging
+  // silently. This structural fix is the actual bug fix — the labeled
+  // console.log lines are the temporary diagnostic layer on top of it;
+  // they can be trimmed later, but the try/catch restructuring must stay.
+  let step = 'start';
   try {
-    // Logged right before the network call so future failures are easy
-    // to bucket: if this line prints but nothing ever reaches the API
-    // Gateway, the problem is downstream (network/CORS/service worker),
-    // not in how this payload gets built.
-    console.log('[submit_trip_request] sending payload:', submitPayload);
+    step = 'preventDefault';
+    e.preventDefault();
+    console.log('[SUBMIT] 1/20 preventDefault OK');
 
+    step = 'clearMsg';
+    clearMsg();
+    console.log('[SUBMIT] 2/20 clearMsg OK');
+
+    step = 'read #customerName';
+    const name = document.getElementById('customerName').value.trim();
+    console.log('[SUBMIT] 3/20 name =', JSON.stringify(name));
+
+    step = 'read #phone';
+    const phone = document.getElementById('phone').value.trim();
+    console.log('[SUBMIT] 4/20 phone =', JSON.stringify(phone));
+
+    step = 'read #pickup';
+    const pickup = document.getElementById('pickup').value.trim();
+    console.log('[SUBMIT] 5/20 pickup =', JSON.stringify(pickup));
+
+    step = 'read #dropoff';
+    const dropoff = document.getElementById('dropoff').value.trim();
+    console.log('[SUBMIT] 6/20 dropoff =', JSON.stringify(dropoff));
+
+    step = 'read #scheduledAt';
+    const scheduledAt = document.getElementById('scheduledAt').value;
+    console.log('[SUBMIT] 7/20 scheduledAt =', JSON.stringify(scheduledAt));
+
+    step = 'read #notes';
+    const notes = document.getElementById('notes').value.trim();
+    console.log('[SUBMIT] 8/20 notes =', JSON.stringify(notes));
+
+    step = 'read #pickupLat';
+    const pickupLat = document.getElementById('pickupLat').value;
+    console.log('[SUBMIT] 9/20 pickupLat =', JSON.stringify(pickupLat));
+
+    step = 'read #pickupLng';
+    const pickupLng = document.getElementById('pickupLng').value;
+    console.log('[SUBMIT] 10/20 pickupLng =', JSON.stringify(pickupLng));
+
+    step = 'validateField(pickup)';
+    const validPickup = validateField('pickup');
+    console.log('[SUBMIT] 11/20 validPickup =', validPickup);
+
+    step = 'validateField(customerName)';
+    const validName = validateField('customerName');
+    console.log('[SUBMIT] 12/20 validName =', validName);
+
+    step = 'validateField(phone)';
+    const validPhone = validateField('phone');
+    console.log('[SUBMIT] 13/20 validPhone =', validPhone);
+
+    if (!validPickup || !validName || !validPhone) {
+      console.log('[SUBMIT] validation failed — stopping before RPC (this is expected/normal, not a bug)');
+      haptic(20);
+      const firstInvalid = document.querySelector('.float-field.invalid input');
+      if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    step = 'showView(submitting)';
+    showView('submitting');
+    console.log('[SUBMIT] 14/20 showView(submitting) OK');
+
+    step = "sheet.setSnap('half') #1";
+    sheet.setSnap('half');
+    console.log('[SUBMIT] 15/20 sheet.setSnap OK');
+
+    // Build every RPC argument OUTSIDE the .rpc() call itself, field by
+    // field, with risky conversions guarded individually (an unparsable
+    // scheduledAt used to throw RangeError here — now it just falls
+    // back to null instead of aborting the whole function).
+    step = 'build p_scheduled_at';
+    let p_scheduled_at = null;
+    if (scheduledAt) {
+      const parsed = new Date(scheduledAt);
+      if (isNaN(parsed.getTime())) {
+        console.error('[SUBMIT] scheduledAt unparsable, using null:', scheduledAt);
+      } else {
+        p_scheduled_at = parsed.toISOString();
+      }
+    }
+    console.log('[SUBMIT] 16/20 p_scheduled_at =', p_scheduled_at);
+
+    step = 'build lat/lng';
+    const parsedPickupLat = pickupLat && Number.isFinite(Number(pickupLat)) ? Number(pickupLat) : null;
+    const parsedPickupLng = pickupLng && Number.isFinite(Number(pickupLng)) ? Number(pickupLng) : null;
+    console.log('[SUBMIT] 17/20 parsedPickupLat/Lng =', parsedPickupLat, parsedPickupLng);
+
+    step = 'build submitPayload';
+    const submitPayload = {
+      p_service_type: state.currentService,
+      p_customer_name: name,
+      p_phone: phone,
+      p_pickup_location: pickup,
+      p_pickup_lat: parsedPickupLat,
+      p_pickup_lng: parsedPickupLng,
+      p_dropoff_location: dropoff || null,
+      p_scheduled_at,
+      p_notes: notes || null,
+      // The driver the customer actually tapped "طلب" on (if any) —
+      // the RPC re-validates this driver is still active for this
+      // service at the moment of insert and, only if so, assigns them
+      // to the trip immediately (status → 'assigned'). If the driver
+      // is gone/inactive by now, or nothing was picked, this is simply
+      // null and behavior is identical to before (status stays 'new').
+      p_selected_driver_phone: state.featuredDriverPhone || null,
+    };
+    console.log('[SUBMIT] 18/20 payload built:', submitPayload);
+
+    step = 'check supabaseClient';
+    console.log('[SUBMIT] 19/20 typeof supabaseClient =', typeof supabaseClient, supabaseClient);
+    if (!supabaseClient || typeof supabaseClient.rpc !== 'function') {
+      throw new Error('supabaseClient is missing or not initialized (typeof=' + typeof supabaseClient + ') — check script load order / that the Supabase config script runs before app.js');
+    }
+
+    step = 'await supabaseClient.rpc(submit_trip_request)';
+    console.log('[SUBMIT] 20/20 calling supabaseClient.rpc("submit_trip_request", ...) now — if this is the LAST line you see, the request never left the browser.');
     const { data, error } = await supabaseClient
       .rpc('submit_trip_request', submitPayload)
       .single();
+
+    step = 'after rpc call returned';
+    console.log('[SUBMIT] rpc() returned. error =', error, ' data =', data);
 
     if (error) throw error;
 
@@ -1206,13 +1278,16 @@ async function handleSubmit(e) {
     sheet.setSnap('half');
     haptic(15);
     startStatusPolling();
+    console.log('[SUBMIT] success — request_number:', data.request_number);
   } catch (err) {
     // Log the REAL Postgres/PostgREST error (message/details/hint/code)
     // instead of only the generic object — this is what actually shows
     // the true cause (e.g. an outdated CHECK constraint, a missing grant,
-    // vs. an actual network failure) in the browser console.
-    console.error('submit_trip_request failed:', {
-      message: err?.message, details: err?.details, hint: err?.hint, code: err?.code, raw: err,
+    // vs. an actual network failure) in the browser console. Also logs
+    // WHICH step failed, since the try/catch now covers the entire
+    // function instead of only the RPC call.
+    console.error(`[SUBMIT] FAILED at step "${step}":`, {
+      message: err?.message, details: err?.details, hint: err?.hint, code: err?.code, name: err?.name, raw: err,
     });
     showView('booking');
     sheet.setSnap('full');
