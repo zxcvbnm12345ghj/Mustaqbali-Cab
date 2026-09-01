@@ -2533,14 +2533,38 @@ function initProfile() {
 }
 
 /* ============================================================
-   Welcome screen — shown on every visit/entry (no "seen once"
-   persistence). Sits above everything else; dismissing it (either
-   button) reveals the normal app underneath unchanged, for that
-   visit. The install button mirrors the shared installAvailable
+   Welcome screen — Step 1: simple local "login" (name + phone
+   required, region optional), saved ONLY to localStorage — never
+   sent to Supabase, never linked to the request/driver system.
+   Step 2 (install + notifications) shows once, immediately after
+   the first successful login on this device. On every later visit
+   where saved login data already exists, the whole welcome screen
+   is skipped and the app opens straight to the map.
+   The install button in Step 2 mirrors the shared installAvailable
    flag (real Android PWA prompt when available, iOS "Add to Home
    Screen" modal otherwise, hidden once already installed) — no
    separate install logic lives here.
    ============================================================ */
+const LOGIN_STORAGE_KEY = 'mustaqbali_login';
+
+function getSavedLogin() {
+  try {
+    const raw = localStorage.getItem(LOGIN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setWelcomeStep(step) {
+  const loginStep = document.getElementById('welcomeLoginStep');
+  const setupStep = document.getElementById('welcomeSetupStep');
+  if (loginStep) loginStep.hidden = step !== 1;
+  if (setupStep) setupStep.hidden = step !== 2;
+  document.querySelectorAll('#welcomeSteps .welcome-step-dot').forEach((dot) => {
+    dot.classList.toggle('active', Number(dot.dataset.step) === step);
+  });
+}
 
 function syncWelcomeInstallVisibility() {
   const welcomeBtn = document.getElementById('welcomeInstallBtn');
@@ -2552,25 +2576,97 @@ function initWelcomeScreen() {
   const screen = document.getElementById('welcomeScreen');
   if (!screen) return;
 
-  // Always show on entry — the app no longer remembers a "seen" state.
-  screen.hidden = false;
-
-  syncWelcomeInstallVisibility();
-
   function dismiss() {
     screen.hidden = true;
   }
 
-  const startBtn = document.getElementById('welcomeStartBtn');
+  // Saved login already on this device → skip the whole welcome
+  // screen (both steps) and open straight into the app.
+  if (getSavedLogin()) {
+    screen.hidden = true;
+  } else {
+    screen.hidden = false;
+    setWelcomeStep(1);
+  }
+
+  syncWelcomeInstallVisibility();
+
+  const loginBtn = document.getElementById('welcomeLoginBtn');
+  const errEl = document.getElementById('welcomeLoginError');
+
+  function showLoginError(message) {
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.classList.add('show');
+  }
+  function clearLoginError() {
+    if (!errEl) return;
+    errEl.textContent = '';
+    errEl.classList.remove('show');
+  }
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      const name = document.getElementById('loginName')?.value.trim() || '';
+      const phone = document.getElementById('loginPhone')?.value.trim() || '';
+      const region = document.getElementById('loginRegion')?.value || '';
+
+      if (!name || name.length < 2) {
+        showLoginError('يرجى إدخال الاسم الكامل');
+        haptic();
+        return;
+      }
+      if (!phone || !PHONE_RE.test(phone)) {
+        showLoginError('رقم غير صحيح — مثال: 07xxxxxxxxx');
+        haptic();
+        return;
+      }
+      clearLoginError();
+
+      try {
+        localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ name, phone, region }));
+      } catch {
+        // Non-critical — still let the customer continue into the app
+        // even if this device can't persist the login locally.
+      }
+
+      const nameEl = document.getElementById('welcomeSetupName');
+      if (nameEl) nameEl.textContent = name;
+      syncWelcomeInstallVisibility();
+      setWelcomeStep(2);
+      haptic();
+    });
+  }
+
+  // Enter key in either login field submits, like a normal form.
+  ['loginName', 'loginPhone'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loginBtn?.click(); }
+    });
+  });
+
   const installBtn = document.getElementById('welcomeInstallBtn');
-  if (startBtn) startBtn.addEventListener('click', () => { dismiss(); haptic(); });
+  const notifBtn = document.getElementById('welcomeEnableNotifBtn');
+  const continueBtn = document.getElementById('welcomeContinueBtn');
+
   if (installBtn) {
     // Install-only: does NOT dismiss the welcome screen. Entry into the
-    // app happens exclusively via "ابدأ الآن" above.
+    // app happens exclusively via "ابدأ الآن" below.
     installBtn.addEventListener('click', () => {
       triggerInstall();
       haptic();
     });
+  }
+  if (notifBtn) {
+    // Reuses the existing customer push-notification setup as-is —
+    // does NOT dismiss the welcome screen.
+    notifBtn.addEventListener('click', () => {
+      setupCustomerPushNotifications();
+      haptic();
+    });
+  }
+  if (continueBtn) {
+    continueBtn.addEventListener('click', () => { dismiss(); haptic(); });
   }
 }
 
