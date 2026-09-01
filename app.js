@@ -311,6 +311,7 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
   showNearestPickupArea(lat, lng);
   updatePriceBar();
   validateField('pickup');
+  updateSubmitButtonState();
 }
 
 // Shows "قرب <اسم المنطقة>" under the pickup field when the pinned point
@@ -458,6 +459,7 @@ async function reverseGeocodePickup(lat, lng) {
   } catch (err) {
     if (!original) input.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
+  updateSubmitButtonState();
 }
 
 async function reverseGeocodeDropoff(lat, lng) {
@@ -1061,6 +1063,28 @@ function validateField(inputId) {
 }
 
 /* ============================================================
+   Submit button enable/disable
+   #bookSubmitBtn is `disabled` by default in index.html. Nothing
+   previously removed that attribute, so the button could never be
+   clicked and the form's `submit` event never fired — handleSubmit()
+   never even started. This re-evaluates the required conditions
+   (pickup + name + a validly-formatted phone + the consent checkbox)
+   on every relevant input change and toggles `disabled` accordingly,
+   without touching validateField()'s own inline error-message logic
+   or anything past the button itself.
+   ============================================================ */
+function updateSubmitButtonState() {
+  const btn = document.getElementById('bookSubmitBtn');
+  if (!btn) return;
+  const pickup = document.getElementById('pickup')?.value.trim();
+  const name = document.getElementById('customerName')?.value.trim();
+  const phone = document.getElementById('phone')?.value.trim();
+  const consent = document.getElementById('consentCheck');
+  const ready = !!pickup && !!name && name.length >= 2 && !!phone && PHONE_RE.test(phone) && !!(consent && consent.checked);
+  btn.disabled = !ready;
+}
+
+/* ============================================================
    Submit
    ============================================================ */
 function showMsg(msg) {
@@ -1291,7 +1315,23 @@ async function handleSubmit(e) {
     });
     showView('booking');
     sheet.setSnap('full');
-    showMsg('تعذّر إرسال الطلب. تأكد من الاتصال بالإنترنت ثم حاول مجدداً.');
+
+    // ============================================================
+    // TEMPORARY ON-SCREEN DIAGNOSTIC (remove once root cause is
+    // confirmed — see request to restore the plain user-facing message
+    // afterward). Console isn't reachable from the reporter's iPhone,
+    // so surface the same step name + real error detail that
+    // console.error already logs above, directly in the visible
+    // error banner (showMsg → #appMsg, via textContent, so this is
+    // safe from HTML injection regardless of error content).
+    // ============================================================
+    const diagnosticDetail = [
+      err?.message,
+      err?.code ? `code=${err.code}` : null,
+      err?.hint ? `hint=${err.hint}` : null,
+      err?.details ? `details=${err.details}` : null,
+    ].filter(Boolean).join(' | ') || String(err);
+    showMsg(`تعذّر إرسال الطلب. [تشخيص مؤقت] فشل عند الخطوة: "${step}" — ${diagnosticDetail}`);
   }
 }
 
@@ -2565,6 +2605,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('whereToBtn').addEventListener('click', () => openBooking());
   document.querySelectorAll('[data-back="home"]').forEach(b => b.addEventListener('click', () => { backToHome(); }));
   document.getElementById('requestForm').addEventListener('submit', handleSubmit);
+  // Keep #bookSubmitBtn's disabled state in sync with the required
+  // fields + consent checkbox every time any of them changes, and set
+  // the correct initial state once on load (all empty → stays disabled).
+  ['pickup', 'customerName', 'phone'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateSubmitButtonState);
+  });
+  document.getElementById('consentCheck')?.addEventListener('change', updateSubmitButtonState);
+  updateSubmitButtonState();
   document.getElementById('recenterBtn').addEventListener('click', () => { locateMe(false); haptic(); });
   document.getElementById('locateBtnApp').addEventListener('click', () => { locateMe(false); haptic(); });
   // "طلب" on any driver in the list doesn't submit or rotate anything by
@@ -2590,6 +2638,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('requestForm').reset();
     ['pickup', 'customerName', 'phone'].forEach(id => setFieldError(id === 'customerName' ? 'customerName' : id, null));
     clearMsg();
+    updateSubmitButtonState();
     state.dropoffLatLng = null;
     if (state.dropoffMarker) { state.map.removeLayer(state.dropoffMarker); state.dropoffMarker = null; }
     document.getElementById('dropoffLat').value = '';
