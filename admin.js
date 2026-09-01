@@ -79,6 +79,23 @@ const state = {
 };
 
 /* ============================================================
+   Dashboard tabs — purely a display toggle between the panels
+   already present in admin.html (#tabPanel-home/drivers/requests/
+   ads/settings). Does not load or query anything on its own; each
+   panel's own existing load function (loadRequests/loadPrices/
+   loadDriverStats/loadAds) still runs from enterDashboard() as
+   before, regardless of which tab is currently visible.
+   ============================================================ */
+function switchTab(tab) {
+  document.querySelectorAll('.admin-tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.tabPanel === tab);
+  });
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+
+/* ============================================================
    XSS-safe rendering helpers
    Every customer-supplied value (name, phone, pickup, notes...)
    goes through escapeHtml before hitting innerHTML. service_type
@@ -445,15 +462,98 @@ async function loadDriverStats(dateStr) {
   if (loading) loading.style.display = 'none';
   if (!body) return;
 
+  // Each driver row is clickable — expands an inline row right below it
+  // showing that driver's requests (filtered from state.requests, already
+  // loaded by loadRequests()). No new page, tab, or Supabase query.
   body.innerHTML = rows.map(r => `
-    <tr>
+    <tr class="driver-row" data-driver-phone="${escapeAttr(r.phone)}">
       <td>${escapeHtml(r.name)}${r.active ? '' : ' <span class="opt">(غير نشط)</span>'}</td>
       <td>${escapeHtml(r.phone)}</td>
       <td>${escapeHtml(SERVICE_LABELS[r.service_type] || r.service_type)}</td>
       <td>${r.dayCount}</td>
       <td>${r.totalCount}</td>
     </tr>
+    <tr class="driver-requests-row" data-driver-requests-for="${escapeAttr(r.phone)}" hidden>
+      <td colspan="5"></td>
+    </tr>
   `).join('');
+
+  body.querySelectorAll('tr.driver-row').forEach(tr => {
+    tr.addEventListener('click', () => toggleDriverRequests(tr.dataset.driverPhone));
+  });
+}
+
+/* ============================================================
+   Inline "طلبات كل سائق" — expands under the clicked driver row
+   inside the السائقون tab itself. Purely a client-side filter over
+   state.requests (already loaded by loadRequests()) matched by
+   driver_phone, same matching key driver stats above already use.
+   No new query, no new page, no new tab.
+   ============================================================ */
+function toggleDriverRequests(phone) {
+  const detailRow = document.querySelector(
+    `tr.driver-requests-row[data-driver-requests-for="${CSS.escape(phone)}"]`
+  );
+  if (!detailRow) return;
+  const wasHidden = detailRow.hidden;
+
+  // Keep it simple — only one driver's requests open at a time.
+  document.querySelectorAll('tr.driver-requests-row').forEach(row => { row.hidden = true; });
+  document.querySelectorAll('tr.driver-row').forEach(row => row.classList.remove('open'));
+
+  if (wasHidden) {
+    detailRow.hidden = false;
+    const driverRow = document.querySelector(`tr.driver-row[data-driver-phone="${CSS.escape(phone)}"]`);
+    if (driverRow) driverRow.classList.add('open');
+    renderDriverRequestsPanel(detailRow, phone);
+  }
+}
+
+function renderDriverRequestsPanel(detailRow, phone) {
+  const cell = detailRow.querySelector('td');
+  if (!cell) return;
+  const rows = state.requests.filter(r => r.driver_phone === phone);
+
+  if (rows.length === 0) {
+    cell.innerHTML = `<div class="driver-requests-empty">لا توجد طلبات مرتبطة بهذا السائق ضمن الطلبات المحمّلة حالياً.</div>`;
+    return;
+  }
+
+  cell.innerHTML = `
+    <div class="driver-requests-wrap">
+      <table class="admin-table driver-requests-table">
+        <thead>
+          <tr>
+            <th>رقم الطلب</th>
+            <th>الخدمة</th>
+            <th>العميل</th>
+            <th>الحالة</th>
+            <th>التاريخ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr class="clickable" data-id="${escapeAttr(r.id)}">
+              <td>${escapeHtml(r.request_number || r.id.slice(0, 8))}</td>
+              <td>${escapeHtml(SERVICE_LABELS[r.service_type] || r.service_type)}</td>
+              <td>${escapeHtml(r.customer_name)}</td>
+              <td><span class="status-pill ${escapeAttr(r.status)}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
+              <td>${escapeHtml(formatDate(r.created_at))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Opens the existing trip detail modal (same modal the "الطلبات" tab
+  // uses) — still the same page, no new tab/window.
+  cell.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDetail(tr.dataset.id);
+    });
+  });
 }
 
 /* ============================================================
@@ -983,6 +1083,9 @@ async function sendAdPush() {
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loginForm').addEventListener('submit', handleLogin);
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
   document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
   document.getElementById('modalBackdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modalBackdrop') closeModal();

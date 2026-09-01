@@ -115,6 +115,57 @@
     display:flex; align-items:center; gap:8px; margin: 4px 0 14px;
     font-size: 13px; color: var(--text, #14243a);
   }
+
+  /* ============================================================
+     Dashboard tab navigation — additive/organizational only. Does
+     not touch any data-loading function; it only shows/hides the
+     existing sections (same elements, same ids) inside admin-main.
+     ============================================================ */
+  .admin-tabs{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding: 4px 4px 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--surface-brd, rgba(20,50,80,0.1));
+    overflow-x:auto;
+  }
+  .admin-tab-btn{
+    display:flex; align-items:center; gap:6px;
+    white-space: nowrap;
+    padding: 9px 16px;
+    border-radius: 100px;
+    border: 1px solid var(--surface-brd, rgba(20,50,80,0.14));
+    background: var(--surface, #fff);
+    color: var(--text, #14243a);
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .admin-tab-btn.active{
+    background: var(--teal-text, #1D6FD1);
+    border-color: var(--teal-text, #1D6FD1);
+    color: #fff;
+  }
+  .admin-tab-panel{ display:none; }
+  .admin-tab-panel.active{ display:block; }
+
+  /* Inline per-driver requests panel — expands under the clicked
+     driver row, inside the same "السائقون" tab. No new page/tab/
+     modal; reuses state.requests already loaded by loadRequests(),
+     no additional Supabase query. */
+  #driverStatsTable tr.driver-row{ cursor: pointer; }
+  #driverStatsTable tr.driver-row:hover,
+  #driverStatsTable tr.driver-row.open{ background: var(--bg-deep, rgba(20,50,80,0.03)); }
+  #driverStatsTable tr.driver-requests-row td{
+    background: var(--bg-deep, rgba(20,50,80,0.03));
+    padding: 0;
+  }
+  .driver-requests-wrap{ padding: 10px 14px; overflow-x:auto; }
+  .driver-requests-table{ width:100%; }
+  .driver-requests-table th, .driver-requests-table td{ white-space: nowrap; font-size: 12.5px; }
+  .driver-requests-empty{
+    padding: 14px; font-size: 12.5px; color: var(--text-faint, #8091A0);
+  }
 </style>
 </head>
 <body class="admin-body">
@@ -153,29 +204,48 @@
       <span>مستقبلي — لوحة الإدارة</span>
     </div>
     <div class="admin-user">
-      <button type="button" class="admin-btn ghost" id="enablePushBtn" style="width:auto; padding:8px 14px;">🔔 تفعيل الإشعارات</button>
       <span id="adminEmail"></span>
       <button type="button" class="admin-btn danger" id="logoutBtn" style="width:auto; padding:8px 16px;">تسجيل الخروج</button>
     </div>
   </div>
 
   <div class="admin-main">
-    <div class="admin-stats">
-      <div class="admin-stat-card"><b id="statTotal">0</b><span>الإجمالي</span></div>
-      <div class="admin-stat-card new"><b id="statNew">0</b><span>طلبات جديدة</span></div>
-      <div class="admin-stat-card progress"><b id="statProgress">0</b><span>قيد التنفيذ</span></div>
-      <div class="admin-stat-card done"><b id="statDone">0</b><span>مكتملة</span></div>
-    </div>
+    <!-- Tab navigation — switches which panel below is visible.
+         Purely a display toggle; every id/element the rest of
+         admin.js already reads/writes stays exactly where it was,
+         just wrapped in a panel. -->
+    <nav class="admin-tabs" id="adminTabs">
+      <button type="button" class="admin-tab-btn active" data-tab="home">الرئيسية</button>
+      <button type="button" class="admin-tab-btn" data-tab="drivers">السائقون</button>
+      <button type="button" class="admin-tab-btn" data-tab="requests">الطلبات</button>
+      <button type="button" class="admin-tab-btn" data-tab="ads">الإعلانات والإشعارات</button>
+      <button type="button" class="admin-tab-btn" data-tab="settings">الإعدادات</button>
+    </nav>
 
-    <div class="admin-prices">
-      <div class="admin-prices-head">
-        <p class="section-label" style="margin:0;">الأسعار</p>
-        <button type="button" class="admin-btn" id="savePricesBtn" style="width:auto; padding:9px 16px;">حفظ الأسعار</button>
+    <!-- الرئيسية -->
+    <div class="admin-tab-panel active" id="tabPanel-home" data-tab-panel="home">
+      <div class="admin-stats">
+        <div class="admin-stat-card"><b id="statTotal">0</b><span>الإجمالي</span></div>
+        <div class="admin-stat-card new"><b id="statNew">0</b><span>طلبات جديدة</span></div>
+        <div class="admin-stat-card progress"><b id="statProgress">0</b><span>قيد التنفيذ</span></div>
+        <div class="admin-stat-card done"><b id="statDone">0</b><span>مكتملة</span></div>
       </div>
-      <div class="admin-price-grid" id="priceGrid"></div>
-      <div class="admin-error" id="priceError"></div>
     </div>
 
+    <!-- الإعدادات -->
+    <div class="admin-tab-panel" id="tabPanel-settings" data-tab-panel="settings">
+      <div class="admin-prices">
+        <div class="admin-prices-head">
+          <p class="section-label" style="margin:0;">الأسعار</p>
+          <button type="button" class="admin-btn" id="savePricesBtn" style="width:auto; padding:9px 16px;">حفظ الأسعار</button>
+        </div>
+        <div class="admin-price-grid" id="priceGrid"></div>
+        <div class="admin-error" id="priceError"></div>
+      </div>
+    </div>
+
+    <!-- السائقون -->
+    <div class="admin-tab-panel" id="tabPanel-drivers" data-tab-panel="drivers">
     <div class="admin-driver-stats">
       <div class="admin-driver-stats-head">
         <p class="section-label" style="margin:0;">إحصائيات السائقين</p>
@@ -216,12 +286,24 @@
         <div class="admin-empty" id="driverStatsLoading" style="display:none;">جارٍ الحساب...</div>
       </div>
     </div>
+    </div>
+    <!-- /tabPanel-drivers -->
 
+    <!-- الإعلانات والإشعارات -->
+    <div class="admin-tab-panel" id="tabPanel-ads" data-tab-panel="ads">
     <!-- ============================================================
          إدارة الإعلانات (Customer Ads) — additive only. Does not touch
          driver stats, pricing, GPS, or the requests table/modal above
          or below it in any way.
          ============================================================ -->
+    <div class="admin-driver-stats" style="margin-bottom:14px;">
+      <div class="admin-ads-head">
+        <p class="section-label" style="margin:0;">إشعارات الإدارة</p>
+        <button type="button" class="admin-btn ghost" id="enablePushBtn" style="width:auto; padding:8px 14px;">🔔 تفعيل الإشعارات</button>
+      </div>
+      <p class="admin-driver-stats-hint" style="margin-bottom:0;">استقبال إشعار فوري على هذا الجهاز عند وصول طلب جديد.</p>
+    </div>
+
     <div class="admin-driver-stats" id="adsSection">
       <div class="admin-ads-head">
         <p class="section-label" style="margin:0;">إدارة الإعلانات (للزبائن)</p>
@@ -246,7 +328,11 @@
         <div class="admin-empty" id="adsEmpty" style="display:none;">لا توجد إعلانات بعد. اضغط "إضافة إعلان" لإنشاء أول إعلان.</div>
       </div>
     </div>
+    </div>
+    <!-- /tabPanel-ads -->
 
+    <!-- الطلبات -->
+    <div class="admin-tab-panel" id="tabPanel-requests" data-tab-panel="requests">
     <div class="admin-toolbar">
       <input type="text" class="admin-search" id="searchInput" placeholder="بحث بالاسم، الجوال، أو رقم الطلب...">
       <button type="button" class="admin-filter active" data-status="all">الكل</button>
@@ -276,6 +362,8 @@
       </table>
       <div class="admin-empty" id="emptyState" style="display:none;">لا توجد طلبات مطابقة.</div>
     </div>
+    </div>
+    <!-- /tabPanel-requests -->
   </div>
 </div>
 
