@@ -1121,26 +1121,61 @@ async function handleSubmit(e) {
   showView('submitting');
   sheet.setSnap('half');
 
+  // Build the RPC payload OUTSIDE the .rpc() call itself, field by field,
+  // with every risky conversion guarded individually. Previously,
+  // `new Date(scheduledAt).toISOString()` sat inline inside the object
+  // literal passed straight to `.rpc(...)`. If scheduledAt ever held a
+  // value `Date` couldn't parse, `.toISOString()` throws a RangeError
+  // *while the argument object is being built* — i.e. before
+  // `supabaseClient.rpc(...)` is even invoked. That throw was still
+  // caught by the try/catch below (so the user saw the generic "تعذّر
+  // إرسال الطلب" message), but the network request was NEVER sent —
+  // which matches exactly what was seen: the POST never reaching the
+  // API Gateway even though the RPC itself works fine. Same risk
+  // applied to Number(pickupLat/pickupLng): a non-numeric string
+  // silently becomes NaN, which is technically harmless (JSON-encodes
+  // to null) but worth normalizing explicitly rather than relying on
+  // that side effect.
+  let p_scheduled_at = null;
+  if (scheduledAt) {
+    const parsed = new Date(scheduledAt);
+    if (isNaN(parsed.getTime())) {
+      console.error('submit_trip_request: scheduledAt could not be parsed, sending null instead:', scheduledAt);
+    } else {
+      p_scheduled_at = parsed.toISOString();
+    }
+  }
+  const parsedPickupLat = pickupLat && Number.isFinite(Number(pickupLat)) ? Number(pickupLat) : null;
+  const parsedPickupLng = pickupLng && Number.isFinite(Number(pickupLng)) ? Number(pickupLng) : null;
+
+  const submitPayload = {
+    p_service_type: state.currentService,
+    p_customer_name: name,
+    p_phone: phone,
+    p_pickup_location: pickup,
+    p_pickup_lat: parsedPickupLat,
+    p_pickup_lng: parsedPickupLng,
+    p_dropoff_location: dropoff || null,
+    p_scheduled_at,
+    p_notes: notes || null,
+    // The driver the customer actually tapped "طلب" on (if any) —
+    // the RPC re-validates this driver is still active for this
+    // service at the moment of insert and, only if so, assigns them
+    // to the trip immediately (status → 'assigned'). If the driver
+    // is gone/inactive by now, or nothing was picked, this is simply
+    // null and behavior is identical to before (status stays 'new').
+    p_selected_driver_phone: state.featuredDriverPhone || null,
+  };
+
   try {
+    // Logged right before the network call so future failures are easy
+    // to bucket: if this line prints but nothing ever reaches the API
+    // Gateway, the problem is downstream (network/CORS/service worker),
+    // not in how this payload gets built.
+    console.log('[submit_trip_request] sending payload:', submitPayload);
+
     const { data, error } = await supabaseClient
-      .rpc('submit_trip_request', {
-        p_service_type: state.currentService,
-        p_customer_name: name,
-        p_phone: phone,
-        p_pickup_location: pickup,
-        p_pickup_lat: pickupLat ? Number(pickupLat) : null,
-        p_pickup_lng: pickupLng ? Number(pickupLng) : null,
-        p_dropoff_location: dropoff || null,
-        p_scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        p_notes: notes || null,
-        // The driver the customer actually tapped "طلب" on (if any) —
-        // the RPC re-validates this driver is still active for this
-        // service at the moment of insert and, only if so, assigns them
-        // to the trip immediately (status → 'assigned'). If the driver
-        // is gone/inactive by now, or nothing was picked, this is simply
-        // null and behavior is identical to before (status stays 'new').
-        p_selected_driver_phone: state.featuredDriverPhone || null,
-      })
+      .rpc('submit_trip_request', submitPayload)
       .single();
 
     if (error) throw error;
