@@ -25,16 +25,86 @@
       <svg viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
     </span>
     <h1>مستقبلي كاب</h1>
-    <p class="welcome-greeting">أهلاً بك في مستقبلي كاب</p>
-    <p class="welcome-sub">احجز رحلتك بسهولة وأمان.</p>
 
-    <div class="welcome-actions">
-      <button type="button" class="app-btn welcome-install-btn" id="welcomeInstallBtn" hidden>
-        <span>📲</span> تثبيت التطبيق
-      </button>
-      <button type="button" class="app-btn" id="welcomeStartBtn">
-        <span>🚀</span> ابدأ الآن
-      </button>
+    <!-- مؤشر الخطوتين -->
+    <div class="welcome-steps" id="welcomeSteps" aria-hidden="true">
+      <span class="welcome-step-dot active" data-step="1"></span>
+      <span class="welcome-step-line"></span>
+      <span class="welcome-step-dot" data-step="2"></span>
+    </div>
+
+    <!-- Step 1 — تسجيل دخول بسيط (اسم + هاتف إلزاميان، المنطقة
+         اختيارية). محفوظ محلياً فقط على الجهاز (localStorage) — لا
+         يُرسل لأي جدول بقاعدة البيانات ولا يُربط بنظام الطلبات. عند
+         وجود بيانات محفوظة سابقاً على هذا الجهاز، تُتخطى هذه الخطوة
+         بالكامل في الزيارات القادمة (انظر initWelcomeScreen بـ app.js). -->
+    <div id="welcomeLoginStep">
+      <p class="welcome-greeting">أهلاً بك في مستقبلي كاب</p>
+      <p class="welcome-sub">أدخل بياناتك للمتابعة</p>
+
+      <div class="welcome-login-form">
+        <div class="welcome-field">
+          <span class="welcome-field-icon">👤</span>
+          <input type="text" class="welcome-input" id="loginName" placeholder="الاسم الكامل" maxlength="80" autocomplete="name">
+        </div>
+        <div class="welcome-field">
+          <span class="welcome-field-icon">📱</span>
+          <input type="tel" class="welcome-input" id="loginPhone" placeholder="رقم الهاتف (07xxxxxxxxx)" maxlength="11" autocomplete="tel">
+        </div>
+        <div class="welcome-field">
+          <span class="welcome-field-icon">📍</span>
+          <select class="welcome-input" id="loginRegion">
+            <option value="">المنطقة (اختياري)</option>
+            <option value="حمام العليل">حمام العليل</option>
+            <option value="النمرود">النمرود</option>
+            <option value="الشورة">الشورة</option>
+            <option value="القيارة">القيارة</option>
+            <option value="الحضر">الحضر</option>
+            <option value="حي الوحدة">حي الوحدة</option>
+            <option value="حي المزارع">حي المزارع</option>
+            <option value="حي فلسطين">حي فلسطين</option>
+            <option value="حي الفاروق">حي الفاروق</option>
+            <option value="حي القادسية">حي القادسية</option>
+            <option value="حي سومر">حي سومر</option>
+            <option value="حي وادي حجر">حي وادي حجر</option>
+            <option value="حي الشهداء">حي الشهداء</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+        </div>
+        <p class="welcome-login-error" id="welcomeLoginError"></p>
+        <button type="button" class="app-btn" id="welcomeLoginBtn">
+          <span>🔑</span> دخول
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2 — يظهر فوراً بعد أول دخول ناجح فقط (مرة واحدة على هذا
+         الجهاز): تثبيت التطبيق (Android/iPhone حسب المنصة، بإعادة
+         استخدام نفس زر/منطق التثبيت الحالي بالأسفل) ثم تفعيل الإشعارات
+         مرة واحدة، ثم الدخول للتطبيق. -->
+    <div id="welcomeSetupStep" hidden>
+      <p class="welcome-greeting">أهلاً <span id="welcomeSetupName"></span> 👋</p>
+      <p class="welcome-sub">خطوة أخيرة لتجربة أفضل</p>
+
+      <div class="welcome-actions">
+        <div class="welcome-action-group">
+          <button type="button" class="app-btn welcome-install-btn" id="welcomeInstallBtn" hidden>
+            <span>📲</span> تثبيت التطبيق على الشاشة الرئيسية
+          </button>
+          <p class="welcome-hint" id="welcomeInstallHint">وصول أسرع لحجز رحلتك دون فتح المتصفح في كل مرة.</p>
+        </div>
+
+        <div class="welcome-action-group">
+          <button type="button" class="app-btn secondary" id="welcomeEnableNotifBtn">
+            <span>🔔</span> تفعيل إشعارات الرحلة والعروض
+          </button>
+          <p class="welcome-hint">لتصلك تنبيهات فور تحديث حالة رحلتك وأحدث العروض.</p>
+        </div>
+
+        <button type="button" class="app-btn" id="welcomeContinueBtn">
+          <span>🚀</span> ابدأ الآن
+        </button>
+      </div>
     </div>
 
     <div class="welcome-footer">
@@ -493,9 +563,9 @@
     </div>
     <h3 id="iosModalTitle">تثبيت التطبيق على iPhone</h3>
     <ol class="ios-modal-steps">
-      <li><span class="step-num">1</span><span>اضغط زر المشاركة <b>Share</b></span></li>
-      <li><span class="step-num">2</span><span>اختر "إضافة إلى الشاشة الرئيسية" <b>Add to Home Screen</b></span></li>
-      <li><span class="step-num">3</span><span>اضغط "إضافة" <b>Add</b></span></li>
+      <li><span class="step-num">1</span><span>اضغط أيقونة المشاركة <b>⬆️ (السهم للأعلى)</b> بشريط المتصفح</span></li>
+      <li><span class="step-num">2</span><span>مرّر للأسفل واختر <b>«إضافة إلى الشاشة الرئيسية»</b></span></li>
+      <li><span class="step-num">3</span><span>اضغط <b>«إضافة»</b> أعلى الشاشة لإكمال التثبيت</span></li>
     </ol>
   </div>
 </div>

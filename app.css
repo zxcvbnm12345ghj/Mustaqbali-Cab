@@ -8,10 +8,24 @@
 
 html, body.app-body{
   height: 100%;
-  /* iOS Safari-safe viewport unit: falls back to 100% above, then
-     upgrades to the small-viewport-aware unit where supported so the
-     address bar showing/hiding never clips the app shell. */
+  /* iOS Safari-safe viewport units. Order matters: 100% first (universal
+     fallback), then 100svh, then 100dvh last so it wins where supported.
+     Standalone/installed PWAs on iOS have no browser chrome to show/hide,
+     so 100svh (which assumes the *smallest* possible viewport, i.e. with
+     toolbars visible) ends up shorter than the real, fully-available
+     screen in that mode — leaving a blank strip below the fixed bottom
+     nav. 100dvh (Dynamic Viewport Height) tracks the actual visual
+     viewport instead and fixes that gap without changing any layout,
+     color, or size otherwise. */
   height: 100svh;
+  height: 100dvh;
+  /* Fallback background so that if any sliver of empty space ever
+     remains below the fixed-position elements (e.g. mid-orientation-
+     change), it matches the app's own background instead of showing
+     through as plain white. Purely a safety net — not a visual change
+     under normal conditions, since #map/.app-shell already paint over
+     this everywhere else. */
+  background: var(--bg-deep);
   overflow: hidden;
   overscroll-behavior: none;
   position: fixed;
@@ -28,6 +42,7 @@ html, body.app-body{
   position: fixed;
   inset: 0;
   height: 100svh;
+  height: 100dvh;
   background: var(--bg-deep);
 }
 
@@ -953,13 +968,17 @@ body.kb-open .sheet{ transition: none; }
 .rights-card p{ margin: 2px 0; font-size: 12.5px; color: var(--text-muted); }
 
 /* ============================================================
-   Welcome screen — first-visit only splash
+   Welcome screen — login-gated splash (Step 1: sign-in, Step 2:
+   install + notifications)
    ============================================================ */
 .welcome-screen{
   position: fixed; inset:0; z-index: 200;
   display:flex; align-items:center; justify-content:center;
   padding: 24px;
-  background: linear-gradient(160deg, #0A0E1A 0%, #14213A 55%, #0A0E1A 100%);
+  background:
+    radial-gradient(720px 420px at 15% -10%, rgba(229,184,92,0.16), transparent 60%),
+    radial-gradient(620px 380px at 105% 110%, rgba(74,173,232,0.16), transparent 55%),
+    linear-gradient(160deg, #0A0E1A 0%, #14213A 55%, #0A0E1A 100%);
 }
 /* Without this, [hidden] gets silently overridden by the display:flex
    rule above (an author-stylesheet rule always wins over the browser's
@@ -980,10 +999,102 @@ body.kb-open .sheet{ transition: none; }
   box-shadow: 0 12px 30px -10px rgba(229,184,92,0.5);
 }
 .welcome-logo svg{ width: 38px; height: 38px; }
-.welcome-content h1{ font-size: 24px; font-weight: 900; margin: 0 0 10px; }
-.welcome-greeting{ font-size: 15.5px; font-weight:700; margin: 0 0 4px; color: var(--gold); }
-.welcome-sub{ font-size: 13.5px; color: rgba(255,255,255,0.7); margin: 0 0 28px; }
-.welcome-actions{ display:flex; flex-direction:column; gap:10px; margin-bottom: 30px; }
+.welcome-content h1{ font-size: 24px; font-weight: 900; margin: 0 0 14px; letter-spacing: -.2px; }
+
+/* مؤشر الخطوتين (١/٢) */
+.welcome-steps{ display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom: 20px; }
+.welcome-step-dot{
+  width:8px; height:8px; border-radius:50%;
+  background: rgba(255,255,255,0.22);
+  transition: background .25s, width .25s, box-shadow .25s;
+}
+.welcome-step-dot.active{
+  width:22px; border-radius:5px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+  box-shadow: 0 0 10px rgba(229,184,92,0.55);
+}
+.welcome-step-line{ width:22px; height:2px; background: rgba(255,255,255,0.16); border-radius:2px; }
+
+.welcome-greeting{ font-size: 16px; font-weight:800; margin: 0 0 5px; color: var(--gold-soft); }
+.welcome-sub{ font-size: 13.5px; color: rgba(255,255,255,0.65); margin: 0 0 26px; }
+
+/* بطاقة زجاجية (glass card) تجمع نموذج تسجيل الدخول — لمسة عصرية
+   متناسقة مع هوية التطبيق دون تغيير الألوان الأساسية. */
+.welcome-login-form{
+  display:flex; flex-direction:column; gap:12px;
+  margin-bottom: 22px; text-align: right;
+  padding: 18px 16px 20px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 20px 50px -25px rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+}
+.welcome-field{ position: relative; }
+.welcome-field-icon{
+  position:absolute; top:50%; right:14px; transform: translateY(-50%);
+  font-size:15px; line-height:1; opacity:0.85; pointer-events:none;
+}
+.welcome-field .welcome-input{ padding-right: 40px; }
+.welcome-input{
+  width:100%;
+  padding: 13px 16px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.055);
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.welcome-input::placeholder{ color: rgba(255,255,255,0.4); }
+.welcome-input:focus{
+  border-color: var(--gold);
+  background: rgba(255,255,255,0.09);
+  box-shadow: 0 0 0 3px rgba(229,184,92,0.14);
+}
+select.welcome-input{
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%23E5B85C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: left 14px center;
+  background-size: 16px;
+  padding-left: 40px;
+}
+select.welcome-input option{ color: #14243a; background: #fff; }
+.welcome-login-error{
+  min-height: 16px;
+  margin: -2px 0 0;
+  font-size: 12px;
+  color: #FF8A80;
+  text-align: right;
+  display: none;
+}
+.welcome-login-error.show{ display:block; }
+
+/* Step 2 — تثبيت + إشعارات */
+.welcome-actions{ display:flex; flex-direction:column; gap:16px; margin-bottom: 30px; }
 .welcome-actions .app-btn{ width:100%; }
-.welcome-install-btn{ background: linear-gradient(180deg, var(--gold), #C99B3E); }
-.welcome-footer p{ margin:2px 0; font-size: 11.5px; color: rgba(255,255,255,0.45); }
+.welcome-action-group{ display:flex; flex-direction:column; gap:7px; }
+.welcome-hint{
+  font-size: 11.5px; line-height:1.5; color: rgba(255,255,255,0.5);
+  margin: 0; text-align: center; padding: 0 6px;
+}
+.welcome-install-btn{
+  background: linear-gradient(180deg, var(--gold), #C99B3E);
+  box-shadow: 0 14px 32px -12px rgba(229,184,92,0.55);
+}
+/* زر ثانوي مخصص لشاشة welcome الداكنة — لا يمس .app-btn.secondary
+   الأصلي المستخدم بخلفية فاتحة بباقي التطبيق. */
+.welcome-actions .app-btn.secondary{
+  background: rgba(255,255,255,0.07);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: none;
+}
+#welcomeSetupName{ color: var(--gold-soft); }
+
+.welcome-footer p{ margin:2px 0; font-size: 11.5px; color: rgba(255,255,255,0.4); }
+
