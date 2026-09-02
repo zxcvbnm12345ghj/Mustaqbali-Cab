@@ -53,6 +53,22 @@ const state = {
   // re-prompting or overwriting a point the customer already set
   // manually (typed address, map tap, marker drag, or the "موقعي" button).
   autoLocateAttempted: false,
+  // Live GPS tracking (watchPosition) — see startGpsWatch()/stopGpsWatch().
+  // gpsWatchId: the id returned by navigator.geolocation.watchPosition(),
+  // so it can be cleared; null when no watch is currently running.
+  // gpsFollowing: true only while the pickup pin should keep following the
+  // customer's real, moving device position. Set true on every real GPS fix
+  // (auto-locate or the "موقعي الحالي" button) and set false the instant the
+  // customer takes manual control of the pickup point (map tap or marker
+  // drag) — so live tracking can never fight or overwrite a manual choice.
+  gpsWatchId: null,
+  gpsFollowing: false,
+  // Throttle for reverse-geocoding pickup while live-tracking: avoids
+  // hammering the Nominatim API (and rewriting the pickup text field) on
+  // every single GPS tick — only re-resolves the address once the device
+  // has actually moved a meaningful distance since the last lookup.
+  lastGeocodedPickup: null,
+  lastGeocodeAt: 0,
   mapTargetMode: 'pickup', // 'pickup' | 'dropoff' — which marker the next map tap sets
   map: null,
   pickupMarker: null,
@@ -135,13 +151,18 @@ function initMap() {
       zoomAnimation: true,
     });
 
-    // CARTO Positron (light_all), no labels: a calm, modern, very-light
+    // CARTO Positron (light_all), WITH labels: a calm, modern, very-light
     // basemap — pale background, light-gray roads, soft blue/turquoise
-    // water — with place-name labels stripped out at the tile-source
-    // level (no city/town/village names baked into the map image
-    // itself). Combined with the accuracy filter in app.css (.leaflet-
-    // tile-pane), this gives the "Modern 2027" calm look requested.
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+    // water — that now also renders real place names (streets, districts,
+    // towns) sourced live from OpenStreetMap data, in whatever language
+    // OSM itself has each name tagged in — which for this service region
+    // is already predominantly Arabic. This is a deliberate change from
+    // the previous no-labels tile set: it adds genuine, live map data
+    // (never fabricated village names or fixed pins — nothing here is
+    // hardcoded), so the map reads as a real, modern, Arabic-leaning map
+    // instead of a blank canvas. Combined with the accuracy filter in
+    // app.css (.leaflet-tile-pane), this keeps the same calm "2027" look.
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
       maxZoom: 19,
     }).addTo(state.map);
@@ -155,6 +176,10 @@ function initMap() {
       if (state.mapTargetMode === 'dropoff') {
         setDropoff(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
       } else {
+        // Manual pickup selection on the map — the customer has explicitly
+        // chosen a point, so live GPS tracking must stop instead of moving
+        // this pin again on the next device-position update.
+        stopGpsWatch();
         setPickup(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
       }
     });
@@ -194,7 +219,7 @@ function dropoffDivIcon() {
   });
 }
 
-function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
+function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = true } = {}) {
   state.pickupLatLng = { lat, lng };
   document.getElementById('pickupLat').value = lat;
   document.getElementById('pickupLng').value = lng;
@@ -203,16 +228,25 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
     if (!state.pickupMarker) {
       state.pickupMarker = L.marker([lat, lng], { icon: pickupDivIcon(), draggable: true }).addTo(state.map);
       state.pickupMarker.on('dragend', () => {
+        // The customer just took manual control of the pickup point —
+        // live GPS tracking must stop here so it can never drag the pin
+        // back to the device's real-time position on the next fix.
+        stopGpsWatch();
         const p = state.pickupMarker.getLatLng();
         setPickup(p.lat, p.lng, { reverseGeocode: true, fly: false });
       });
     } else {
       state.pickupMarker.setLatLng([lat, lng]);
-      const el = state.pickupMarker.getElement();
-      if (el) {
-        el.classList.remove('dropped');
-        void el.offsetWidth;
-        el.classList.add('dropped');
+      // animate=false is used for live GPS ticks (see startGpsWatch()) so
+      // the pin glides to its new spot instead of replaying the "drop"
+      // bounce every few seconds while the customer is simply moving.
+      if (animate) {
+        const el = state.pickupMarker.getElement();
+        if (el) {
+          el.classList.remove('dropped');
+          void el.offsetWidth;
+          el.classList.add('dropped');
+        }
       }
     }
     drawRoute();
@@ -311,6 +345,21 @@ function shortAddressFromGeocode(data) {
 }
 
 async function reverseGeocodePickup(lat, lng) {
+  // While live GPS tracking is moving this pin every few seconds, re-
+  // resolving the address on every single tick would hammer the Nominatim
+  // API and make the pickup text field flicker constantly while the
+  // customer is simply standing still or moving slowly. Skip the lookup
+  // if the device hasn't moved meaningfully since the last one — this
+  // only throttles the *text lookup*; the actual GPS coordinates saved
+  // for the trip are always the latest real fix, untouched by this.
+  const now = Date.now();
+  if (state.lastGeocodedPickup) {
+    const movedM = haversineKm(state.lastGeocodedPickup.lat, state.lastGeocodedPickup.lng, lat, lng) * 1000;
+    if (movedM < 40 && (now - state.lastGeocodeAt) < 8000) return;
+  }
+  state.lastGeocodedPickup = { lat, lng };
+  state.lastGeocodeAt = now;
+
   const input = document.getElementById('pickup');
   const original = input.value;
   input.placeholder = ' ';
@@ -409,7 +458,12 @@ function locateMe(auto = false) {
   }
 
   const onSuccess = (pos) => {
+    // A real GPS/network fix just came in — the pin should now actively
+    // follow the customer's real, moving device position until they take
+    // manual control (map tap / marker drag — see setPickup()).
+    state.gpsFollowing = true;
     setPickup(pos.coords.latitude, pos.coords.longitude, { reverseGeocode: true, fly: true });
+    startGpsWatch();
     stopSpin();
   };
 
@@ -447,6 +501,52 @@ function locateMe(auto = false) {
     },
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
+}
+
+/* ============================================================
+   Live GPS tracking (watchPosition)
+   ------------------------------------------------------------
+   Keeps the pickup pin following the customer's REAL, moving device
+   position — using the browser's native watchPosition with
+   enableHighAccuracy:true, exactly like the single-fix call above.
+   This is what makes the pin update automatically while the customer
+   is in motion, instead of only ever reflecting a single moment-in-
+   time fix. It only ever runs after a real fix has already succeeded
+   (see locateMe's onSuccess) and only ever moves the pin while
+   state.gpsFollowing is true — the instant the customer manually taps
+   the map or drags the pin, that flag flips false and this watch is
+   cleared outright (see setPickup/map click handler), so live
+   tracking can never override a manual choice. No fixed/simulated
+   coordinates are ever used here — every update comes straight from
+   navigator.geolocation.
+   ============================================================ */
+function startGpsWatch() {
+  if (!navigator.geolocation || state.gpsWatchId !== null) return;
+  state.gpsWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      if (!state.gpsFollowing) return; // customer already took manual control
+      setPickup(pos.coords.latitude, pos.coords.longitude, {
+        reverseGeocode: true,
+        fly: false,   // don't fight the customer's own map panning/zooming
+        animate: false, // glide, don't replay the drop-bounce every tick
+      });
+    },
+    () => {
+      // Silent by design: a transient signal-loss/timeout on one watch
+      // tick shouldn't interrupt the customer with a toast — the watch
+      // keeps running and simply resumes updating on the next good fix,
+      // and the pin stays exactly where its last real fix placed it.
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function stopGpsWatch() {
+  if (state.gpsWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(state.gpsWatchId);
+  }
+  state.gpsWatchId = null;
+  state.gpsFollowing = false;
 }
 
 /* ============================================================

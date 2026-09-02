@@ -50,6 +50,20 @@
   }
   .admin-driver-stats-wrap{ overflow-x:auto; }
   #driverStatsTable th, #driverStatsTable td{ white-space: nowrap; }
+  /* Driver link display — additive only, part of the existing
+     driver_token / copyDriverLink() system in admin.js. Shows the
+     link text next to the existing "نسخ رابط السائق" button; does
+     not change how the token/link is generated or copied. */
+  .driver-link-cell{ display:flex; align-items:center; gap:8px; }
+  .driver-link-text{
+    display:inline-block;
+    max-width: 220px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-faint, #8091A0);
+  }
   /* ------------------------------------------------------------
      Add-driver row — reuses .admin-date-input/.admin-btn tokens
      above so it visually matches the rest of this card. Additive
@@ -278,6 +292,7 @@
               <th>الخدمة</th>
               <th id="driverStatsDateColLabel">طلبات اليوم</th>
               <th>إجمالي الطلبات</th>
+              <th>رابط السائق</th>
             </tr>
           </thead>
           <tbody id="driverStatsBody"></tbody>

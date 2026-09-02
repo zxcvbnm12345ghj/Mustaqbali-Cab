@@ -320,7 +320,7 @@ function dayBoundsIso(dateStr) {
 async function loadDriversRoster() {
   const { data, error } = await supabaseClient
     .from('drivers')
-    .select('id, name, phone, service_type, active')
+    .select('id, name, phone, service_type, active, driver_token')
     .order('name', { ascending: true });
   if (error) {
     console.error(error);
@@ -472,15 +472,100 @@ async function loadDriverStats(dateStr) {
       <td>${escapeHtml(SERVICE_LABELS[r.service_type] || r.service_type)}</td>
       <td>${r.dayCount}</td>
       <td>${r.totalCount}</td>
+      <td>
+        <div class="driver-link-cell">
+          <span class="driver-link-text" title="${escapeAttr(r.driver_token ? buildDriverLink(r.driver_token) : '')}">${r.driver_token ? escapeHtml(buildDriverLink(r.driver_token)) : '<span class="opt">سيُنشأ عند الضغط على نسخ</span>'}</span>
+          <button type="button" class="admin-btn ghost driver-copy-link-btn"
+            data-driver-id="${escapeAttr(r.id)}"
+            style="width:auto; padding:6px 12px; font-size:12.5px;">نسخ رابط السائق</button>
+        </div>
+      </td>
     </tr>
     <tr class="driver-requests-row" data-driver-requests-for="${escapeAttr(r.phone)}" hidden>
-      <td colspan="5"></td>
+      <td colspan="6"></td>
     </tr>
   `).join('');
 
   body.querySelectorAll('tr.driver-row').forEach(tr => {
     tr.addEventListener('click', () => toggleDriverRequests(tr.dataset.driverPhone));
   });
+
+  // Copy-link buttons live inside the clickable driver row, so stop the
+  // click from bubbling up and toggling the requests panel below.
+  body.querySelectorAll('button.driver-copy-link-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const driver = rows.find(r => r.id === btn.dataset.driverId);
+      if (driver) copyDriverLink(driver, btn);
+    });
+  });
+}
+
+/* ============================================================
+   Driver link — builds and copies the single "secret link" a driver
+   opens on their phone (driver.html?driver_token=...) to start sending
+   GPS. The token is the driver's only credential (see driver.js), never
+   a system secret/API key, so it's safe to have client-side and to put
+   in a plain URL — same design already documented in driver.js.
+   Unified naming (chat decision): the column is drivers.driver_token
+   (matching the live database, and what update_driver_location /
+   save_driver_push_subscription already look up internally — those two
+   functions are untouched here, only their own p_token *parameter*
+   name stays as-is). Every driver already gets a driver_token
+   automatically at creation time (drivers.driver_token default in
+   schema.sql); the fallback branch below only covers an already-
+   existing row that somehow has none, and it NEVER overwrites a
+   driver_token that's already set (requirement: don't regenerate an
+   existing driver's link).
+   ============================================================ */
+function buildDriverLink(token) {
+  // driver.html is assumed to live next to admin.html (same project
+  // root), matching how the app already ships its pages.
+  return new URL('driver.html', window.location.href).toString() +
+    '?driver_token=' + encodeURIComponent(token);
+}
+
+async function copyDriverLink(driver, btn) {
+  let token = driver.driver_token;
+
+  if (!token) {
+    token = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/-/g, '');
+    const { error } = await supabaseClient
+      .from('drivers')
+      .update({ driver_token: token })
+      .eq('id', driver.id);
+    if (error) {
+      console.error(error);
+      alert('تعذّر إنشاء رابط السائق: ' + error.message);
+      return;
+    }
+    driver.driver_token = token; // keep in-memory row in sync for subsequent clicks
+
+    // Reflect the newly-created token in the visible link cell right away,
+    // instead of only in the clipboard, so the admin can see it without
+    // re-clicking. Display-only; does not affect the copy behavior below.
+    const cell = btn ? btn.closest('.driver-link-cell') : null;
+    const textEl = cell ? cell.querySelector('.driver-link-text') : null;
+    if (textEl) {
+      textEl.textContent = buildDriverLink(token);
+      textEl.title = buildDriverLink(token);
+    }
+  }
+
+  const link = buildDriverLink(token);
+
+  try {
+    await navigator.clipboard.writeText(link);
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = 'تم النسخ ✓';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }
+  } catch (err) {
+    // Clipboard API can fail (no HTTPS, permissions, older browser) —
+    // fall back to a manual-copy prompt so the admin still gets the link.
+    window.prompt('انسخ رابط السائق يدويًا:', link);
+  }
 }
 
 /* ============================================================
