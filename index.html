@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>مستقبلي كاب | Mustaqbali Cab</title>
 <meta name="description" content="مستقبلي كاب: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
-<meta name="theme-color" content="#0A0E1A">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="مستقبلي">
@@ -18,6 +18,35 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body class="app-body">
+
+<!-- Screen-fit fix (Stage 2 / Step 2) — runs first, before any layout.
+     Many hosts (Android, iPhone Safari, and especially the in-app
+     browsers used by Facebook, Instagram, Messenger, and Gmail) either
+     don't support CSS svh/dvh or report them inaccurately against
+     their own toolbars — that mismatch is what caused the white gap
+     below the app on some devices and content getting cut off at the
+     bottom on others. This measures the real, currently-visible
+     viewport directly (preferring visualViewport, which also tracks
+     the on-screen keyboard) and exposes it as --app-1vh, which
+     app.css uses as the final, most reliable height everywhere it
+     previously relied on vh/svh/dvh alone. Purely additive: no
+     existing ID, class, or app logic is touched, and app.js is not
+     modified. -->
+<script>
+(function () {
+  var root = document.documentElement;
+  function setAppVh() {
+    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    root.style.setProperty('--app-1vh', (h * 0.01) + 'px');
+  }
+  setAppVh();
+  window.addEventListener('resize', setAppVh);
+  window.addEventListener('orientationchange', setAppVh);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setAppVh);
+  }
+})();
+</script>
 
 <div class="welcome-screen" id="welcomeScreen" hidden>
   <div class="welcome-content">
@@ -143,8 +172,9 @@
     </div>
   </div>
 
-  <button class="fab recenter-fab" id="recenterBtn" aria-label="تحديد موقعي">
+  <button class="fab recenter-fab" id="recenterBtn" aria-label="تحديد موقعي الحالي">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>موقعي الحالي</span>
   </button>
 
   <!-- Bottom sheet -->
@@ -164,8 +194,10 @@
 
         <p class="section-label">اختر خدمتك</p>
         <div class="quick-services" id="quickServices">
-          <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards -->
-          <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
+          <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards.
+               6 placeholders to match the fixed 3x2 grid of the 6 real services below —
+               prevents a layout jump/reflow when the real cards replace these. -->
+          <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
         </div>
 
         <div class="promo-card">
@@ -526,23 +558,23 @@
 
 <nav class="bottom-nav" id="bottomNav">
   <button type="button" class="bnav-item active" id="bnavHome" data-nav="home">
-    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 16.5V10a1 1 0 0 1 .4-.8l6.6-5a2 2 0 0 1 2.4 0l6.6 5a1 1 0 0 1 .4.8v6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16.5h18M6 16.5v-3a1 1 0 0 1 1-1h1.5M18 16.5v-3a1 1 0 0 0-1-1h-1.5M9 12.5h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="18.5" r="1.3" fill="currentColor"/><circle cx="17" cy="18.5" r="1.3" fill="currentColor"/></svg></span>
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 11.5 12 4l8 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v8.3a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1V10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     <span>الرئيسية</span>
   </button>
   <button type="button" class="bnav-item" id="bnavRequests" data-nav="requests">
-    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5 9 4l6 2 5-1.5v14L15 20l-6-2-5 1.5v-14Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r="2.3" stroke="currentColor" stroke-width="1.7"/><path d="M9 12.3V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-    <span>طلباتي</span>
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-7.15 7-12a7 7 0 1 0-14 0c0 4.85 7 12 7 12Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9" r="2.35" stroke="currentColor" stroke-width="1.7"/></svg></span>
+    <span>رحلاتي</span>
   </button>
   <button type="button" class="bnav-item" id="bnavSupport" data-nav="support">
-    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13v-1a8 8 0 0 1 16 0v1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><rect x="3" y="13" width="4" height="6" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="17" y="13" width="4" height="6" rx="1.6" stroke="currentColor" stroke-width="1.7"/><path d="M19 19v.5a3 3 0 0 1-3 3h-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-    <span>الدعم</span>
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M6 8.6a6 6 0 0 1 12 0c0 3.15 1 4.55 1.6 5.35.4.53.1 1.35-.55 1.35H4.95c-.65 0-.95-.82-.55-1.35C5 13.15 6 11.75 6 8.6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.6 17.6a2.5 2.5 0 0 0 4.8 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+    <span>النشاط</span>
   </button>
   <button type="button" class="bnav-item" id="bnavProfile" data-nav="profile">
     <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-    <span>بياناتي</span>
+    <span>حسابي</span>
   </button>
   <button type="button" class="bnav-item" id="bnavMore" data-nav="more">
-    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></span>
+    <span class="bnav-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></span>
     <span>المزيد</span>
   </button>
 </nav>
@@ -574,10 +606,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
-<style>
-  .consent-check{display:flex;align-items:flex-start;gap:8px;margin:10px 0;font-size:13px;line-height:1.5;color:#1a73c7;cursor:pointer;}
-  .consent-check input{margin-top:2px;width:16px;height:16px;accent-color:#4A90D9;flex-shrink:0;}
-</style>
 <script>
   (function () {
     var consentCheck = document.getElementById('consentCheck');

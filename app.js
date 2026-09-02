@@ -12,7 +12,7 @@ const SERVICES = {
   courier:   { label: 'دليفري',          base: 2000,  perKm: 400, icon: 'courier' },
   intercity: { label: 'بين المحافظات',    base: 20000, perKm: 350, icon: 'intercity' },
   cargo:     { label: 'حمل',             base: 6000,  perKm: 700, icon: 'cargo' },
-  starx:     { label: 'ستاركس',          base: 4000,  perKm: 550, icon: 'starx' },
+  starx:     { label: 'نقل نفرات',        base: 4000,  perKm: 550, icon: 'starx' },
 };
 
 const ICONS = {
@@ -25,8 +25,14 @@ const ICONS = {
 };
 
 const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم مستقبلي كاب — 07718828710
-// Map is centered on the real service area — south Mosul / Nineveh —
-// not Baghdad. Centroid of the three confirmed towns below (SERVICE_AREA_LABELS).
+// Initial camera position only — used to frame the map (south Mosul /
+// Nineveh service area, not Baghdad) for the brief moment before a
+// real GPS fix arrives; it is never shown as a marker, pin, or name,
+// and setPickup()/setDropoff() always override it with the customer's
+// actual GPS/tap/search position. Kept because Leaflet needs *some*
+// initial center — removing it would leave the map with no defined
+// starting view (e.g. mid-ocean at zoom 11) until GPS resolves or if
+// location permission is denied.
 const SERVICE_REGION_CENTER = { lat: 35.9824, lng: 43.2578 };
 const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
 const TIMELINE_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة' };
@@ -129,11 +135,13 @@ function initMap() {
       zoomAnimation: true,
     });
 
-    // CARTO Voyager: a modern, professional tile set with clear, readable
-    // colors (green parks, blue water, warm roads) instead of the
-    // near-monochrome "light_all" look used before. Place names render
-    // in Arabic by default wherever OSM/CARTO has an Arabic name set.
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // CARTO Positron (light_all), no labels: a calm, modern, very-light
+    // basemap — pale background, light-gray roads, soft blue/turquoise
+    // water — with place-name labels stripped out at the tile-source
+    // level (no city/town/village names baked into the map image
+    // itself). Combined with the accuracy filter in app.css (.leaflet-
+    // tile-pane), this gives the "Modern 2027" calm look requested.
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
       maxZoom: 19,
     }).addTo(state.map);
@@ -153,8 +161,6 @@ function initMap() {
 
     setTimeout(() => state.map.invalidateSize(), 250);
     window.addEventListener('resize', () => state.map && state.map.invalidateSize());
-
-    addServiceAreaLabels();
   } catch (err) {
     console.error('Map failed to load', err);
     document.getElementById('map').style.background =
@@ -164,106 +170,12 @@ function initMap() {
   }
 }
 
-// Confirmed towns of the real service area — south Mosul / Nineveh
-// Governorate — shown as small non-interactive orientation labels only
-// (not an official service-boundary dataset — no such file was
-// provided, so this deliberately stops at "general area names for
-// orientation" rather than claiming precise coverage zones/borders).
-// interactive:false + a low zIndexOffset keep them from ever
-// intercepting a tap meant for picking a pickup/dropoff point or
-// choosing a driver.
-//
-// All three coordinates below are confirmed exact points — no
-// approximate/interpolated positions are used.
-const SERVICE_AREA_LABELS = [
-  { name: 'حمام العليل', lat: 36.158111, lng: 43.259389 },
-  { name: 'الشورة', lat: 35.99269, lng: 43.22057 },
-  { name: 'القيارة', lat: 35.796389, lng: 43.293333 },
-];
-
-// Smaller, secondary village markers around Qayyarah/Shura — added on
-// top of (never replacing) the three main city pills above. Every
-// entry here was cross-checked against a real, sourced reference
-// before being included — nothing here is estimated or interpolated.
-// Shown only from VILLAGE_LABEL_MIN_ZOOM upward (see toggleVillageLabels)
-// so the default view stays uncluttered and only the 3 main cities show
-// at low zoom.
-const VILLAGE_LABELS = [
-  // Confirmed via English Wikipedia (infobox coordinates, cited to the
-  // osm.hlidskjalf.is Iraqi settlement database): right bank of the
-  // Tigris, on the Qayyarah↔Shirqat road, one of the largest villages
-  // in Qayyarah subdistrict.
-  { name: 'إمام غربي', lat: 35.6949, lng: 43.2876 },
-  // The six entries below were added on request, each backed by an
-  // independent settlement-geolocation record (meteoblue / Weather
-  // Crave per-settlement coordinates for the named Nineveh village —
-  // a fixed database lookup, not a search estimate). Two of the
-  // sourced points for القيارة/الشورة above were independently
-  // cross-checked against this same source and matched to within
-  // ~0.01°, which is why it was trusted for the villages below too.
-  { name: 'الزاوية', lat: 35.8781, lng: 43.3413 },
-  { name: 'الحود التحتاني', lat: 35.86, lng: 43.30 },
-  { name: 'الحود / لزاكة', lat: 35.87, lng: 43.30 },
-  { name: 'أم المناسيس', lat: 35.9311, lng: 43.3149 },
-  { name: 'السرت (حميدية شرقي)', lat: 35.88, lng: 43.29 },
-  { name: 'المنگوبة (الوفاء الجديدة)', lat: 35.91, lng: 43.31 },
-];
-const VILLAGE_LABEL_MIN_ZOOM = 12;
-
-function addServiceAreaLabels() {
-  if (!state.map) return;
-  SERVICE_AREA_LABELS.forEach((area) => {
-    L.marker([area.lat, area.lng], {
-      icon: L.divIcon({
-        className: 'area-label-icon',
-        html: `<span class="area-label-pill"><span class="area-label-dot"></span>${escapeHtml(area.name)}</span>`,
-        iconSize: [null, null],
-        iconAnchor: [0, 0],
-      }),
-      // interactive:false + a deeply negative zIndexOffset: these badges
-      // never intercept a tap meant for the map, location pins, or booking.
-      interactive: false,
-      keyboard: false,
-      zIndexOffset: -2000,
-    }).addTo(state.map);
-  });
-
-  // Village-level labels live in their own layer group so they can be
-  // shown/hidden together as the user zooms, instead of always being on
-  // screen and crowding the map at the default zoom level.
-  const villageLayer = L.layerGroup();
-  VILLAGE_LABELS.forEach((area) => {
-    L.marker([area.lat, area.lng], {
-      icon: L.divIcon({
-        className: 'area-label-icon',
-        html: `<span class="village-label-pill"><span class="village-label-dot"></span>${escapeHtml(area.name)}</span>`,
-        iconSize: [null, null],
-        iconAnchor: [0, 0],
-      }),
-      interactive: false,
-      keyboard: false,
-      zIndexOffset: -2100,
-    }).addTo(villageLayer);
-  });
-  state.villageLabelLayer = villageLayer;
-
-  const toggleVillageLabels = () => {
-    if (!state.map || !state.villageLabelLayer) return;
-    const shouldShow = state.map.getZoom() >= VILLAGE_LABEL_MIN_ZOOM;
-    const isShown = state.map.hasLayer(state.villageLabelLayer);
-    if (shouldShow && !isShown) state.villageLabelLayer.addTo(state.map);
-    else if (!shouldShow && isShown) state.map.removeLayer(state.villageLabelLayer);
-  };
-  state.map.on('zoomend', toggleVillageLabels);
-  toggleVillageLabels();
-}
-
 function pickupDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E5B85C" stroke="#FFFFFF" stroke-width="1.4"/>
-      <circle cx="17" cy="13.5" r="4.6" fill="#263746"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#0EA5B7" stroke="#FFFFFF" stroke-width="1.4"/>
+      <circle cx="17" cy="13.5" r="4.6" fill="#FFFFFF"/>
     </svg>`,
     iconSize: [40, 52],
     iconAnchor: [20, 50],
@@ -274,8 +186,8 @@ function dropoffDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped dropoff-pin',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#4AADE8" stroke="#FFFFFF" stroke-width="1.4"/>
-      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#263746"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#F2994A" stroke="#FFFFFF" stroke-width="1.4"/>
+      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#FFFFFF"/>
     </svg>`,
     iconSize: [40, 52],
     iconAnchor: [20, 50],
@@ -308,59 +220,9 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true } = {}) {
   }
 
   if (reverseGeocode) reverseGeocodePickup(lat, lng);
-  showNearestPickupArea(lat, lng);
   updatePriceBar();
   validateField('pickup');
   updateSubmitButtonState();
-}
-
-// Shows "قرب <اسم المنطقة>" under the pickup field when the pinned point
-// (GPS fix, map tap, or marker drag) falls near one of the known
-// towns/villages above — e.g. a customer at a junction near لزاكة sees
-// their real GPS position on the map plus a plain-language area name,
-// instead of only raw coordinates or a possibly-sparse street address
-// from reverse geocoding. Purely informational: it never overwrites the
-// pickup text field, and it's hidden again if nothing is close enough
-// to be a meaningful hint.
-const NEAREST_AREA_MAX_KM = 8;
-function showNearestPickupArea(lat, lng) {
-  const hint = document.getElementById('pickupAreaHint');
-  if (!hint) return;
-  const candidates = [...SERVICE_AREA_LABELS, ...VILLAGE_LABELS];
-  let closest = null;
-  let closestKm = Infinity;
-  candidates.forEach((area) => {
-    const km = haversineKm(lat, lng, area.lat, area.lng);
-    if (km < closestKm) {
-      closestKm = km;
-      closest = area;
-    }
-  });
-  if (closest && closestKm <= NEAREST_AREA_MAX_KM) {
-    hint.textContent = `📍 قرب ${closest.name}`;
-    hint.hidden = false;
-  } else {
-    hint.hidden = true;
-  }
-}
-
-// Same zone list as showNearestPickupArea() above, but WITHOUT the 8km
-// display cutoff and returning just the name — used purely for
-// zone-priority driver sorting (see sortRosterByZone below), never for
-// anything shown directly to the customer. Always resolves to one of
-// the 10 real, existing points; never invents a zone.
-function nearestZoneName(lat, lng) {
-  const candidates = [...SERVICE_AREA_LABELS, ...VILLAGE_LABELS];
-  let closest = null;
-  let closestKm = Infinity;
-  candidates.forEach((area) => {
-    const km = haversineKm(lat, lng, area.lat, area.lng);
-    if (km < closestKm) {
-      closestKm = km;
-      closest = area;
-    }
-  });
-  return closest ? closest.name : null;
 }
 
 function setDropoff(lat, lng, { reverseGeocode = false, fly = true } = {}) {
@@ -638,88 +500,68 @@ function selectService(key) {
 }
 
 /* ============================================================
-   Driver card (booking view) — shows ONLY the driver currently at
-   the front of this service's queue (get_front_driver RPC — the
-   real, existing function; matches schema.sql exactly). The customer
-   never sees a name or phone-as-identifier, only vehicle type and an
-   availability status, per privacy design.
+   Driver card (booking view) — shows EVERY driver currently returned
+   by get_service_driver_roster() for this service, with no queue/turn
+   concept on the customer side at all: no "front of the queue", no
+   "waiting their turn". The customer sees only two real states —
+   available or busy — and can tap "طلب" on ANY available driver to
+   request that exact driver directly. A busy driver is shown (so the
+   customer can see who's currently working) but has no "طلب" button
+   and cannot be selected. The customer never sees a name or phone-as-
+   identifier here, only vehicle type and status, per privacy design.
 
-   status ('available' | 'busy' | 'offline') is computed server-side
-   in the migration (see migration_v1.3.sql) purely from drivers.active
-   and whether a REAL open trip_requests row exists for that driver —
-   "في مهمة" can only ever appear after an actual assignment. Until
-   that migration is applied, the RPC simply won't return a status
-   field, and the UI falls back to "متاح" (reasonable: a driver only
-   appears here at all because the query already filtered on
-   active = true).
-
-   Rotation only happens on a REAL, confirmed booking (see
-   handleSubmit): tapping call or WhatsApp here never changes the
-   queue order or request count — only tapping "طلب" on the driver,
-   then actually confirming the form, does.
-   Hidden entirely if no active driver exists yet for this service.
+   status is computed server-side (see get_service_driver_roster) —
+   this file only ever reads it, never assumes a value when absent
+   (falls back to "متاح" so a driver still returned by the roster is
+   never wrongly shown as busy).
    ============================================================ */
 const DRIVER_AVATAR_SVG = '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 const CALL_ICON_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const WA_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>';
 const REQUEST_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-// Maps get_service_driver_roster()'s per-driver status (plus whether
-// this row is the real front-of-queue driver, per get_front_driver) to
-// the exact 🟢/🟡/🔴 scheme requested: 🟢 متاح (front of queue) / 🟡
-// بانتظار الدور (active, waiting their turn) / 🔴 في مهمة أو غير متصل
-// (on an open trip, or inactive) — red covers both real-world cases,
-// only the label text tells them apart. A real status of busy/offline
-// always wins over the front flag for what's DISPLAYED (truthful
-// "حسب الحالة الفعلية"), even in the rare edge case where that same
-// driver is technically who get_front_driver() would return next.
-function rosterStatusInfo(status, isFront) {
-  const raw = String(status || '').toLowerCase();
-  if (raw === 'offline') return { dot: '🔴', label: 'غير متصل', cls: 'badge-offline' };
-  if (raw === 'busy') return { dot: '🔴', label: 'في مهمة', cls: 'badge-onjob' };
-  if (isFront) return { dot: '🟢', label: 'متاح', cls: 'badge-live' };
-  return { dot: '🟡', label: 'بانتظار الدور', cls: 'badge-waiting' };
+// Exactly two states shown to the customer, per the no-FIFO design:
+// 🟢 متاح (status === 'active' — selectable) or 🔴 مشغول (anything
+// else — busy or offline both read as simply "not available right
+// now"; the customer never sees a third "بانتظار الدور" queue state).
+function rosterStatusInfo(status) {
+  const isAvailable = String(status || '').toLowerCase() === 'active';
+  return isAvailable
+    ? { dot: '🟢', label: 'متاح', cls: 'badge-live' }
+    : { dot: '🔴', label: 'مشغول', cls: 'badge-onjob' };
 }
 
 // Renders EVERY driver for this service, each in its own card (no
 // limit(1), nothing hidden — get_service_driver_roster() returns the
-// full roster, now including phone). The customer can call/WhatsApp
-// ANY visible driver — not only the one whose turn it is — and doing
-// so never touches the queue or counts as a booking: only
-// get_front_driver()'s id ever gets the "طلب" button, and only a real
-// confirmed submission (handleSubmit → select_driver, unchanged) ever
-// rotates anyone. So the official request always auto-routes to
-// whoever's turn it actually is, regardless of who the customer called.
-// Display-order-only sort: نفس المنطقة أولًا → الأقرب جغرافيًا → باقي
-// المناطق. Never touches the database, `last_served_at`, or
-// select_driver()'s rotation — it only reorders the array right before
-// rendering. The "طلب" button still always targets whoever
-// get_front_driver() says is actually next (frontId), completely
-// independent of this display order, so the fair-rotation queue is
-// unaffected no matter how the cards are arranged on screen.
+// full roster, including phone). The customer can call/WhatsApp ANY
+// visible driver. "طلب" only appears on an available driver (status
+// === 'active') and requests that exact driver directly — a busy
+// driver has no "طلب" button and cannot be selected. There is no
+// queue/turn concept here at all: no driver is singled out as "next",
+// every available driver is equally selectable.
+// Display-order-only sort: closest real GPS distance to the customer
+// first, everyone else after in original list order — purely
+// cosmetic ordering, never touches the database or any driver's data.
 // A driver's location is ignored (treated as unknown) once it's older
-// than STALE_LOCATION_MS — they simply fall back to the "باقي المناطق"
-// group in original queue order, instead of showing a false position.
+// than STALE_LOCATION_MS — they simply fall back to the end of the
+// list in original order, instead of showing a false position.
 const STALE_LOCATION_MS = 10 * 60 * 1000; // 10 minutes
 
-function sortRosterByZone(roster, customerLat, customerLng) {
+function sortRosterByDistance(roster, customerLat, customerLng) {
   if (customerLat == null || customerLng == null) return roster;
-  const customerZone = nearestZoneName(customerLat, customerLng);
   const now = Date.now();
 
   const enriched = roster.map((row, idx) => {
     const hasFreshLoc =
       row.driver_lat != null && row.driver_lng != null && row.location_updated_at &&
       (now - new Date(row.location_updated_at).getTime()) <= STALE_LOCATION_MS;
-    const driverZone = hasFreshLoc ? nearestZoneName(row.driver_lat, row.driver_lng) : null;
     const distanceKm = hasFreshLoc ? haversineKm(customerLat, customerLng, row.driver_lat, row.driver_lng) : Infinity;
-    return { row, idx, sameZone: hasFreshLoc && driverZone === customerZone, distanceKm };
+    return { row, idx, distanceKm };
   });
 
   enriched.sort((a, b) => {
-    if (a.sameZone !== b.sameZone) return a.sameZone ? -1 : 1;
     if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
-    return a.idx - b.idx; // stable fallback — preserves the existing queue order
+    return a.idx - b.idx; // stable fallback — preserves the existing list order
   });
 
   return enriched.map((e) => e.row);
@@ -734,35 +576,29 @@ async function loadServiceDrivers(serviceType) {
   wrap.innerHTML = '';
 
   try {
-    const [frontRes, rosterRes] = await Promise.all([
-      supabaseClient.rpc('get_front_driver', { p_service_type: serviceType }).maybeSingle(),
-      supabaseClient.rpc('get_service_driver_roster', { p_service_type: serviceType }),
-    ]);
+    const { data: roster, error: rosterError } = await supabaseClient
+      .rpc('get_service_driver_roster', { p_service_type: serviceType });
 
-    const roster = rosterRes.data;
-    if (rosterRes.error || !roster || roster.length === 0) return; // hidden entirely if no drivers exist yet for this service
+    if (rosterError || !roster || roster.length === 0) return; // hidden entirely if no drivers exist yet for this service
 
-    const frontId = (!frontRes.error && frontRes.data && frontRes.data.id) ? frontRes.data.id : null;
     const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر مستقبلي كاب`);
 
-    // GPS is the basis; zones are priority-only (see sortRosterByZone).
-    // Falls back to the roster's original (queue) order untouched when
-    // the customer hasn't set a pickup point yet.
+    // Pure real-GPS distance sort (see sortRosterByDistance). Falls
+    // back to the roster's original order untouched when the customer
+    // hasn't set a pickup point yet.
     const sortedRoster = state.pickupLatLng
-      ? sortRosterByZone(roster, state.pickupLatLng.lat, state.pickupLatLng.lng)
+      ? sortRosterByDistance(roster, state.pickupLatLng.lat, state.pickupLatLng.lng)
       : roster;
 
     const cardsHtml = sortedRoster.map((row) => {
-      const isFront = frontId && row.id === frontId;
-      const info = rosterStatusInfo(row.status, isFront);
+      const info = rosterStatusInfo(row.status);
       const vehicleTypeLabel = row.vehicle_type || SERVICES[serviceType]?.label || 'مركبة';
       const cleanTel = (row.phone || '').replace(/[^\d+]/g, '');
       const waTarget = normalizeIraqiPhoneForWhatsapp(row.phone);
       // "طلب" is only offered on an actually available driver (status
-      // === 'active') — someone already on a job ("في مهمة") or offline
-      // cannot be picked for a real, immediate assignment. This is
-      // independent of isFront/queue position: any available driver in
-      // the GPS/zone-sorted list can be chosen, not only the front one.
+      // === 'active') — a busy driver cannot be picked for a real,
+      // immediate assignment. Every available driver in the
+      // GPS-sorted list can be chosen equally; none is singled out.
       const canRequest = row.status === 'active';
       const hasActions = cleanTel || waTarget || canRequest;
 
@@ -775,7 +611,7 @@ async function loadServiceDrivers(serviceType) {
       ` : '';
 
       return `
-        <div class="driver-card-app${isFront ? ' driver-live' : ''}">
+        <div class="driver-card-app${canRequest ? ' driver-live' : ''}">
           <span class="driver-avatar">${DRIVER_AVATAR_SVG}</span>
           <div class="driver-info">
             <b>${escapeHtml(vehicleTypeLabel)}</b>
@@ -1068,10 +904,12 @@ function validateField(inputId) {
    previously removed that attribute, so the button could never be
    clicked and the form's `submit` event never fired — handleSubmit()
    never even started. This re-evaluates the required conditions
-   (pickup + name + a validly-formatted phone + the consent checkbox)
-   on every relevant input change and toggles `disabled` accordingly,
-   without touching validateField()'s own inline error-message logic
-   or anything past the button itself.
+   (pickup + name + a validly-formatted phone + the consent checkbox
+   + a specifically chosen available driver — no-FIFO: there is no
+   "submit and let the system pick someone" path) on every relevant
+   change and toggles `disabled` accordingly, without touching
+   validateField()'s own inline error-message logic or anything past
+   the button itself.
    ============================================================ */
 function updateSubmitButtonState() {
   const btn = document.getElementById('bookSubmitBtn');
@@ -1080,7 +918,7 @@ function updateSubmitButtonState() {
   const name = document.getElementById('customerName')?.value.trim();
   const phone = document.getElementById('phone')?.value.trim();
   const consent = document.getElementById('consentCheck');
-  const ready = !!pickup && !!name && name.length >= 2 && !!phone && PHONE_RE.test(phone) && !!(consent && consent.checked);
+  const ready = !!pickup && !!name && name.length >= 2 && !!phone && PHONE_RE.test(phone) && !!(consent && consent.checked) && !!state.featuredDriverPhone;
   btn.disabled = !ready;
 }
 
@@ -1206,6 +1044,21 @@ async function handleSubmit(e) {
       haptic(20);
       const firstInvalid = document.querySelector('.float-field.invalid input');
       if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // No-FIFO guard: a request can only ever be sent to a specific
+    // driver the customer actually tapped "طلب" on in the list. There
+    // is no "submit with nobody chosen" path from the customer side —
+    // if that ever happens (e.g. the driver list refreshed and the
+    // previous pick is now stale), stop here with a clear message
+    // instead of letting the RPC fall through to any server-side
+    // auto-assignment.
+    step = 'check featuredDriverPhone (no-FIFO guard)';
+    if (!state.featuredDriverPhone) {
+      console.log('[SUBMIT] no driver selected — stopping before RPC');
+      haptic(20);
+      showMsg('يرجى اختيار سائق متاح من القائمة أولاً');
       return;
     }
 
@@ -2711,13 +2564,13 @@ document.addEventListener('DOMContentLoaded', () => {
   updateSubmitButtonState();
   document.getElementById('recenterBtn').addEventListener('click', () => { locateMe(false); haptic(); });
   document.getElementById('locateBtnApp').addEventListener('click', () => { locateMe(false); haptic(); });
-  // "طلب" on any driver in the list doesn't submit or rotate anything by
-  // itself — it just records WHICH driver was chosen and brings the real
+  // "طلب" on any driver in the list doesn't submit anything by itself —
+  // it just records WHICH available driver was chosen (no-FIFO: only
+  // that exact driver, never an auto-picked one) and brings the real
   // request form into view so the customer can fill it in and confirm.
-  // Only that real, successful submission (handleSubmit) rotates the
-  // chosen driver to the back of the queue — see there. Event delegation
-  // (one listener on the container) since the driver list is rebuilt on
-  // every service switch.
+  // Only a real, successful submission (handleSubmit) actually sends
+  // the request to that driver. Event delegation (one listener on the
+  // container) since the driver list is rebuilt on every service switch.
   document.getElementById('driversListApp').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-driver-action="request"]');
     if (!btn) return;
