@@ -63,12 +63,10 @@
     </div>
 
     <!-- Step 1 — تسجيل دخول بسيط (اسم + هاتف إلزاميان، المنطقة
-         اختيارية)، يظهر مرة واحدة فقط لكل جهاز. محفوظ محلياً فقط على
-         الجهاز (localStorage) — لا يُرسل لأي جدول بقاعدة البيانات ولا
-         يُربط بنظام الطلبات. عند وجود بيانات محفوظة سابقاً على هذا
-         الجهاز، تُتخطى هذه الخطوة بالكامل، ويظهر بدلاً منها
-         #welcomeReturningStep بالأسفل في كل زيارة قادمة (انظر
-         initWelcomeScreen بـ app.js). -->
+         اختيارية). محفوظ محلياً فقط على الجهاز (localStorage) — لا
+         يُرسل لأي جدول بقاعدة البيانات ولا يُربط بنظام الطلبات. عند
+         وجود بيانات محفوظة سابقاً على هذا الجهاز، تُتخطى هذه الخطوة
+         بالكامل في الزيارات القادمة (انظر initWelcomeScreen بـ app.js). -->
     <div id="welcomeLoginStep">
       <p class="welcome-greeting">أهلاً بك في مستقبلي كاب</p>
       <p class="welcome-sub">أدخل بياناتك للمتابعة</p>
@@ -110,16 +108,11 @@
     </div>
 
     <!-- Step 2 — يظهر فوراً بعد أول دخول ناجح فقط (مرة واحدة على هذا
-         الجهاز): رسالة الترحيب الموحّدة، ثم تثبيت التطبيق (Android/iPhone
-         حسب المنصة، بإعادة استخدام نفس زر/منطق التثبيت الحالي بالأسفل)
-         ثم تفعيل الإشعارات مرة واحدة، ثم الدخول للتطبيق. -->
+         الجهاز): تثبيت التطبيق (Android/iPhone حسب المنصة، بإعادة
+         استخدام نفس زر/منطق التثبيت الحالي بالأسفل) ثم تفعيل الإشعارات
+         مرة واحدة، ثم الدخول للتطبيق. -->
     <div id="welcomeSetupStep" hidden>
-      <div class="welcome-msg">
-        <p class="welcome-msg-line1">أهلاً بك، <span id="welcomeSetupName"></span> 🤍</p>
-        <p>في مستقبلي كاب</p>
-        <p>يسعدنا وجودك معنا.</p>
-        <p>رحلتك تبدأ هنا 🚕</p>
-      </div>
+      <p class="welcome-greeting">أهلاً <span id="welcomeSetupName"></span> 👋</p>
       <p class="welcome-sub">خطوة أخيرة لتجربة أفضل</p>
 
       <div class="welcome-actions">
@@ -140,20 +133,6 @@
         <button type="button" class="app-btn" id="welcomeContinueBtn">
           <span>🚀</span> ابدأ الآن
         </button>
-      </div>
-    </div>
-
-    <!-- Step "ترحيب متكرر" — لزبون مسجّل مسبقًا على هذا الجهاز: تظهر في
-         كل فتحة للتطبيق رسالة الترحيب الموحّدة فقط (بدون نموذج تسجيل
-         وبدون إعادة عرض خطوة التثبيت/الإشعارات، فهي تظهر مرة واحدة فقط
-         أعلاه)، ثم دخول تلقائي للرئيسية خلال ثوانٍ، أو فورًا عند النقر
-         بأي مكان بالشاشة. انظر showReturningWelcome() بـ app.js. -->
-    <div id="welcomeReturningStep" hidden>
-      <div class="welcome-msg">
-        <p class="welcome-msg-line1">أهلاً بك، <span id="welcomeReturnName"></span> 🤍</p>
-        <p>في مستقبلي كاب</p>
-        <p>يسعدنا وجودك معنا.</p>
-        <p>رحلتك تبدأ هنا 🚕</p>
       </div>
     </div>
 
@@ -182,16 +161,6 @@
       </radialGradient>
     </defs>
   </svg>
-
-  <!-- Top overlay -->
-  <div class="app-topbar">
-    <div class="brand-chip">
-      <span class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
-      </span>
-      <span>مستقبلي</span>
-    </div>
-  </div>
 
   <button class="fab recenter-fab" id="recenterBtn" aria-label="تحديد موقعي الحالي">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>

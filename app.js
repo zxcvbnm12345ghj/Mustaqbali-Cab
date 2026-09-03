@@ -128,143 +128,18 @@ class BottomSheet {
 let sheet;
 
 /* ============================================================
-   Map — Arabic-first vector basemap (MapLibre GL via Leaflet)
-   ============================================================
-   Real, live-sourced Arabic map labels — not a cosmetic translation
-   layer bolted on top. This loads MapLibre GL JS + the official
-   Leaflet bridge plugin (@maplibre/maplibre-gl-leaflet) at runtime —
-   injected here as <script>/<link> tags, so no HTML file needs to be
-   touched — then renders OpenFreeMap's "Liberty" vector style
-   (OpenStreetMap data via the OpenMapTiles schema — openfreemap.org,
-   free for unlimited/commercial use, no API key, no request limit,
-   no account).
-   Every label layer's text is rewritten, client-side, to prefer the
-   real `name:ar` field OSM mappers entered for that street/place, and
-   to fall back to the style's own existing name expression ONLY when
-   no Arabic name exists in the source data. Nothing is ever invented,
-   and English is never forced as a default — if OSM has no Arabic
-   name for a place, none is guessed; whatever the map would already
-   have shown (typically the local name, already mostly Arabic in this
-   service region) is shown instead, exactly as before.
-   L.map()/markers/click-handlers/GPS logic below are all completely
-   unchanged — this only swaps what gets added as the map's *base*
-   layer. If the vector stack fails to load for any reason (offline,
-   blocked script, no WebGL, style fetch failure, etc.) initMap() logs
-   it and silently falls back to the previous CARTO raster basemap, so
-   the map always still works.
+   Map
    ============================================================ */
-
-// OpenFreeMap: OSM data, OpenMapTiles schema (includes name:ar where
-// mapped), genuinely free for this kind of commercial use — see
-// https://openfreemap.org. "liberty" is their modern, colorful,
-// professional-looking style (closest match to a ride-hailing app feel).
-const ARABIC_BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-// Pinned to a combo the maplibre-gl-leaflet maintainers document as
-// tested together (see their README) — deliberately not "latest", so
-// this can't silently break on an upstream release.
-const MAPLIBRE_GL_JS_URL = 'https://unpkg.com/maplibre-gl@2.2.1/dist/maplibre-gl.js';
-const MAPLIBRE_GL_CSS_URL = 'https://unpkg.com/maplibre-gl@2.2.1/dist/maplibre-gl.css';
-const MAPLIBRE_LEAFLET_JS_URL = 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js';
-
-function loadScriptOnce(src) {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) {
-      if (existing.dataset.loaded === '1') { resolve(); return; }
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('script failed: ' + src)));
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = true;
-    s.onload = () => { s.dataset.loaded = '1'; resolve(); };
-    s.onerror = () => reject(new Error('script failed: ' + src));
-    document.head.appendChild(s);
-  });
-}
-
-function loadCssOnce(href) {
-  if (!document.querySelector(`link[href="${href}"]`)) {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet';
-    l.href = href;
-    document.head.appendChild(l);
-  }
-}
-
-// Loads MapLibre GL JS + the Leaflet bridge plugin (in order — the
-// bridge plugin needs both Leaflet, already loaded by the app itself,
-// and maplibre-gl to exist as globals first).
-async function loadMapLibreStack() {
-  if (window.L && window.L.maplibreGL) return; // already available
-  loadCssOnce(MAPLIBRE_GL_CSS_URL);
-  if (!window.maplibregl) await loadScriptOnce(MAPLIBRE_GL_JS_URL);
-  if (!(window.L && window.L.maplibreGL)) await loadScriptOnce(MAPLIBRE_LEAFLET_JS_URL);
-}
-
-// Converts a bare legacy token string like "{name}" into the modern
-// ["get","name"] expression form. Returns null for anything that isn't
-// exactly one bare token (multi-token/mixed-text strings are left to
-// the caller to skip, rather than risk mangling them).
-function bareTokenToGetExpr(fieldStr) {
-  const m = typeof fieldStr === 'string' && fieldStr.match(/^\{([A-Za-z0-9_:]+)\}$/);
-  return m ? ['get', m[1]] : null;
-}
-
-// Rewrites EVERY label layer of a MapLibre style — country/governorate,
-// city/town/district, village/hamlet, street, and POI/landmark labels
-// are all just "symbol" layers with a text-field in this schema, so one
-// generic pass covers all of them without needing to special-case any
-// layer by name — so the real OSM `name:ar` tag becomes the priority
-// label everywhere it exists, keeping the style's own existing name
-// expression as the ONLY fallback (see file header comment above).
-// Handles both of the two text-field formats MapLibre/Mapbox styles use
-// in the wild: modern expression arrays (e.g. ["get","name"]) AND the
-// older "{name}" token-string format — so this works regardless of
-// which form the upstream style happens to ship in.
-function arabicizeStyleLabels(style) {
-  if (!style || !Array.isArray(style.layers)) return style;
-  let rewritten = 0;
-  style.layers.forEach((layer) => {
-    if (!layer || !layer.layout) return;
-    const field = layer.layout['text-field'];
-    if (field === undefined || field === null) return;
-
-    if (Array.isArray(field)) {
-      layer.layout['text-field'] = ['coalesce', ['get', 'name:ar'], field];
-      rewritten++;
-      return;
-    }
-    if (typeof field === 'string') {
-      const asGetExpr = bareTokenToGetExpr(field);
-      if (asGetExpr) {
-        layer.layout['text-field'] = ['coalesce', ['get', 'name:ar'], asGetExpr];
-        rewritten++;
-      }
-      // A multi-token/mixed-text string (e.g. "{name} ({ref})") is left
-      // untouched — too risky to rewrite blindly, and this format is
-      // uncommon in the Liberty style's name layers.
-    }
-  });
-  console.info(`Arabic-first labels applied to ${rewritten} basemap layer(s).`);
-  return style;
-}
-
-async function buildArabicBasemapLayer() {
-  const res = await fetch(ARABIC_BASEMAP_STYLE_URL);
-  if (!res.ok) throw new Error('basemap style fetch failed: ' + res.status);
-  const style = arabicizeStyleLabels(await res.json());
-  return L.maplibreGL({ style, attribution: '' });
-}
 
 function initMap() {
   try {
     state.map = L.map('map', {
       zoomControl: false,
-      // No attribution control — removes the small map logo/attribution
-      // watermark from the corner per the requested design.
-      attributionControl: false,
+      // A minimal attribution control is required by the tile provider's
+      // usage policy below (OpenStreetMap) — kept as small/unobtrusive as
+      // possible via app.css's .leaflet-control-attribution rule, not a
+      // design change to the map itself.
+      attributionControl: true,
       center: [SERVICE_REGION_CENTER.lat, SERVICE_REGION_CENTER.lng],
       zoom: 11,
       minZoom: 6,
@@ -278,35 +153,27 @@ function initMap() {
       zoomAnimation: true,
     });
 
-    const hideMapSkeleton = () => {
+    // Standard OpenStreetMap raster tiles — a reliable, genuinely keyless
+    // source (no account, no secret, nothing to embed in the published
+    // code). Switched from CARTO's basemaps.cartocdn.com endpoint, which
+    // started requiring an API key in late August 2026 and now serves
+    // every unauthenticated request with a large "API KEY REQUIRED"
+    // watermark. Same Leaflet setup, same raster-tile approach, same
+    // real place names sourced live from OpenStreetMap data in whatever
+    // language OSM itself has each name tagged in — which for this
+    // service region is already predominantly Arabic. Nothing here is
+    // hardcoded or fabricated. Combined with the accuracy filter in
+    // app.css (.leaflet-tile-pane), this keeps the same calm, light look.
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      subdomains: 'abc',
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    }).addTo(state.map);
+
+    tiles.on('load', () => {
       const skel = document.getElementById('mapSkeleton');
       if (skel) skel.classList.add('hide');
-    };
-
-    // Previous CARTO Positron raster basemap — kept, unchanged, as the
-    // safety-net fallback if the Arabic vector basemap above can't
-    // load for any reason, so the map never breaks.
-    function addRasterFallback() {
-      const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 19,
-      }).addTo(state.map);
-      tiles.on('load', hideMapSkeleton);
-    }
-
-    (async () => {
-      try {
-        await loadMapLibreStack();
-        const glLayer = await buildArabicBasemapLayer();
-        glLayer.addTo(state.map);
-        const innerMap = glLayer.getMaplibreMap ? glLayer.getMaplibreMap() : null;
-        if (innerMap) innerMap.once('load', hideMapSkeleton);
-        else setTimeout(hideMapSkeleton, 1200);
-      } catch (err) {
-        console.error('Arabic vector basemap failed to load — falling back to the raster basemap', err);
-        addRasterFallback();
-      }
-    })();
+    });
 
     state.map.on('click', (e) => {
       if (state.mapTargetMode === 'dropoff') {
@@ -2658,49 +2525,11 @@ function getSavedLogin() {
 function setWelcomeStep(step) {
   const loginStep = document.getElementById('welcomeLoginStep');
   const setupStep = document.getElementById('welcomeSetupStep');
-  const returningStep = document.getElementById('welcomeReturningStep');
-  const dots = document.getElementById('welcomeSteps');
-  // يُستدعى فقط لمسار التسجيل الأول (خطوة 1 ثم 2) — تأكيد أن شاشة
-  // "أهلاً بعودتك" ونقطتَي التقدّم بحالتهما الافتراضية قبل عرض أي منهما.
-  if (returningStep) returningStep.hidden = true;
-  if (dots) dots.hidden = false;
   if (loginStep) loginStep.hidden = step !== 1;
   if (setupStep) setupStep.hidden = step !== 2;
   document.querySelectorAll('#welcomeSteps .welcome-step-dot').forEach((dot) => {
     dot.classList.toggle('active', Number(dot.dataset.step) === step);
   });
-}
-
-// شاشة "أهلاً بعودتك" — لزبون مسجّل مسبقًا على هذا الجهاز فقط. تعرض
-// رسالة الترحيب الموحّدة باسمه، بدون نموذج تسجيل وبدون إعادة عرض
-// خطوة التثبيت/الإشعارات (تلك تظهر مرة واحدة فقط عند أول تسجيل)، ثم
-// تنتقل تلقائيًا للرئيسية خلال ثوانٍ قليلة — أو فورًا إذا نقر الزبون
-// بأي مكان بالشاشة لتخطّيها بسرعة.
-function showReturningWelcome(name) {
-  const screen = document.getElementById('welcomeScreen');
-  const loginStep = document.getElementById('welcomeLoginStep');
-  const setupStep = document.getElementById('welcomeSetupStep');
-  const returningStep = document.getElementById('welcomeReturningStep');
-  const dots = document.getElementById('welcomeSteps');
-  const nameEl = document.getElementById('welcomeReturnName');
-  if (!screen || !returningStep) return;
-
-  if (loginStep) loginStep.hidden = true;
-  if (setupStep) setupStep.hidden = true;
-  if (dots) dots.hidden = true;
-  if (nameEl) nameEl.textContent = name;
-  returningStep.hidden = false;
-  screen.hidden = false;
-
-  let dismissed = false;
-  function goHome() {
-    if (dismissed) return;
-    dismissed = true;
-    screen.hidden = true;
-    returningStep.removeEventListener('click', goHome);
-  }
-  const autoTimer = setTimeout(goHome, 1700);
-  returningStep.addEventListener('click', () => { clearTimeout(autoTimer); goHome(); });
 }
 
 function syncWelcomeInstallVisibility() {
@@ -2717,14 +2546,10 @@ function initWelcomeScreen() {
     screen.hidden = true;
   }
 
-  const savedLogin = getSavedLogin();
-
-  // زبون مسجّل مسبقًا على هذا الجهاز: التسجيل لا يتكرر أبدًا — تظهر
-  // شاشة ترحيب قصيرة باسمه في كل فتحة للتطبيق (showReturningWelcome)
-  // ثم ينتقل تلقائيًا للرئيسية دون أي نموذج تسجيل جديد. غير ذلك،
-  // تظهر خطوة التسجيل الأولى كما في الزيارة الأولى.
-  if (savedLogin && savedLogin.name) {
-    showReturningWelcome(savedLogin.name);
+  // Saved login already on this device → skip the whole welcome
+  // screen (both steps) and open straight into the app.
+  if (getSavedLogin()) {
+    screen.hidden = true;
   } else {
     screen.hidden = false;
     setWelcomeStep(1);

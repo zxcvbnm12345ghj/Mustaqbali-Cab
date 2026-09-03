@@ -93,8 +93,7 @@
   --elev-2: 0 12px 26px -14px rgba(11,32,54,0.24);
   --elev-3: 0 22px 46px -20px rgba(11,32,54,0.32);
 
-  --app-header-h: 72px;
-  --app-map-h: clamp(190px, 28vh, 260px);
+  --app-map-h: clamp(260px, 36vh, 340px);
 }
 
 html, body.app-body{
@@ -131,19 +130,20 @@ html, body.app-body{
 }
 
 /* ============================================================
-   App shell — v5 "Fixed Horizon" layout
+   App shell — v6 "Fixed Horizon, header removed"
    ---------------------------------------------------------
-   The whole customer interface is now one fixed, non-scrolling
-   vertical stack instead of a full-bleed map with floating panels
-   on top of it: a static header row, a bounded "medium" map card
-   (never the largest element on screen), a scrollable content
-   panel, and the bottom nav. Nothing here drags, swipes sideways,
-   or shows a horizontal scrollbar — the ONLY element that still
-   zooms/pans is the map itself, inside its own card. Every id/
+   The whole customer interface is one fixed, non-scrolling vertical
+   stack: a bounded "medium-to-large" map card at the top (grown to
+   reclaim the space the header used to take — still not full-screen,
+   just no longer split with a header row above it), a scrollable
+   content panel, and the bottom nav. No header/logo bar — removed
+   entirely, not replaced with anything. Nothing here drags, swipes
+   sideways, or shows a horizontal scrollbar — the ONLY element that
+   still zooms/pans is the map itself, inside its own card. Every id/
    class app.js already reads or toggles (#map, #mapSkeleton,
-   .app-topbar, .recenter-fab, #sheet, #sheetScroll, .sheet-view,
-   #bottomNav…) keeps its exact selector and DOM position; only
-   how they're laid out on screen changes.
+   .recenter-fab, #sheet, #sheetScroll, .sheet-view, #bottomNav…)
+   keeps its exact selector and DOM position; only how they're laid
+   out on screen changes.
    ============================================================ */
 .app-shell{
   position: fixed;
@@ -164,7 +164,7 @@ html, body.app-body{
   flex: 0 0 var(--app-map-h);
   width: auto;
   height: var(--app-map-h);
-  margin: 0 var(--sp-4) var(--sp-3);
+  margin: calc(env(safe-area-inset-top) + var(--sp-2)) var(--sp-4) var(--sp-3);
   border-radius: var(--app-r-lg);
   overflow: hidden;
   z-index: 1;
@@ -178,6 +178,19 @@ html, body.app-body{
   filter: saturate(1.1) brightness(1.02) hue-rotate(6deg);
 }
 .leaflet-control-zoom{ display:none; }
+/* Required by the OpenStreetMap tile usage policy (see initMap in
+   app.js) — kept as small and unobtrusive as possible instead of
+   Leaflet's default gray attribution box, so it doesn't read as a
+   design change to the map card itself. */
+.leaflet-control-attribution{
+  background: rgba(255,255,255,0.72);
+  font-size: 9px;
+  line-height: 1.3;
+  padding: 1px 6px;
+  border-radius: var(--app-r-xs) 0 0 0;
+  color: var(--text-faint);
+}
+.leaflet-control-attribution a{ color: var(--text-faint); }
 .leaflet-fade-anim .leaflet-tile{ will-change: opacity; }
 
 /* Skeleton is a sibling of #map (not nested in it), so it's pinned
@@ -185,7 +198,7 @@ html, body.app-body{
    tokens above rather than via document flow. */
 .map-skeleton{
   position: absolute;
-  top: calc(var(--app-header-h) + env(safe-area-inset-top));
+  top: calc(env(safe-area-inset-top) + var(--sp-2));
   inset-inline: var(--sp-4);
   height: var(--app-map-h);
   z-index: 2; pointer-events:none;
@@ -236,50 +249,6 @@ html, body.app-body{
 }
 @keyframes decor-route-flow{ to{ stroke-dashoffset: -150; } }
 
-/* ---------------- App bar (static header row, not a map overlay) ----------------
-   A real header row with a fixed height at the top of the fixed
-   vertical stack instead of a floating chip painted over the raw
-   map. Same brand-chip element, restyled to sit directly in the
-   bar instead of as a light glass pill over dark hero art. */
-.app-topbar{
-  order: 1;
-  position: relative;
-  z-index: 5;
-  flex-shrink: 0;
-  display:flex; align-items:center; justify-content:space-between;
-  height: calc(var(--app-header-h) + env(safe-area-inset-top));
-  padding: calc(env(safe-area-inset-top) + var(--sp-3)) var(--sp-4) var(--sp-3);
-  background: linear-gradient(120deg, var(--horizon-ink) 0%, #14314F 60%, #0B2036 100%);
-  border-bottom-right-radius: var(--app-r-xl);
-  border-bottom-left-radius: var(--app-r-sm);
-  box-shadow: var(--elev-2);
-  overflow: hidden;
-}
-.app-topbar::before{
-  content:'';
-  position:absolute; inset:0; z-index:-1;
-  background:
-    radial-gradient(120% 160% at 6% -30%, rgba(255,138,61,0.55), transparent 62%),
-    radial-gradient(110% 160% at 102% -20%, rgba(0,180,166,0.5), transparent 58%);
-  opacity: 0.95;
-}
-
-.brand-chip{
-  display:flex; align-items:center; gap: var(--sp-3);
-  font-weight: 800; font-size: 15.5px;
-  letter-spacing: 0.01em;
-  color: #fff;
-}
-.brand-chip .brand-mark{
-  width:38px; height:38px;
-  border-radius: var(--app-r-xs) var(--app-r-xs) var(--app-r-xs) 6px;
-  background: linear-gradient(135deg, var(--gold), var(--teal));
-  display:flex; align-items:center; justify-content:center;
-  box-shadow: 0 8px 16px -6px rgba(0,180,166,0.55);
-  flex-shrink: 0;
-}
-.brand-chip .brand-mark svg{ width:18px; height:18px; }
-
 .fab{
   width: 44px; height: 44px;
   border-radius: var(--app-r-sm) var(--app-r-sm) var(--app-r-sm) 6px;
@@ -298,14 +267,14 @@ html, body.app-body{
 @keyframes spin{ to{ transform: rotate(360deg); } }
 
 /* GPS "current location" control — anchored to the bottom-right
-   corner of the map card itself (not floating over a full-screen
-   map anymore), computed from the same fixed header/map tokens
-   the map card and its skeleton use, so it always lands inside the
-   card regardless of viewport height. */
+   corner of the map card itself, computed from the same fixed map
+   tokens the map card and its skeleton use (no header above it any
+   more), so it always lands inside the card regardless of viewport
+   height. */
 .recenter-fab{
   position: absolute;
   inset-inline-end: calc(var(--sp-4) + var(--sp-3));
-  top: calc(var(--app-header-h) + env(safe-area-inset-top) + var(--app-map-h) - 60px);
+  top: calc(env(safe-area-inset-top) + var(--sp-2) + var(--app-map-h) - 60px);
   z-index: 15;
   width: auto;
   height: auto;
@@ -1026,17 +995,12 @@ html, body.app-body{
 .app-toast.show{ opacity:1; transform: translateX(-50%) translateY(0); z-index: 40; }
 
 /* ---------------- Keyboard-open state (set via JS using visualViewport) ----------------
-   In the new fixed vertical stack the header and map card each take
-   their own permanent row, so when the on-screen keyboard opens they
-   collapse to zero height (not just hidden/opaque) — that's what lets
-   the content panel below grow to fill the space above the keyboard,
-   keeping the focused field visible. Purely a CSS response to the
-   existing body.kb-open class app.js already toggles; no JS change. */
-body.kb-open .app-topbar{
-  flex-basis: 0; height: 0; min-height: 0; padding: 0; overflow: hidden;
-  opacity: 0; pointer-events: none;
-  transition: opacity .15s, flex-basis .15s;
-}
+   The map card takes its own permanent row, so when the on-screen
+   keyboard opens it collapses to zero height (not just hidden/opaque)
+   — that's what lets the content panel below grow to fill the space
+   above the keyboard, keeping the focused field visible. Purely a CSS
+   response to the existing body.kb-open class app.js already toggles;
+   no JS change. */
 body.kb-open #map{
   flex-basis: 0; height: 0; margin: 0; border: none; box-shadow: none;
   opacity: 0; pointer-events: none; overflow: hidden;
@@ -1290,32 +1254,9 @@ body.kb-open .sheet{ transition: none; }
   box-shadow: 0 0 10px rgba(255,138,61,0.45);
 }
 .welcome-step-line{ width:22px; height:2px; background: var(--surface-brd); border-radius:2px; }
-/* بدون هذا، إخفاء النقطتين عبر [hidden] لا يعمل: .welcome-steps تحدد
-   display:flex بنفس مستوى خصوصية [hidden] الافتراضي من المتصفح، وقاعدة
-   المؤلف الأحدث بالترتيب هي التي تفوز — تمامًا كما مع .welcome-screen. */
-.welcome-steps[hidden]{ display: none; }
 
 .welcome-greeting{ font-size: 16px; font-weight:800; margin: 0 0 5px; color: var(--gold-text); }
 .welcome-sub{ font-size: 13.5px; color: var(--text-muted); margin: 0 0 26px; }
-
-/* رسالة الترحيب الموحّدة — تُستخدم مرتين: خطوة الإعداد الأولى (بعد أول
-   تسجيل) وشاشة "أهلاً بعودتك" لكل زيارة لاحقة. أربعة أسطر متراصة
-   بأقل مسافة ممكنة بينها (بدون فراغات/أسطر فارغة). */
-.welcome-msg{ margin: 4px 0 26px; }
-.welcome-msg p{
-  margin: 0;
-  line-height: 1.3;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
-.welcome-msg p.welcome-msg-line1{
-  font-size: 17.5px;
-  font-weight: 900;
-  color: var(--gold-text);
-  margin-bottom: 2px;
-}
-.welcome-msg p:last-child{ color: var(--teal); }
 
 /* بطاقة زجاجية (glass card) تجمع نموذج تسجيل الدخول */
 .welcome-login-form{
