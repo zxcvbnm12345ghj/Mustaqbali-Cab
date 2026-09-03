@@ -202,7 +202,7 @@ function pickupDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#0EA5B7" stroke="#FFFFFF" stroke-width="1.4"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#1D6FD1" stroke="#FFFFFF" stroke-width="1.4"/>
       <circle cx="17" cy="13.5" r="4.6" fill="#FFFFFF"/>
     </svg>`,
     iconSize: [40, 52],
@@ -214,7 +214,7 @@ function dropoffDivIcon() {
   return L.divIcon({
     className: 'pickup-pin dropped dropoff-pin',
     html: `<svg viewBox="0 0 34 34" fill="none">
-      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#F2994A" stroke="#FFFFFF" stroke-width="1.4"/>
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E5B85C" stroke="#FFFFFF" stroke-width="1.4"/>
       <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#FFFFFF"/>
     </svg>`,
     iconSize: [40, 52],
@@ -348,12 +348,22 @@ function shortAddressFromGeocode(data) {
   return null;
 }
 
-// Formats a raw GPS fix as the fallback label when no reliable street or
-// landmark name is available — real coordinates (never a guessed area
-// name), with the device's GPS accuracy in meters appended when known.
+// Fallback label used when reverse geocoding has no reliable street or
+// landmark name to offer. Never shows the raw lat/lng digits to the
+// customer — those are already saved separately (hidden #pickupLat/
+// #pickupLng / #dropoffLat/#dropoffLng inputs + state.pickupLatLng/
+// state.dropoffLatLng, set in setPickup()/setDropoff() before this ever
+// runs) and are exactly what's used for GPS tracking, distance/price,
+// and the request sent to Supabase — this only controls what the
+// customer sees written in the address text field, which must always
+// read like a location, never like coordinates. `accuracy` is only ever
+// passed for a real device GPS fix (pickup), so its presence is what
+// distinguishes "your current location" from a manually chosen point.
 function coordsLabel(lat, lng, accuracy = null) {
-  const base = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  return (accuracy != null && isFinite(accuracy)) ? `${base} (±${Math.round(accuracy)} م)` : base;
+  if (accuracy != null && isFinite(accuracy)) {
+    return `موقعك الحالي (دقة تحديد GPS ±${Math.round(accuracy)} م تقريبًا)`;
+  }
+  return 'الموقع المحدد على الخريطة';
 }
 
 async function reverseGeocodePickup(lat, lng, accuracy = null) {
@@ -1032,7 +1042,21 @@ function updateSubmitButtonState() {
   const phone = document.getElementById('phone')?.value.trim();
   const consent = document.getElementById('consentCheck');
   const ready = !!pickup && !!name && name.length >= 2 && !!phone && PHONE_RE.test(phone) && !!(consent && consent.checked) && !!state.featuredDriverPhone;
-  btn.disabled = !ready;
+  // FIX (bug #1 — button unresponsive): this used to set btn.disabled =
+  // !ready. A native `disabled` button in HTML swallows every click
+  // before it ever reaches our own JS — including the "submit" event
+  // listener that calls handleSubmit() — so whenever `ready` was false
+  // (most commonly: no driver picked from the list yet) the button
+  // looked normal but literally could not be tapped, with no message
+  // explaining why. The button is now ALWAYS enabled/clickable; we only
+  // toggle a CSS class for the same dimmed visual, and
+  // handleSubmit() itself does the real validation and tells the
+  // customer exactly what's missing. `removeAttribute` also covers the
+  // case where index.html still hard-codes `disabled` on this button by
+  // default — this guarantees it's cleared on first load too.
+  btn.classList.toggle('is-blocked', !ready);
+  btn.setAttribute('aria-disabled', String(!ready));
+  btn.removeAttribute('disabled');
 }
 
 /* ============================================================
@@ -1157,6 +1181,23 @@ async function handleSubmit(e) {
       haptic(20);
       const firstInvalid = document.querySelector('.float-field.invalid input');
       if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // FIX (bug #1): the consent checkbox used to only be enforced by
+    // disabling the button (updateSubmitButtonState). Now that the
+    // button is always clickable (see that function), handleSubmit
+    // must check it explicitly too, or an unchecked box would let the
+    // request through — or, before this fix, could just as easily be
+    // the silent, unexplained reason the old disabled-button click did
+    // nothing at all.
+    step = 'check consent checkbox';
+    const consentEl = document.getElementById('consentCheck');
+    if (!consentEl || !consentEl.checked) {
+      console.log('[SUBMIT] consent not checked — stopping before RPC');
+      haptic(20);
+      showMsg('يرجى الموافقة على الشروط أولاً');
+      consentEl?.focus();
       return;
     }
 
@@ -2133,6 +2174,22 @@ function initInAppBrowserNotice() {
    and keep the focused field visible instead of letting it hide
    behind the keyboard or the bottom sheet collapsing awkwardly.
    ============================================================ */
+// FIX (bug #3 helper): scrolls a field into view using ONLY the app's
+// internal .sheet-scroll container, never window/document scroll — see
+// initViewportHandling() below for why. Shared by the keyboard-focus
+// handler and the "طلب" driver-list handler, which had the same
+// document-level scrollIntoView() call causing the same white-gap bug.
+function scrollFieldIntoSheetView(el) {
+  if (!el) return;
+  const scrollEl = el.closest('.sheet-scroll');
+  if (!scrollEl) return;
+  const fieldRect = el.getBoundingClientRect();
+  const boxRect = scrollEl.getBoundingClientRect();
+  const delta = (fieldRect.top - boxRect.top) - (boxRect.height / 2) + (fieldRect.height / 2);
+  scrollEl.scrollTop += delta;
+  if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+}
+
 function initViewportHandling() {
   // --- Anti page-zoom guard ---------------------------------------------
   // The viewport <meta> tag's user-scalable=no is NOT enough on its own:
@@ -2179,13 +2236,30 @@ function initViewportHandling() {
     }
   });
 
+  // FIX (bug #3 — white gap / page jumps up when typing): html and
+  // body are position:fixed with overflow:hidden (see app.css) so the
+  // *document* can never scroll — but the old code still called
+  // e.target.scrollIntoView(...) directly on the focused input. On iOS
+  // Safari in particular, asking the browser to scroll an element
+  // "into view" can still nudge the outer page/visual viewport even
+  // when its fixed ancestors supposedly can't scroll, which is what
+  // left a blank strip above/below the fixed app shell. The fix scrolls
+  // ONLY the app's own internal scroll container (.sheet-scroll) by
+  // computing the offset manually, and never touches window/document
+  // scroll at all — so there's nothing for iOS to misinterpret.
   document.addEventListener('focusin', (e) => {
     if (e.target.matches('input, textarea')) {
-      setTimeout(() => {
-        e.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }, 300);
+      setTimeout(() => scrollFieldIntoSheetView(e.target), 300);
     }
   });
+
+  // Same safety net on its own, independent of focus events — catches
+  // any stray scroll the OS/browser triggers on its own (e.g. while the
+  // keyboard is animating open/closed) rather than only right after a
+  // field is focused.
+  window.addEventListener('scroll', () => {
+    if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+  }, { passive: true });
 }
 
 /* ============================================================
@@ -2691,7 +2765,13 @@ document.addEventListener('DOMContentLoaded', () => {
     state.featuredDriverPhone = btn.dataset.driverPhone || null;
     sheet.setSnap('full');
     const pickupEl = document.getElementById('pickup');
-    pickupEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // FIX (bug #3): was pickupEl.scrollIntoView(...) — same document-
+    // level scroll trigger as the keyboard-focus handler above. Now
+    // scrolls only the internal .sheet-scroll panel via the shared
+    // helper, then focuses with preventScroll so the browser's own
+    // native "scroll focused field into view" behavior can't re-trigger
+    // a page-level scroll either.
+    scrollFieldIntoSheetView(pickupEl);
     pickupEl.focus({ preventScroll: true });
     haptic();
   });

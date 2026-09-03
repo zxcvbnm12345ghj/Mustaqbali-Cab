@@ -1,15 +1,15 @@
 {
   "name": "مستقبلي كاب — Mustaqbali Cab",
   "short_name": "مستقبلي",
-  "description": "احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.",
+  "description": "مستقبلي كاب — نقل وتوصيل بسهولة وأمان في نينوى وبين المحافظات.",
   "start_url": "/index.html",
   "id": "/index.html",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0A0E1A",
-  "theme_color": "#0A0E1A",
+  "background_color": "#0B1E38",
+  "theme_color": "#0B1E38",
   "dir": "rtl",
   "lang": "ar",
   "icons": [

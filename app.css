@@ -1,8 +1,8 @@
 /* =========================================================
    Mustaqbali Cab — Customer App Shell (PWA)
-   "Horizon 2027" identity — v4 REDESIGN PASS
+   "مستقبلي بلو" identity — primary blue + light gold accent
    ---------------------------------------------------------
-   This pass is a genuine layout/shape overhaul, not a recolor:
+   Layout/shape system (kept from the prior pass, only recolored):
    - Asymmetric corner language (sheet, cards) instead of one
      uniform radius everywhere.
    - A curved gradient "hero band" behind the topbar instead of
@@ -19,27 +19,32 @@
    ========================================================= */
 
 /* ---------------------------------------------------------
-   "Horizon 2027" tokens — overrides the gold/teal tokens from
+   "مستقبلي بلو" tokens — overrides the gold/teal tokens from
    style.css (this file always loads after, so these values win
-   app-wide), tuned toward a punchier sunrise-orange + real
-   turquoise pairing, plus shape tokens that drive the new
-   asymmetric-radius language used throughout this file.
+   app-wide). Identity: confident primary blue carries the app's
+   chrome (buttons, active states, focus rings, nav), with a soft,
+   restrained gold used only as a light secondary accent (ratings,
+   highlights, the current-step timeline glow) — never as the
+   dominant color. Plus shape tokens that drive the asymmetric-
+   radius language used throughout this file.
    --------------------------------------------------------- */
 :root{
-  --gold: #FF8A3D;
-  --gold-soft: #FFC073;
-  --gold-text: #B84E00;
-  --gold-dim: rgba(255,138,61,0.14);
+  /* ---- Primary — Mustaqbali Blue ---- */
+  --teal: #1D6FD1;
+  --teal-soft: #5B93E0;
+  --teal-text: #123E73;
+  --teal-dim: rgba(29,111,209,0.13);
 
-  --teal: #00B4A6;
-  --teal-soft: #5CE0D3;
-  --teal-text: #006D63;
-  --teal-dim: rgba(0,180,166,0.13);
+  /* ---- Secondary — light gold accent (used sparingly) ---- */
+  --gold: #E5B85C;
+  --gold-soft: #F0CF82;
+  --gold-text: #A87B2E;
+  --gold-dim: rgba(229,184,92,0.14);
 
-  --yellow: #FFC93C;
-  --yellow-soft: #FFE08A;
-  --yellow-text: #8A6800;
-  --yellow-dim: rgba(255,201,60,0.16);
+  --yellow: #E0A93E;
+  --yellow-soft: #F0C878;
+  --yellow-text: #7A5610;
+  --yellow-dim: rgba(224,169,62,0.16);
 
   --green: #22C55E;
   --green-soft: #4ADE80;
@@ -48,7 +53,18 @@
 
   /* Deep ink used only for the hero band gradient depth + shadows —
      not a text color, so contrast rules elsewhere are untouched. */
-  --horizon-ink: #0B2036;
+  --horizon-ink: #0B1E38;
+
+  /* ---- Per-service helper colors — one dedicated accent per ride
+     type, distinct from one another but all drawn from the same
+     restrained blue/gold-led family (never neon, never competing
+     with the primary blue chrome around them). ---- */
+  --svc-taxi: #1D6FD1;       --svc-taxi-soft: #5B93E0;   --svc-taxi-text: #123E73;   --svc-taxi-dim: rgba(29,111,209,0.14);
+  --svc-private: #34406E;    --svc-private-soft: #5A6796; --svc-private-text: #232C4D; --svc-private-dim: rgba(52,64,110,0.16);
+  --svc-courier: #D9A441;    --svc-courier-soft: #EAC272; --svc-courier-text: #8A6415; --svc-courier-dim: rgba(217,164,65,0.16);
+  --svc-intercity: #1E9E82;  --svc-intercity-soft: #57C4AC; --svc-intercity-text: #146854; --svc-intercity-dim: rgba(30,158,130,0.14);
+  --svc-cargo: #C97A3D;      --svc-cargo-soft: #E0A16A;   --svc-cargo-text: #8A4E1E;   --svc-cargo-dim: rgba(201,122,61,0.16);
+  --svc-starx: #6E5CC4;      --svc-starx-soft: #9689DB;   --svc-starx-text: #453579;   --svc-starx-dim: rgba(110,92,196,0.14);
 
   /* ---- Shape tokens — the asymmetric-radius language used across
      the sheet, cards and buttons in this pass. ---- */
@@ -205,8 +221,8 @@ html, body.app-body{
   border-radius: var(--app-r-lg);
   overflow: hidden;
   background:
-    radial-gradient(60% 45% at 30% 35%, rgba(255,138,61,0.13), transparent 60%),
-    radial-gradient(50% 40% at 75% 65%, rgba(0,180,166,0.11), transparent 60%),
+    radial-gradient(60% 45% at 30% 35%, rgba(229,184,92,0.13), transparent 60%),
+    radial-gradient(50% 40% at 75% 65%, rgba(29,111,209,0.11), transparent 60%),
     var(--bg-deep);
   opacity: 1;
   transition: opacity .5s ease;
@@ -225,12 +241,12 @@ html, body.app-body{
   content:'';
   position:absolute; bottom:2px; left:50%; transform: translateX(-50%);
   width: 46px; height: 46px; border-radius:50%;
-  background: radial-gradient(circle, rgba(0,180,166,0.4), transparent 70%);
+  background: radial-gradient(circle, rgba(29,111,209,0.4), transparent 70%);
   animation: pin-pulse 1.8s ease-out infinite;
   z-index:1;
 }
 .dropoff-pin::before{
-  background: radial-gradient(circle, rgba(255,138,61,0.4), transparent 70%);
+  background: radial-gradient(circle, rgba(229,184,92,0.4), transparent 70%);
 }
 .pickup-pin.dropped{ animation: pin-drop .55s cubic-bezier(.34,1.56,.64,1); }
 @keyframes pin-drop{ 0%{ transform: translateY(-24px) scale(0.5); opacity:0; } 60%{ transform: translateY(4px) scale(1.08); opacity:1; } 100%{ transform: translateY(0) scale(1); } }
@@ -245,7 +261,7 @@ html, body.app-body{
   stroke-dasharray: 1 14;
   animation: decor-route-flow 1.4s linear infinite;
   opacity: 0.9;
-  filter: drop-shadow(0 0 4px rgba(255,138,61,0.5));
+  filter: drop-shadow(0 0 4px rgba(229,184,92,0.5));
 }
 @keyframes decor-route-flow{ to{ stroke-dashoffset: -150; } }
 
@@ -322,21 +338,15 @@ html, body.app-body{
 .sheet::before{
   content:'';
   position:absolute; top:0; inset-inline:0; height:4px;
-  background: linear-gradient(90deg, var(--gold), var(--yellow) 45%, var(--teal));
+  background: linear-gradient(90deg, var(--teal) 0%, var(--teal) 65%, var(--gold-soft) 85%, var(--gold) 100%);
 }
 
-.sheet-handle-area{
-  flex-shrink: 0;
-  padding-top: 14px;
-  padding-bottom: 4px;
-  pointer-events: none; /* decorative only — the sheet no longer drags */
-}
-.sheet-handle{
-  width: 38px; height: 4px;
-  border-radius: 100px;
-  background: rgba(11,32,54,0.16);
-  margin: 0 auto;
-}
+/* The sheet's old pill-shaped "drag handle" middle bar (previously
+   #sheetHandleArea/.sheet-handle) has been removed from index.html
+   entirely — the sheet stopped being draggable a while ago (see
+   BottomSheet class in app.js — it's now a fixed, non-resizing panel),
+   so that bar no longer did anything. Removed outright, not replaced
+   with any other bar/divider. */
 
 .sheet-scroll{
   flex: 1;
@@ -384,7 +394,7 @@ html, body.app-body{
   color: #fff; flex-shrink:0; width:32px; height:32px;
   padding: 7px; box-sizing: border-box;
   border-radius: var(--app-r-xs);
-  background: linear-gradient(135deg, var(--gold), var(--teal));
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
 }
 
 .section-label{
@@ -447,21 +457,24 @@ html, body.app-body{
 .qs-chip:active .ic{ transform: scale(1.08); }
 .qs-chip span{ font-size: 11.5px; font-weight:800; color: var(--text-muted); line-height:1.3; text-align:center; }
 
-/* ---- Per-service accent colors (taxi / delivery / etc.) — restrained
-   to tints/shades of the four brand accents only. ---- */
-.qs-chip[data-service="taxi"] .ic{ background: var(--gold-dim); color: var(--gold-text); }
-.qs-chip[data-service="private"] .ic{ background: var(--teal-dim); color: var(--teal-text); }
-.qs-chip[data-service="courier"] .ic{ background: var(--yellow-dim); color: var(--yellow-text); }
-.qs-chip[data-service="intercity"] .ic{ background: rgba(0,114,104,0.14); color:#00473F; }
-.qs-chip[data-service="cargo"] .ic{ background: var(--green-dim); color: var(--green-text); }
-.qs-chip[data-service="starx"] .ic{ background: rgba(217,96,26,0.16); color:#B84E00; }
+/* ---- Per-service accent colors — تاكسي / خصوصي / دليفري / بين
+   المحافظات / حمل / نقل نفرات — each service gets its own dedicated
+   --svc-* helper color (defined in :root above) instead of sharing
+   the four brand tokens, so all six are clearly distinguishable at
+   a glance while still reading as one restrained blue/gold family. */
+.qs-chip[data-service="taxi"] .ic{ background: var(--svc-taxi-dim); color: var(--svc-taxi-text); }
+.qs-chip[data-service="private"] .ic{ background: var(--svc-private-dim); color: var(--svc-private-text); }
+.qs-chip[data-service="courier"] .ic{ background: var(--svc-courier-dim); color: var(--svc-courier-text); }
+.qs-chip[data-service="intercity"] .ic{ background: var(--svc-intercity-dim); color: var(--svc-intercity-text); }
+.qs-chip[data-service="cargo"] .ic{ background: var(--svc-cargo-dim); color: var(--svc-cargo-text); }
+.qs-chip[data-service="starx"] .ic{ background: var(--svc-starx-dim); color: var(--svc-starx-text); }
 
-.svc-pill[data-service="taxi"].active{ background: linear-gradient(180deg, var(--gold-soft), var(--gold)); box-shadow: 0 6px 16px -6px rgba(255,138,61,0.55); }
-.svc-pill[data-service="private"].active{ background: linear-gradient(180deg, var(--teal-soft), var(--teal)); box-shadow: 0 6px 16px -6px rgba(0,180,166,0.55); }
-.svc-pill[data-service="courier"].active{ background: linear-gradient(180deg, var(--yellow-soft), var(--yellow)); box-shadow: 0 6px 16px -6px rgba(255,201,60,0.5); color:#4A3800; }
-.svc-pill[data-service="intercity"].active{ background: linear-gradient(180deg, #17948A, #00554D); box-shadow: 0 6px 16px -6px rgba(0,85,77,0.55); }
-.svc-pill[data-service="cargo"].active{ background: linear-gradient(180deg, var(--green-soft), var(--green)); box-shadow: 0 6px 16px -6px rgba(34,197,94,0.5); }
-.svc-pill[data-service="starx"].active{ background: linear-gradient(180deg, #E8783A, #B84E00); box-shadow: 0 6px 16px -6px rgba(184,78,0,0.55); }
+.svc-pill[data-service="taxi"].active{ background: linear-gradient(180deg, var(--svc-taxi-soft), var(--svc-taxi)); box-shadow: 0 6px 16px -6px rgba(29,111,209,0.55); color:#fff; }
+.svc-pill[data-service="private"].active{ background: linear-gradient(180deg, var(--svc-private-soft), var(--svc-private)); box-shadow: 0 6px 16px -6px rgba(52,64,110,0.55); color:#fff; }
+.svc-pill[data-service="courier"].active{ background: linear-gradient(180deg, var(--svc-courier-soft), var(--svc-courier)); box-shadow: 0 6px 16px -6px rgba(217,164,65,0.5); color:#4A3300; }
+.svc-pill[data-service="intercity"].active{ background: linear-gradient(180deg, var(--svc-intercity-soft), var(--svc-intercity)); box-shadow: 0 6px 16px -6px rgba(30,158,130,0.5); color:#fff; }
+.svc-pill[data-service="cargo"].active{ background: linear-gradient(180deg, var(--svc-cargo-soft), var(--svc-cargo)); box-shadow: 0 6px 16px -6px rgba(201,122,61,0.5); color:#fff; }
+.svc-pill[data-service="starx"].active{ background: linear-gradient(180deg, var(--svc-starx-soft), var(--svc-starx)); box-shadow: 0 6px 16px -6px rgba(110,92,196,0.5); color:#fff; }
 
 .qs-skel{
   height: 96px; border-radius: var(--app-r-md);
@@ -483,10 +496,10 @@ html, body.app-body{
 }
 .promo-card .ic{
   width:42px; height:42px; border-radius: var(--app-r-xs);
-  background: linear-gradient(135deg, var(--gold), var(--teal));
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
   display:flex; align-items:center; justify-content:center;
   color:#fff; flex-shrink:0;
-  box-shadow: 0 8px 18px -8px rgba(255,138,61,0.5);
+  box-shadow: 0 8px 18px -8px rgba(229,184,92,0.5);
 }
 .promo-card b{ display:block; font-size:13.5px; margin-bottom:2px; }
 .promo-card span{ font-size:12px; color: var(--text-muted); }
@@ -565,11 +578,11 @@ html, body.app-body{
 .qa-btn > span:last-child{ overflow:hidden; text-overflow:ellipsis; }
 .qa-btn:active{ transform: scale(0.94); background: var(--surface-hi); }
 .qa-btn:hover, .qa-btn:focus-visible{
-  border-color: rgba(255,138,61,0.5);
+  border-color: rgba(229,184,92,0.5);
   box-shadow: 0 0 0 3px var(--gold-dim);
 }
 .qa-btn:focus-visible{ outline:none; }
-.qa-btn.open{ border-color: rgba(0,180,166,0.35); background: var(--teal-dim); color: var(--teal-text); }
+.qa-btn.open{ border-color: rgba(29,111,209,0.35); background: var(--teal-dim); color: var(--teal-text); }
 .qa-icon{
   width:22px; height:22px; border-radius:8px 8px 8px 3px; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
@@ -593,7 +606,7 @@ html, body.app-body{
   overflow: hidden;
   transition: border-color .2s, box-shadow .2s;
 }
-.help-item.open{ border-color: rgba(0,180,166,0.32); box-shadow: 0 6px 16px -10px rgba(0,180,166,0.35); }
+.help-item.open{ border-color: rgba(29,111,209,0.32); box-shadow: 0 6px 16px -10px rgba(29,111,209,0.35); }
 .help-q{
   width:100%;
   display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -641,7 +654,7 @@ html, body.app-body{
   transition: all .2s cubic-bezier(.34,1.56,.64,1);
 }
 .svc-pill:active{ transform: scale(0.94); }
-.svc-pill.active{ background: linear-gradient(180deg,var(--teal-soft),var(--teal)); color:#fff; border-color:transparent; box-shadow: 0 6px 16px -6px rgba(0,180,166,0.6); }
+.svc-pill.active{ background: linear-gradient(180deg,var(--teal-soft),var(--teal)); color:#fff; border-color:transparent; box-shadow: 0 6px 16px -6px rgba(29,111,209,0.6); }
 .svc-pill svg{ display:none; }
 .svc-pill::before{
   content:'';
@@ -668,7 +681,7 @@ html, body.app-body{
 .distance-tag{
   display:flex; align-items:center; justify-content:center; gap:6px;
   font-size:12px; font-weight:700; color: var(--teal-text); background: var(--teal-dim);
-  border:1px solid rgba(0,180,166,0.3); border-radius:var(--r-pill); padding:8px 14px; margin-bottom:14px;
+  border:1px solid rgba(29,111,209,0.3); border-radius:var(--r-pill); padding:8px 14px; margin-bottom:14px;
 }
 
 /* ---- Floating-label fields ---- */
@@ -722,7 +735,7 @@ html, body.app-body{
   font-size:12px; font-weight:700;
   color: var(--teal-text);
   background: var(--teal-dim);
-  border: 1px solid rgba(0,180,166,0.3);
+  border: 1px solid rgba(29,111,209,0.3);
   border-radius: 10px 10px 10px 4px;
   min-height: 40px;
   transition: transform .15s;
@@ -755,13 +768,28 @@ html, body.app-body{
   border-radius: var(--app-r-md);
   font-size: 15.5px; font-weight:800;
   min-height: 54px;
-  background: linear-gradient(135deg, var(--gold), var(--teal));
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
   color: #fff;
   box-shadow: var(--elev-2);
   transition: transform .12s, box-shadow .2s, opacity .2s;
 }
 .app-btn:active{ transform: scale(0.97); }
 .app-btn[disabled]{ opacity:.55; pointer-events:none; }
+/* FIX (bug #1 — "اطلب الآن" unresponsive): #bookSubmitBtn no longer gets
+   the native `disabled` attribute toggled by JS (see
+   updateSubmitButtonState() in app.js) — a native-disabled button
+   silently swallows every click/tap before it ever reaches
+   handleSubmit(), which is exactly why tapping the button could do
+   nothing with zero feedback. It now only gets this `.is-blocked` class
+   for the same dimmed look, but stays fully clickable (pointer-events
+   left at its default `auto`) so a tap always reaches handleSubmit(),
+   which tells the customer exactly what's missing (pickup / name /
+   phone / consent / driver) instead of doing nothing. position+z-index
+   are set defensively so this button can never end up visually under
+   another element (map card, sheet-view, etc.) regardless of future
+   layout/stacking changes. */
+.app-btn.is-blocked{ opacity:.55; }
+#bookSubmitBtn{ position: relative; z-index: 2; pointer-events: auto; }
 .app-btn.secondary{
   background: var(--surface); color: var(--text); box-shadow:none;
   border: 1px solid var(--surface-brd);
@@ -799,7 +827,7 @@ html, body.app-body{
   font-family: var(--f-display); font-weight:800; font-size:15px;
   color: var(--gold-text);
   background: var(--gold-dim);
-  border: 1px solid rgba(255,138,61,0.3);
+  border: 1px solid rgba(229,184,92,0.3);
   padding: 8px 14px; border-radius: var(--r-pill);
   display:inline-block;
 }
@@ -829,11 +857,11 @@ html, body.app-body{
 .tla-step.done .tla-dot{ background: linear-gradient(135deg, var(--success), var(--teal)); border-color: transparent; color:#06241A; }
 .tla-step.current .tla-dot{
   background: linear-gradient(135deg, var(--gold-soft), var(--gold)); border-color: transparent; color:#1A1204;
-  box-shadow: 0 0 0 6px var(--gold-dim), 0 0 18px rgba(255,138,61,0.55);
+  box-shadow: 0 0 0 6px var(--gold-dim), 0 0 18px rgba(229,184,92,0.55);
   animation: tla-pulse 1.6s ease-in-out infinite;
   transform: scale(1.12);
 }
-@keyframes tla-pulse{ 0%,100%{ box-shadow: 0 0 0 6px var(--gold-dim), 0 0 18px rgba(255,138,61,0.55); } 50%{ box-shadow: 0 0 0 10px transparent, 0 0 24px rgba(255,138,61,0.75); } }
+@keyframes tla-pulse{ 0%,100%{ box-shadow: 0 0 0 6px var(--gold-dim), 0 0 18px rgba(229,184,92,0.55); } 50%{ box-shadow: 0 0 0 10px transparent, 0 0 24px rgba(229,184,92,0.75); } }
 .tla-step span{ font-size:10.5px; font-weight:700; color: var(--text-faint); text-align:center; transition: color .3s; }
 .tla-step.done span, .tla-step.current span{ color: var(--text); }
 .tla-step.cancelled .tla-dot{ background: var(--danger); border-color: var(--danger); box-shadow:none; animation:none; }
@@ -895,7 +923,7 @@ html, body.app-body{
 .driver-meta span.badge-live{ background: var(--green-dim); color: var(--green-text); }
 .driver-meta span.badge-busy{ background: var(--gold-dim); color: var(--gold-text); }
 .driver-meta span.badge-onjob{ background: rgba(201,68,53,0.09); color: #C24A3D; }
-.driver-meta span.badge-done{ background: var(--teal-dim, rgba(0,180,166,0.12)); color: var(--teal-text); }
+.driver-meta span.badge-done{ background: var(--teal-dim, rgba(29,111,209,0.12)); color: var(--teal-text); }
 
 /* Roster rows inside the organized drivers panel: flatten the
    standalone-card look above into dividing rows of one continuous
@@ -963,7 +991,7 @@ html, body.app-body{
   transition: transform .15s;
 }
 .driver-action-btn:active{ transform: scale(0.95); }
-.driver-action-btn.call{ background: var(--teal-dim); color: var(--teal-text); border:1px solid rgba(0,180,166,0.3); }
+.driver-action-btn.call{ background: var(--teal-dim); color: var(--teal-text); border:1px solid rgba(29,111,209,0.3); }
 .driver-action-btn.whatsapp{ background: rgba(34,182,125,0.16); color:#34D399; border:1px solid rgba(34,182,125,0.32); }
 .driver-action-btn.request{ background: linear-gradient(180deg, var(--teal-soft), var(--teal)); color:#fff; border:1px solid transparent; font-family:inherit; cursor:pointer; }
 
@@ -1073,9 +1101,9 @@ body.kb-open .sheet{ transition: none; }
 .ios-modal-icon{
   width:52px; height:52px; margin: 0 auto 14px;
   border-radius:18px 18px 18px 6px;
-  background: linear-gradient(135deg, var(--gold), var(--teal));
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
   display:flex; align-items:center; justify-content:center;
-  box-shadow: 0 8px 20px -8px rgba(0,180,166,0.5);
+  box-shadow: 0 8px 20px -8px rgba(29,111,209,0.5);
 }
 .ios-modal-icon svg{ width:24px; height:24px; }
 .ios-modal h3{ font-family: var(--f-display); font-size:16px; margin: 0 0 18px; }
@@ -1129,9 +1157,9 @@ body.kb-open .sheet{ transition: none; }
 .bnav-icon svg{ width:19px; height:19px; transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
 .bnav-item.active{ color: var(--gold-text); }
 .bnav-item.active .bnav-icon{
-  background: linear-gradient(150deg, var(--gold), var(--teal));
+  background: linear-gradient(150deg, var(--gold-soft) 0%, var(--teal) 40%, var(--teal) 100%);
   transform: translateY(-14px) scale(1.12);
-  box-shadow: 0 10px 20px -8px rgba(255,138,61,0.6);
+  box-shadow: 0 10px 20px -8px rgba(229,184,92,0.6);
 }
 .bnav-item.active .bnav-icon svg{ color:#fff; transform: scale(1.02); }
 .bnav-item.active span:last-child{ transform: translateY(-8px); }
@@ -1154,7 +1182,7 @@ body.kb-open .sheet{ transition: none; }
   transition: border-color .2s, background .2s;
 }
 .help-header:active{ background: var(--surface-hi); }
-.help-header.open{ border-color: rgba(255,138,61,0.45); background: var(--gold-dim); color: var(--gold-text); }
+.help-header.open{ border-color: rgba(229,184,92,0.45); background: var(--gold-dim); color: var(--gold-text); }
 .help-header-label{ flex:1; text-align:start; }
 .help-chevron-main{ width:18px; height:18px; flex-shrink:0; transition: transform .2s; }
 .help-header.open .help-chevron-main{ transform: rotate(180deg); }
@@ -1173,7 +1201,7 @@ body.kb-open .sheet{ transition: none; }
   transition: border-color .15s;
 }
 .more-item:active{ background: var(--surface-hi); }
-.more-item[aria-expanded="true"]{ border-color: rgba(255,138,61,0.45); background: var(--gold-dim); }
+.more-item[aria-expanded="true"]{ border-color: rgba(229,184,92,0.45); background: var(--gold-dim); }
 .more-item-icon{ font-size:16px; flex-shrink:0; }
 .more-item-label{ flex:1; text-align: start; }
 .more-item-chevron{ color: var(--text-faint); transition: transform .2s; }
@@ -1200,7 +1228,7 @@ body.kb-open .sheet{ transition: none; }
   padding: 18px;
   text-align:center;
   background: var(--gold-dim);
-  border: 1px solid rgba(255,138,61,0.35);
+  border: 1px solid rgba(229,184,92,0.35);
 }
 .rights-title{ font-weight:800; font-size:14px; color: var(--gold-text); margin: 0 0 8px; }
 .rights-card p{ margin: 2px 0; font-size: 12.5px; color: var(--text-muted); }
@@ -1235,8 +1263,8 @@ body.kb-open .sheet{ transition: none; }
   display:inline-flex; align-items:center; justify-content:center;
   width:78px; height:78px; margin-bottom: 18px;
   border-radius: 26px 26px 26px 8px;
-  background: linear-gradient(135deg, var(--gold), var(--teal));
-  box-shadow: 0 16px 34px -12px rgba(0,180,166,0.4);
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
+  box-shadow: 0 16px 34px -12px rgba(29,111,209,0.4);
 }
 .welcome-logo svg{ width: 38px; height: 38px; }
 .welcome-content h1{ font-size: 25px; font-weight: 900; margin: 0 0 14px; letter-spacing: -.2px; color: var(--text); }
@@ -1251,7 +1279,7 @@ body.kb-open .sheet{ transition: none; }
 .welcome-step-dot.active{
   width:22px; border-radius:5px;
   background: linear-gradient(90deg, var(--gold), var(--gold-soft));
-  box-shadow: 0 0 10px rgba(255,138,61,0.45);
+  box-shadow: 0 0 10px rgba(229,184,92,0.45);
 }
 .welcome-step-line{ width:22px; height:2px; background: var(--surface-brd); border-radius:2px; }
 
@@ -1322,8 +1350,8 @@ select.welcome-input option{ color: var(--text); background: #fff; }
   margin: 0; text-align: center; padding: 0 6px;
 }
 .welcome-install-btn{
-  background: linear-gradient(135deg, var(--gold), #C97A1A);
-  box-shadow: 0 14px 32px -12px rgba(255,138,61,0.45);
+  background: linear-gradient(135deg, var(--gold), #B8862E);
+  box-shadow: 0 14px 32px -12px rgba(229,184,92,0.45);
 }
 #welcomeSetupName{ color: var(--gold-text); }
 
