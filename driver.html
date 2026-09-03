@@ -19,6 +19,11 @@
       </div>
       <h1>رابط غير صالح</h1>
       <p class="driver-muted">هذا الرابط غير صحيح أو منتهي. تواصل مع الإدارة للحصول على رابطك الخاص.</p>
+      <!-- Populated by setInvalidDetail() in driver.js ONLY when the RPC
+           call itself failed (real error) — stays empty/hidden for a
+           clean "token not found" result, so normal invalid-link cases
+           look exactly as before. -->
+      <p class="driver-fineprint" id="driverInvalidDetail" hidden></p>
     </div>
   </div>
 

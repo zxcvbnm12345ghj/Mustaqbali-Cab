@@ -128,8 +128,135 @@ class BottomSheet {
 let sheet;
 
 /* ============================================================
-   Map
+   Map — Arabic-first vector basemap (MapLibre GL via Leaflet)
+   ============================================================
+   Real, live-sourced Arabic map labels — not a cosmetic translation
+   layer bolted on top. This loads MapLibre GL JS + the official
+   Leaflet bridge plugin (@maplibre/maplibre-gl-leaflet) at runtime —
+   injected here as <script>/<link> tags, so no HTML file needs to be
+   touched — then renders OpenFreeMap's "Liberty" vector style
+   (OpenStreetMap data via the OpenMapTiles schema — openfreemap.org,
+   free for unlimited/commercial use, no API key, no request limit,
+   no account).
+   Every label layer's text is rewritten, client-side, to prefer the
+   real `name:ar` field OSM mappers entered for that street/place, and
+   to fall back to the style's own existing name expression ONLY when
+   no Arabic name exists in the source data. Nothing is ever invented,
+   and English is never forced as a default — if OSM has no Arabic
+   name for a place, none is guessed; whatever the map would already
+   have shown (typically the local name, already mostly Arabic in this
+   service region) is shown instead, exactly as before.
+   L.map()/markers/click-handlers/GPS logic below are all completely
+   unchanged — this only swaps what gets added as the map's *base*
+   layer. If the vector stack fails to load for any reason (offline,
+   blocked script, no WebGL, style fetch failure, etc.) initMap() logs
+   it and silently falls back to the previous CARTO raster basemap, so
+   the map always still works.
    ============================================================ */
+
+// OpenFreeMap: OSM data, OpenMapTiles schema (includes name:ar where
+// mapped), genuinely free for this kind of commercial use — see
+// https://openfreemap.org. "liberty" is their modern, colorful,
+// professional-looking style (closest match to a ride-hailing app feel).
+const ARABIC_BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+// Pinned to a combo the maplibre-gl-leaflet maintainers document as
+// tested together (see their README) — deliberately not "latest", so
+// this can't silently break on an upstream release.
+const MAPLIBRE_GL_JS_URL = 'https://unpkg.com/maplibre-gl@2.2.1/dist/maplibre-gl.js';
+const MAPLIBRE_GL_CSS_URL = 'https://unpkg.com/maplibre-gl@2.2.1/dist/maplibre-gl.css';
+const MAPLIBRE_LEAFLET_JS_URL = 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js';
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === '1') { resolve(); return; }
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('script failed: ' + src)));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = () => { s.dataset.loaded = '1'; resolve(); };
+    s.onerror = () => reject(new Error('script failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+function loadCssOnce(href) {
+  if (!document.querySelector(`link[href="${href}"]`)) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    document.head.appendChild(l);
+  }
+}
+
+// Loads MapLibre GL JS + the Leaflet bridge plugin (in order — the
+// bridge plugin needs both Leaflet, already loaded by the app itself,
+// and maplibre-gl to exist as globals first).
+async function loadMapLibreStack() {
+  if (window.L && window.L.maplibreGL) return; // already available
+  loadCssOnce(MAPLIBRE_GL_CSS_URL);
+  if (!window.maplibregl) await loadScriptOnce(MAPLIBRE_GL_JS_URL);
+  if (!(window.L && window.L.maplibreGL)) await loadScriptOnce(MAPLIBRE_LEAFLET_JS_URL);
+}
+
+// Converts a bare legacy token string like "{name}" into the modern
+// ["get","name"] expression form. Returns null for anything that isn't
+// exactly one bare token (multi-token/mixed-text strings are left to
+// the caller to skip, rather than risk mangling them).
+function bareTokenToGetExpr(fieldStr) {
+  const m = typeof fieldStr === 'string' && fieldStr.match(/^\{([A-Za-z0-9_:]+)\}$/);
+  return m ? ['get', m[1]] : null;
+}
+
+// Rewrites EVERY label layer of a MapLibre style — country/governorate,
+// city/town/district, village/hamlet, street, and POI/landmark labels
+// are all just "symbol" layers with a text-field in this schema, so one
+// generic pass covers all of them without needing to special-case any
+// layer by name — so the real OSM `name:ar` tag becomes the priority
+// label everywhere it exists, keeping the style's own existing name
+// expression as the ONLY fallback (see file header comment above).
+// Handles both of the two text-field formats MapLibre/Mapbox styles use
+// in the wild: modern expression arrays (e.g. ["get","name"]) AND the
+// older "{name}" token-string format — so this works regardless of
+// which form the upstream style happens to ship in.
+function arabicizeStyleLabels(style) {
+  if (!style || !Array.isArray(style.layers)) return style;
+  let rewritten = 0;
+  style.layers.forEach((layer) => {
+    if (!layer || !layer.layout) return;
+    const field = layer.layout['text-field'];
+    if (field === undefined || field === null) return;
+
+    if (Array.isArray(field)) {
+      layer.layout['text-field'] = ['coalesce', ['get', 'name:ar'], field];
+      rewritten++;
+      return;
+    }
+    if (typeof field === 'string') {
+      const asGetExpr = bareTokenToGetExpr(field);
+      if (asGetExpr) {
+        layer.layout['text-field'] = ['coalesce', ['get', 'name:ar'], asGetExpr];
+        rewritten++;
+      }
+      // A multi-token/mixed-text string (e.g. "{name} ({ref})") is left
+      // untouched — too risky to rewrite blindly, and this format is
+      // uncommon in the Liberty style's name layers.
+    }
+  });
+  console.info(`Arabic-first labels applied to ${rewritten} basemap layer(s).`);
+  return style;
+}
+
+async function buildArabicBasemapLayer() {
+  const res = await fetch(ARABIC_BASEMAP_STYLE_URL);
+  if (!res.ok) throw new Error('basemap style fetch failed: ' + res.status);
+  const style = arabicizeStyleLabels(await res.json());
+  return L.maplibreGL({ style, attribution: '' });
+}
 
 function initMap() {
   try {
@@ -151,26 +278,35 @@ function initMap() {
       zoomAnimation: true,
     });
 
-    // CARTO Positron (light_all), WITH labels: a calm, modern, very-light
-    // basemap — pale background, light-gray roads, soft blue/turquoise
-    // water — that now also renders real place names (streets, districts,
-    // towns) sourced live from OpenStreetMap data, in whatever language
-    // OSM itself has each name tagged in — which for this service region
-    // is already predominantly Arabic. This is a deliberate change from
-    // the previous no-labels tile set: it adds genuine, live map data
-    // (never fabricated village names or fixed pins — nothing here is
-    // hardcoded), so the map reads as a real, modern, Arabic-leaning map
-    // instead of a blank canvas. Combined with the accuracy filter in
-    // app.css (.leaflet-tile-pane), this keeps the same calm "2027" look.
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 19,
-    }).addTo(state.map);
-
-    tiles.on('load', () => {
+    const hideMapSkeleton = () => {
       const skel = document.getElementById('mapSkeleton');
       if (skel) skel.classList.add('hide');
-    });
+    };
+
+    // Previous CARTO Positron raster basemap — kept, unchanged, as the
+    // safety-net fallback if the Arabic vector basemap above can't
+    // load for any reason, so the map never breaks.
+    function addRasterFallback() {
+      const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 19,
+      }).addTo(state.map);
+      tiles.on('load', hideMapSkeleton);
+    }
+
+    (async () => {
+      try {
+        await loadMapLibreStack();
+        const glLayer = await buildArabicBasemapLayer();
+        glLayer.addTo(state.map);
+        const innerMap = glLayer.getMaplibreMap ? glLayer.getMaplibreMap() : null;
+        if (innerMap) innerMap.once('load', hideMapSkeleton);
+        else setTimeout(hideMapSkeleton, 1200);
+      } catch (err) {
+        console.error('Arabic vector basemap failed to load — falling back to the raster basemap', err);
+        addRasterFallback();
+      }
+    })();
 
     state.map.on('click', (e) => {
       if (state.mapTargetMode === 'dropoff') {
@@ -219,7 +355,7 @@ function dropoffDivIcon() {
   });
 }
 
-function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = true } = {}) {
+function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = true, accuracy = null } = {}) {
   state.pickupLatLng = { lat, lng };
   document.getElementById('pickupLat').value = lat;
   document.getElementById('pickupLng').value = lng;
@@ -253,7 +389,7 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = tru
     if (fly) state.map.flyTo([lat, lng], 15, { duration: 1.1 });
   }
 
-  if (reverseGeocode) reverseGeocodePickup(lat, lng);
+  if (reverseGeocode) reverseGeocodePickup(lat, lng, accuracy);
   updatePriceBar();
   validateField('pickup');
   updateSubmitButtonState();
@@ -316,11 +452,13 @@ function drawRoute() {
 
 // Nominatim's reverse geocode returns a full administrative chain in
 // display_name (country, governorate, city, district, village...). The
-// customer only needs something short and recognizable — a street name
-// or a nearby area/landmark — never that whole chain. This only changes
-// what's SHOWN in the text field; the lat/lng hidden inputs are already
-// set from the raw coordinates before this ever runs (see setPickup/
-// setDropoff above) and are completely untouched by it.
+// customer needs the most precise detail actually available — a street/
+// road, plus a nearby landmark and/or area for context — never a bare
+// area/neighbourhood name standing in for a precise location, and never
+// the generic administrative chain. This only changes what's SHOWN in
+// the text field; the lat/lng hidden inputs are already set from the
+// raw coordinates before this ever runs (see setPickup/setDropoff above)
+// and are completely untouched by it.
 function shortAddressFromGeocode(data) {
   if (!data) return null;
   const a = data.address || {};
@@ -328,23 +466,30 @@ function shortAddressFromGeocode(data) {
   const street = a.road;
   const area = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.village || a.town;
 
+  // A name is only ever returned when there's a real street or landmark
+  // to anchor it. An area/neighbourhood name by itself is too generic to
+  // represent a precise device location, so it's only added as context
+  // to a street/landmark below — never returned alone. With neither, the
+  // caller falls back to the real lat/lng (+ GPS accuracy when available)
+  // instead of guessing a place name.
+  if (landmark && street && area) return `${landmark}، ${street}، ${area}`;
+  if (landmark && street) return `${landmark}، ${street}`;
   if (landmark && area) return `${landmark}، ${area}`;
   if (landmark) return landmark;
   if (street && area) return `${street}، ${area}`;
   if (street) return street;
-  if (area) return area;
-
-  // No structured fields at all (addressdetails came back empty) — fall
-  // back to the shortest usable piece of display_name instead of the
-  // full string: its first one or two comma-separated segments.
-  if (data.display_name) {
-    const parts = data.display_name.split(',').map((s) => s.trim()).filter(Boolean);
-    if (parts.length) return parts.slice(0, 2).join('، ');
-  }
   return null;
 }
 
-async function reverseGeocodePickup(lat, lng) {
+// Formats a raw GPS fix as the fallback label when no reliable street or
+// landmark name is available — real coordinates (never a guessed area
+// name), with the device's GPS accuracy in meters appended when known.
+function coordsLabel(lat, lng, accuracy = null) {
+  const base = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  return (accuracy != null && isFinite(accuracy)) ? `${base} (±${Math.round(accuracy)} م)` : base;
+}
+
+async function reverseGeocodePickup(lat, lng, accuracy = null) {
   // While live GPS tracking is moving this pin every few seconds, re-
   // resolving the address on every single tick would hammer the Nominatim
   // API and make the pickup text field flicker constantly while the
@@ -364,11 +509,11 @@ async function reverseGeocodePickup(lat, lng) {
   const original = input.value;
   input.placeholder = ' ';
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}&accept-language=ar`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}&accept-language=ar`);
     const data = await res.json();
-    input.value = shortAddressFromGeocode(data) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng, accuracy);
   } catch (err) {
-    if (!original) input.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (!original) input.value = coordsLabel(lat, lng, accuracy);
   }
   updateSubmitButtonState();
 }
@@ -378,11 +523,11 @@ async function reverseGeocodeDropoff(lat, lng) {
   const original = input.value;
   input.placeholder = ' ';
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}&accept-language=ar`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}&accept-language=ar`);
     const data = await res.json();
-    input.value = shortAddressFromGeocode(data) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng);
   } catch (err) {
-    if (!original) input.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (!original) input.value = coordsLabel(lat, lng);
   }
 }
 
@@ -462,7 +607,7 @@ function locateMe(auto = false) {
     // follow the customer's real, moving device position until they take
     // manual control (map tap / marker drag — see setPickup()).
     state.gpsFollowing = true;
-    setPickup(pos.coords.latitude, pos.coords.longitude, { reverseGeocode: true, fly: true });
+    setPickup(pos.coords.latitude, pos.coords.longitude, { reverseGeocode: true, fly: true, accuracy: pos.coords.accuracy });
     startGpsWatch();
     stopSpin();
   };
@@ -529,6 +674,7 @@ function startGpsWatch() {
         reverseGeocode: true,
         fly: false,   // don't fight the customer's own map panning/zooming
         animate: false, // glide, don't replay the drop-bounce every tick
+        accuracy: pos.coords.accuracy,
       });
     },
     () => {
@@ -2512,11 +2658,49 @@ function getSavedLogin() {
 function setWelcomeStep(step) {
   const loginStep = document.getElementById('welcomeLoginStep');
   const setupStep = document.getElementById('welcomeSetupStep');
+  const returningStep = document.getElementById('welcomeReturningStep');
+  const dots = document.getElementById('welcomeSteps');
+  // يُستدعى فقط لمسار التسجيل الأول (خطوة 1 ثم 2) — تأكيد أن شاشة
+  // "أهلاً بعودتك" ونقطتَي التقدّم بحالتهما الافتراضية قبل عرض أي منهما.
+  if (returningStep) returningStep.hidden = true;
+  if (dots) dots.hidden = false;
   if (loginStep) loginStep.hidden = step !== 1;
   if (setupStep) setupStep.hidden = step !== 2;
   document.querySelectorAll('#welcomeSteps .welcome-step-dot').forEach((dot) => {
     dot.classList.toggle('active', Number(dot.dataset.step) === step);
   });
+}
+
+// شاشة "أهلاً بعودتك" — لزبون مسجّل مسبقًا على هذا الجهاز فقط. تعرض
+// رسالة الترحيب الموحّدة باسمه، بدون نموذج تسجيل وبدون إعادة عرض
+// خطوة التثبيت/الإشعارات (تلك تظهر مرة واحدة فقط عند أول تسجيل)، ثم
+// تنتقل تلقائيًا للرئيسية خلال ثوانٍ قليلة — أو فورًا إذا نقر الزبون
+// بأي مكان بالشاشة لتخطّيها بسرعة.
+function showReturningWelcome(name) {
+  const screen = document.getElementById('welcomeScreen');
+  const loginStep = document.getElementById('welcomeLoginStep');
+  const setupStep = document.getElementById('welcomeSetupStep');
+  const returningStep = document.getElementById('welcomeReturningStep');
+  const dots = document.getElementById('welcomeSteps');
+  const nameEl = document.getElementById('welcomeReturnName');
+  if (!screen || !returningStep) return;
+
+  if (loginStep) loginStep.hidden = true;
+  if (setupStep) setupStep.hidden = true;
+  if (dots) dots.hidden = true;
+  if (nameEl) nameEl.textContent = name;
+  returningStep.hidden = false;
+  screen.hidden = false;
+
+  let dismissed = false;
+  function goHome() {
+    if (dismissed) return;
+    dismissed = true;
+    screen.hidden = true;
+    returningStep.removeEventListener('click', goHome);
+  }
+  const autoTimer = setTimeout(goHome, 1700);
+  returningStep.addEventListener('click', () => { clearTimeout(autoTimer); goHome(); });
 }
 
 function syncWelcomeInstallVisibility() {
@@ -2533,10 +2717,14 @@ function initWelcomeScreen() {
     screen.hidden = true;
   }
 
-  // Saved login already on this device → skip the whole welcome
-  // screen (both steps) and open straight into the app.
-  if (getSavedLogin()) {
-    screen.hidden = true;
+  const savedLogin = getSavedLogin();
+
+  // زبون مسجّل مسبقًا على هذا الجهاز: التسجيل لا يتكرر أبدًا — تظهر
+  // شاشة ترحيب قصيرة باسمه في كل فتحة للتطبيق (showReturningWelcome)
+  // ثم ينتقل تلقائيًا للرئيسية دون أي نموذج تسجيل جديد. غير ذلك،
+  // تظهر خطوة التسجيل الأولى كما في الزيارة الأولى.
+  if (savedLogin && savedLogin.name) {
+    showReturningWelcome(savedLogin.name);
   } else {
     screen.hidden = false;
     setWelcomeStep(1);

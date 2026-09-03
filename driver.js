@@ -1,8 +1,12 @@
 /* Mustaqbali Cab — driver.html logic.
-   Token-only auth (see chat decision): the URL's ?token= value is the
-   driver's one and only credential, sent as-is with every location
-   ping to update_driver_location(p_token, p_lat, p_lng). No password,
-   no Supabase Auth session — matches the "single secret link" design.
+   Token-only auth (see chat decision): the URL's ?driver_token= value
+   is the driver's one and only credential, sent as p_token with every
+   location ping to update_driver_location(p_token, p_lat, p_lng) — that
+   RPC's own parameter name is p_token and is left untouched (unified
+   token system decision: only the drivers.driver_token column/link
+   naming changed, never these two existing functions' signatures). No
+   password, no Supabase Auth session — matches the "single secret
+   link" design.
 
    Reporting strategy: getCurrentPosition on a fixed interval (NOT
    watchPosition) — a deliberate battery/data trade-off discussed and
@@ -17,10 +21,10 @@ const TOKEN_STORAGE_KEY = 'mustaqbali_driver_token';
 
 // Public VAPID key — safe to embed client-side by design (it's how the
 // browser verifies push messages came from OUR server, not a secret).
-// The matching PRIVATE key lives only in the send-push-notification
-// Edge Function's environment variables. ⚠️ Replace with your real
-// generated public key before deploying.
-const VAPID_PUBLIC_KEY = 'BA_mwRbHk_BXqtt8PKCma9oaAbuQVAoYNvNvtTmq2L8bcWTPakSgiU4AuDZKpo6NCpKCRzXM2gFaZ5QIA6s5_ww'; // must match admin.js's key exactly
+// The matching PRIVATE key lives only in the push-sending Edge Function
+// (deployed under the slug "super-worker" — see that function's own
+// header comment for why), never in this file.
+const VAPID_PUBLIC_KEY = 'BFVWm5hrmgd1XW353mNtKys8H6fSrdvhpIWiksixEUMcP1ZmyiNQohlGR3DIVOScBtW3bIyhnPPmADi4Ncg7nFk'; // ⚠️ replace with your real generated key before deploying — must match admin.js's key exactly
 
 let driverToken = null;
 let reportTimer = null;
@@ -29,16 +33,16 @@ let consecutiveFailures = 0;
 
 function getTokenFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const t = params.get('token');
+  const t = params.get('driver_token');
   return t && t.trim() ? t.trim() : null;
 }
 
 // Falls back to a previously-saved token when the page is opened
-// without ?token= in the URL — this is what lets tapping a push
+// without ?driver_token= in the URL — this is what lets tapping a push
 // notification reopen driver.html correctly (a notification click
 // can't carry the original query string). The very first visit must
-// still come from the real ?token= link; after that, this is purely
-// additive convenience and never overrides an explicit URL token.
+// still come from the real ?driver_token= link; after that, this is
+// purely additive convenience and never overrides an explicit URL token.
 function resolveDriverToken() {
   const fromUrl = getTokenFromUrl();
   if (fromUrl) {
@@ -60,6 +64,22 @@ function setLastSent(date) {
   if (!el) return;
   const t = date.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
   el.textContent = `آخر إرسال: ${t}`;
+}
+
+// Shows the real reason behind "رابط غير صالح" when one is available
+// (an actual RPC/network error), instead of only the generic copy.
+// Purely additive display helper — driverInvalidDetail is an optional
+// element; if it isn't present in the page nothing breaks.
+function setInvalidDetail(message) {
+  const el = document.getElementById('driverInvalidDetail');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.hidden = false;
+  } else {
+    el.textContent = '';
+    el.hidden = true;
+  }
 }
 
 async function sendLocation(lat, lng) {
@@ -159,14 +179,67 @@ async function setupPushNotifications() {
   }
 }
 
-function initDriverPage() {
+// Verifies the token from the URL/localStorage actually matches an
+// active driver in the database, via the narrow get_driver_by_token()
+// RPC (see schema.sql) — read-only, returns only { id, name } for
+// exactly one row, never the full roster. A token simply being present
+// is no longer enough to open the main screen; it must be found in
+// `drivers.driver_token` or the "invalid link" screen is shown instead
+// (requirement from the driver-link-system task).
+//
+// Returns { driver, error }: `error` is only set when the RPC call
+// itself failed (network/permissions/schema mismatch) — a *real*
+// problem, as opposed to a clean "no row for this token" result. The
+// caller (initDriverPage) uses this to show the actual reason instead
+// of always defaulting to the same "invalid link" copy.
+async function lookupDriverByToken(token) {
+  try {
+    const { data, error } = await supabaseClient.rpc('get_driver_by_token', {
+      p_driver_token: token,
+    });
+    if (error) throw error;
+    const driver = Array.isArray(data) ? (data[0] || null) : (data || null);
+    return { driver, error: null };
+  } catch (err) {
+    console.error('get_driver_by_token failed', err);
+    return { driver: null, error: err };
+  }
+}
+
+async function initDriverPage() {
   driverToken = resolveDriverToken();
   const invalidScreen = document.getElementById('driverInvalidScreen');
   const mainScreen = document.getElementById('driverMainScreen');
 
   if (!driverToken) {
+    setInvalidDetail(null);
     invalidScreen.hidden = false;
     mainScreen.hidden = true;
+    return;
+  }
+
+  const { driver, error } = await lookupDriverByToken(driverToken);
+
+  if (error) {
+    // The RPC call itself failed — token may well be correct, this is
+    // a real infrastructure problem (network/permissions/schema). Show
+    // it instead of silently reusing the generic "invalid link" copy,
+    // and do NOT clear the saved token: it hasn't been proven invalid.
+    invalidScreen.hidden = false;
+    mainScreen.hidden = true;
+    setInvalidDetail('خطأ تقني: ' + (error.message || error.code || String(error)));
+    return;
+  }
+
+  if (!driver) {
+    // RPC succeeded and cleanly returned no row — token is genuinely
+    // wrong, revoked, or belongs to an inactive driver. Same "invalid
+    // link" screen as before, and drop it from localStorage so a stale
+    // token doesn't keep silently failing on future visits.
+    setInvalidDetail(null);
+    invalidScreen.hidden = false;
+    mainScreen.hidden = true;
+    try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (_) {}
     return;
   }
 
