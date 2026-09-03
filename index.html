@@ -223,27 +223,43 @@
         <div class="distance-tag" id="distanceTag" hidden></div>
 
         <form id="requestForm" novalidate>
-          <div class="float-field">
-            <div class="field-inline-app">
-              <input type="text" id="pickup" placeholder=" " maxlength="300" required autocomplete="off">
-              <label for="pickup">مكان الانطلاق</label>
-              <button type="button" class="btn-locate-app" id="locateBtnApp">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                موقعي
-              </button>
-            </div>
-            <span class="field-error" id="errPickup"></span>
-            <span class="field-hint" id="pickupAreaHint" hidden></span>
-            <input type="hidden" id="pickupLat">
-            <input type="hidden" id="pickupLng">
-          </div>
+          <!-- Stage — pickup + dropoff now presented as one connected
+               "route card" (start/end dot + dashed line), matching the
+               modern map-app pattern from the reference design. Purely
+               a wrapping <div> + decorative connector: the two
+               .float-field blocks inside are byte-for-byte the same
+               (same ids, same label-follows-input order), so every
+               existing selector/listener in app.js/app.css keeps
+               working exactly as before. -->
+          <div class="route-card">
+            <span class="route-connector" aria-hidden="true">
+              <span class="route-dot start"></span>
+              <span class="route-line"></span>
+              <span class="route-dot end"></span>
+            </span>
 
-          <div class="float-field">
-            <input type="text" id="dropoff" placeholder=" " maxlength="300" autocomplete="off">
-            <label for="dropoff">الوجهة</label>
-            <span class="field-hint">اكتب العنوان أو اختره من الخريطة بزر "تحديد على الخريطة" أعلاه</span>
-            <input type="hidden" id="dropoffLat">
-            <input type="hidden" id="dropoffLng">
+            <div class="float-field">
+              <div class="field-inline-app">
+                <input type="text" id="pickup" placeholder=" " maxlength="300" required autocomplete="off">
+                <label for="pickup">مكان الانطلاق</label>
+                <button type="button" class="btn-locate-app" id="locateBtnApp">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  موقعي
+                </button>
+              </div>
+              <span class="field-error" id="errPickup"></span>
+              <span class="field-hint" id="pickupAreaHint" hidden></span>
+              <input type="hidden" id="pickupLat">
+              <input type="hidden" id="pickupLng">
+            </div>
+
+            <div class="float-field">
+              <input type="text" id="dropoff" placeholder=" " maxlength="300" autocomplete="off">
+              <label for="dropoff">الوجهة</label>
+              <span class="field-hint">اكتب العنوان أو اختره من الخريطة بزر "تحديد على الخريطة" أعلاه</span>
+              <input type="hidden" id="dropoffLat">
+              <input type="hidden" id="dropoffLng">
+            </div>
           </div>
 
           <div class="float-field">

@@ -15,13 +15,58 @@ const SERVICES = {
   starx:     { label: 'نقل نفرات',        base: 4000,  perKm: 550, icon: 'starx' },
 };
 
+// Stage — real vehicle photos for the service list/switch, replacing
+// the flat SVG car icons. Each service maps to a local image under
+// assets/vehicles/ (ship these files with the app — no network call,
+// works offline like the rest of the shell). If a photo file is
+// missing (e.g. before you've dropped the real photos in), the <img>
+// onerror handler below falls back to the old ICONS SVG for that one
+// service only, so the UI never breaks — nothing else changes.
+// Recommended photo specs: real, well-lit photo of the actual vehicle
+// type, square-ish crop (at least 300x300px), JPG or WEBP, vehicle
+// filling most of the frame on a plain/blurred background so it reads
+// clearly at the small 38–44px display size.
+const VEHICLE_PHOTOS = {
+  taxi:      'assets/vehicles/taxi.jpg',       // سيارة تكسي (سيدان صفراء/عادية)
+  private:   'assets/vehicles/private.jpg',    // سيارة خصوصي (سيدان فاخرة)
+  courier:   'assets/vehicles/courier.jpg',    // دراجة نارية توصيل
+  intercity: 'assets/vehicles/intercity.jpg',  // باص/فان بين المحافظات
+  cargo:     'assets/vehicles/cargo.jpg',      // بيك أب / سيارة حمل
+  starx:     'assets/vehicles/starx.jpg',      // فان نقل نفرات
+};
+
+// Stage — realistic, multi-color vehicle icons (replaces the previous
+// flat single-stroke outlines). Each is a small self-contained flat
+// illustration (body + windows + wheels + accent) built from inline
+// SVG shapes with their own explicit fill colors, so every service
+// reads as a distinct little "photo-like" vehicle badge instead of a
+// generic line icon recolored per service. Purely visual: still valid
+// inner-SVG markup dropped into the exact same wrapper markup as
+// before (buildQuickServiceChips / buildServiceSwitch), so no other
+// app.js logic, data attribute, or click handler changes.
+// Stage 2 — refined to match the reference ride-list icon style more
+// closely: smoother rounded car-silhouette body (instead of a boxy
+// rect body) for the three car-type services, plus a light diagonal
+// "gloss" reflection stroke added to every icon for a glossier,
+// less flat-drawn look. Still small self-contained flat illustrations
+// (no external images/network calls — offline-safe), still dropped
+// into the exact same wrapper markup, so no other app.js logic changes.
+const CAR_BODY = 'M2.2 14.8c0-.66.4-1.25 1-1.5l2.1-.9 1.7-2.9A2.1 2.1 0 0 1 8.8 8.4h6.4a2.1 2.1 0 0 1 1.8 1.1l1.7 2.9 2.1.9c.6.25 1 .84 1 1.5v1.6a.9.9 0 0 1-.9.9h-1.3a2.4 2.4 0 0 1-4.7 0H8.9a2.4 2.4 0 0 1-4.7 0H3.1a.9.9 0 0 1-.9-.9Z';
+const CAR_WHEELS = '<circle cx="6.5" cy="17.3" r="2.3" fill="#1F2430"/><circle cx="6.5" cy="17.3" r="0.85" fill="#C9CFDA"/><circle cx="17.5" cy="17.3" r="2.3" fill="#1F2430"/><circle cx="17.5" cy="17.3" r="0.85" fill="#C9CFDA"/>';
+const CAR_GLOSS = '<path d="M5.4 10c2-1 4.5-1.5 6.6-1.5s4.6.5 6.6 1.5" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" opacity="0.4" fill="none"/>';
+function carIcon(bodyFill, windowFill){
+  return `<path d="${CAR_BODY}" fill="${bodyFill}"/>` +
+    `<path d="M6.9 12.9l1.5-3.55a1 1 0 0 1 .95-.65h2.05v4.2Z" fill="${windowFill}"/>` +
+    `<path d="M11.85 8.7h2.65a1.1 1.1 0 0 1 1 .63l1.7 3.57h-5.35Z" fill="${windowFill}"/>` +
+    CAR_GLOSS + CAR_WHEELS;
+}
 const ICONS = {
-  taxi: '<path d="M5 17H3v-4l2-5h11l3 4v5h-2M9 17h6M7 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  private: '<path d="M4 17h1a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h1v-5l-2.5-5.5A2 2 0 0 0 15.7 5H8.3a2 2 0 0 0-1.8 1.5L4 12v5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  courier: '<path d="M3 8l3-4h12l3 4M3 8h18M3 8v9a1 1 0 0 0 1 1h1a2 2 0 0 0 2-2v0h10v0a2 2 0 0 0 2 2h1a1 1 0 0 0 1-1V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  intercity: '<path d="M9 20l-5-2V4l5 2m0 14l6-2m-6 2V6m6 12l5 2V6l-5-2m0 14V4m0 2L9 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  cargo: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 21v-9M4 7.5L12 12l8-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
-  starx: '<path d="M3 16V8a1 1 0 0 1 1-1h8l5 4v5M3 16h1a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h1M3 16v-3h16M9 7v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  taxi: carIcon('#F5B301', '#FFF3D0') + '<rect x="9.6" y="8.55" width="4.8" height="0.55" fill="#1A1A1A"/><rect x="9.9" y="4.6" width="4.2" height="1.5" rx="0.4" fill="#1A1A1A"/>',
+  private: carIcon('#2B3352', '#9FC6FF'),
+  courier: '<circle cx="5.8" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="5.8" cy="17.4" r="0.8" fill="#C9CFDA"/><circle cx="17.5" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="17.5" cy="17.4" r="0.8" fill="#C9CFDA"/><path d="M5.8 17.4h2.8l1.6-5.4h2.7" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M10.5 12l1.3-3h2.6" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="14" y="9.6" width="5.4" height="5.1" rx="0.9" fill="#D9A441"/><rect x="14" y="9.6" width="5.4" height="1.5" fill="#8A6415"/><circle cx="11.9" cy="7.1" r="1.5" fill="#E7B463"/><path d="M14.7 10.7h3.9" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.45"/>',
+  intercity: '<rect x="2.6" y="6" width="18.8" height="9.4" rx="2.2" fill="#1E9E82"/><rect x="4" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="7.6" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="11.2" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="14.8" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="2.6" y="11.6" width="18.8" height="1.4" fill="#146854"/><rect x="2.6" y="15.2" width="18.8" height="2" rx="1" fill="#146854"/><path d="M3.4 6.9h17.2" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="18" r="1.8" fill="#12131A"/><circle cx="6.6" cy="18" r="0.7" fill="#8B93A8"/><circle cx="17.4" cy="18" r="1.8" fill="#12131A"/><circle cx="17.4" cy="18" r="0.7" fill="#8B93A8"/>',
+  cargo: '<rect x="2.4" y="9.4" width="10.6" height="6" rx="0.8" fill="#C97A3D"/><rect x="2.4" y="8" width="7.6" height="1.6" fill="#8A4E1E"/><path d="M13 11h3.6a2 2 0 0 1 1.8 1.1l1.4 2.6v1.7h-6.8Z" fill="#8A4E1E"/><rect x="15.2" y="12.4" width="3.4" height="2.2" rx="0.4" fill="#FFE1C2"/><rect x="3.2" y="10.6" width="8.9" height="1" fill="#E0A16A"/><path d="M3.2 10.1h7" stroke="#FFFFFF" stroke-width="0.5" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="6.6" cy="17.6" r="0.75" fill="#C9CFDA"/><circle cx="16.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="16.6" cy="17.6" r="0.75" fill="#C9CFDA"/>',
+  starx: carIcon('#6E5CC4', '#E6E1FA') + '<path d="M11.85 8.7v4.2" stroke="#453579" stroke-width="0.5"/>',
 };
 
 const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم مستقبلي كاب — 07718828710
@@ -1524,24 +1569,66 @@ async function pollStatus() {
 /* ============================================================
    Init
    ============================================================ */
+// Stage 2 — short, generic one-line descriptors shown under each
+// service name (subtitle), matching the title+description row layout
+// in the reference design. Static display copy only — not fetched
+// from Supabase, not used in pricing/logic, so loadServicePrices()
+// (which only overwrites label/base/perKm) is unaffected.
+const SERVICE_TAGLINES = {
+  taxi: 'الخيار الأفضل لتنقلاتك اليومية',
+  private: 'رحلة خاصة وراحة أكثر',
+  courier: 'توصيل سريع للطرود',
+  intercity: 'رحلات بين المحافظات',
+  cargo: 'نقل الأغراض والحمولات',
+  starx: 'نقل عدة أشخاص دفعة واحدة',
+};
+
+// Stage — shared fallback for the real vehicle <img> photos above: if
+// a photo file hasn't been added yet (or fails to load) for a given
+// service, swap that single <img> out for the old flat SVG icon so
+// the row/pill still looks correct instead of showing a broken-image
+// glyph. Purely cosmetic, DOM-only — no service data/logic touched.
+function vehiclePhotoFallback(imgEl, serviceKey) {
+  const wrap = document.createElement('span');
+  wrap.className = imgEl.className === 'svc-pill-photo' ? 'svc-pill-photo-fallback' : 'qs-row-photo-fallback';
+  wrap.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[SERVICES[serviceKey]?.icon] || ''}</svg>`;
+  imgEl.replaceWith(wrap.firstChild);
+}
+
+// Stage — quick-service selector rebuilt as a single vertical list of
+// rows (icon + title/subtitle + trailing chevron) instead of a grid of
+// icon tiles, matching the reference design's ride-option list
+// pattern. Same data source (SERVICES), same data-service attribute,
+// same click handler (openBooking) — only the markup/classes are new,
+// so nothing else in app.js needs to change. Price is intentionally
+// left out of this row (kept hidden from the customer, same as
+// elsewhere in the app — see .price-bar).
 function buildQuickServiceChips() {
   const wrap = document.getElementById('quickServices');
   wrap.innerHTML = Object.entries(SERVICES).map(([key, svc]) => `
-    <button type="button" class="qs-chip" data-service="${key}">
-      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none">${ICONS[svc.icon]}</svg></span>
-      <span>${svc.label}</span>
+    <button type="button" class="qs-row" data-service="${key}">
+      <span class="qs-row-ic"><img class="qs-row-photo" src="${VEHICLE_PHOTOS[key]}" alt="${svc.label}" loading="lazy" onerror="vehiclePhotoFallback(this, '${key}')"></span>
+      <span class="qs-row-label">
+        <b>${svc.label}</b>
+        <span>${SERVICE_TAGLINES[key] || ''}</span>
+      </span>
+      <span class="qs-row-chev"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </button>
   `).join('');
-  wrap.querySelectorAll('.qs-chip').forEach(chip => {
+  wrap.querySelectorAll('.qs-row').forEach(chip => {
     chip.addEventListener('click', () => openBooking(chip.dataset.service));
   });
 }
 
+// Stage — service switch (inside the booking form) now shows the same
+// realistic, full-color vehicle icon as the list above instead of a
+// single-tone masked silhouette. Same data-service attribute, same
+// click handler (selectService).
 function buildServiceSwitch() {
   const wrap = document.getElementById('svcSwitch');
   wrap.innerHTML = Object.entries(SERVICES).map(([key, svc]) => `
     <button type="button" class="svc-pill" data-service="${key}">
-      <svg viewBox="0 0 24 24" fill="none">${ICONS[svc.icon]}</svg>
+      <img class="svc-pill-photo" src="${VEHICLE_PHOTOS[key]}" alt="${svc.label}" loading="lazy" onerror="vehiclePhotoFallback(this, '${key}')">
       <span>${svc.label}</span>
     </button>
   `).join('');
