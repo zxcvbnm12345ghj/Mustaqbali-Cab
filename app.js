@@ -1,4 +1,4 @@
-// Mustaqbali Cab — Customer App Shell (PWA) — v2 (Careem/Uber-grade)
+// Yammak — Customer App Shell (PWA) — v2 (Careem/Uber-grade)
 // Same backend contract: submit_trip_request RPC + the new
 // get_trip_request_status RPC for live status polling (see schema.sql v1.1).
 
@@ -26,13 +26,22 @@ const SERVICES = {
 // type, square-ish crop (at least 300x300px), JPG or WEBP, vehicle
 // filling most of the frame on a plain/blurred background so it reads
 // clearly at the small 38–44px display size.
+// v=2026090401 — cache-busting query tag. Bump this string any time the
+// image FILES under assets/vehicles/ are replaced/updated. Without it,
+// a browser or the PWA service worker (sw.js) that already cached the
+// old 404/missing response for these paths can keep "remembering" the
+// failure and never re-request the now-present file — this alone can
+// make correctly-uploaded images silently keep showing the SVG
+// fallback. The tag forces every client to treat this as a brand-new
+// URL and re-fetch it for real.
+const VEHICLE_PHOTOS_VERSION = 'v=2026090401';
 const VEHICLE_PHOTOS = {
-  taxi:      'assets/vehicles/taxi.jpg',       // سيارة تكسي (سيدان صفراء/عادية)
-  private:   'assets/vehicles/private.jpg',    // سيارة خصوصي (سيدان فاخرة)
-  courier:   'assets/vehicles/courier.jpg',    // دراجة نارية توصيل
-  intercity: 'assets/vehicles/intercity.jpg',  // باص/فان بين المحافظات
-  cargo:     'assets/vehicles/cargo.jpg',      // بيك أب / سيارة حمل
-  starx:     'assets/vehicles/starx.jpg',      // فان نقل نفرات
+  taxi:      `assets/vehicles/taxi.jpg?${VEHICLE_PHOTOS_VERSION}`,       // سيارة تكسي (سيدان صفراء/عادية)
+  private:   `assets/vehicles/private.jpg?${VEHICLE_PHOTOS_VERSION}`,    // سيارة خصوصي (سيدان فاخرة)
+  courier:   `assets/vehicles/courier.jpg?${VEHICLE_PHOTOS_VERSION}`,    // دراجة نارية توصيل
+  intercity: `assets/vehicles/intercity.jpg?${VEHICLE_PHOTOS_VERSION}`,  // باص/فان بين المحافظات
+  cargo:     `assets/vehicles/cargo.jpg?${VEHICLE_PHOTOS_VERSION}`,      // بيك أب / سيارة حمل
+  starx:     `assets/vehicles/starx.jpg?${VEHICLE_PHOTOS_VERSION}`,      // فان نقل نفرات
 };
 
 // Stage — realistic, multi-color vehicle icons (replaces the previous
@@ -69,7 +78,7 @@ const ICONS = {
   starx: carIcon('#6E5CC4', '#E6E1FA') + '<path d="M11.85 8.7v4.2" stroke="#453579" stroke-width="0.5"/>',
 };
 
-const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم مستقبلي كاب — 07718828710
+const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم يمّك — 07718828710
 // Initial camera position only — used to frame the map (south Mosul /
 // Nineveh service area, not Baghdad) for the brief moment before a
 // real GPS fix arrives; it is never shown as a marker, pin, or name,
@@ -271,6 +280,7 @@ function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = tru
   state.pickupLatLng = { lat, lng };
   document.getElementById('pickupLat').value = lat;
   document.getElementById('pickupLng').value = lng;
+  showLocationMapLink('pickupMapLink', lat, lng);
 
   if (state.map) {
     if (!state.pickupMarker) {
@@ -311,6 +321,7 @@ function setDropoff(lat, lng, { reverseGeocode = false, fly = true } = {}) {
   state.dropoffLatLng = { lat, lng };
   document.getElementById('dropoffLat').value = lat;
   document.getElementById('dropoffLng').value = lng;
+  showLocationMapLink('dropoffMapLink', lat, lng);
 
   if (state.map) {
     if (!state.dropoffMarker) {
@@ -376,21 +387,55 @@ function shortAddressFromGeocode(data) {
   const a = data.address || {};
   const landmark = a.amenity || a.shop || a.tourism || a.building || a.office || a.leisure;
   const street = a.road;
-  const area = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.village || a.town;
+  const area = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.village || a.hamlet || a.town;
+  // Broader administrative name (county/district/nearest city) — used only
+  // as extra context next to `area`, or as the name itself when even a
+  // village/hamlet/suburb tag is missing. This is the fix for rural spots
+  // and road junctions (e.g. a junction south of Mosul) that Nominatim has
+  // no street/landmark/village tag for at all: previously that meant
+  // falling straight through to the GPS-accuracy fallback text below,
+  // even though OSM often still knows the surrounding county/city name —
+  // e.g. "جنوب الموصل"-style context — which reads as an actual place to
+  // the driver instead of nothing.
+  const broader = a.county || a.state_district || a.city || a.town;
 
-  // A name is only ever returned when there's a real street or landmark
-  // to anchor it. An area/neighbourhood name by itself is too generic to
-  // represent a precise device location, so it's only added as context
-  // to a street/landmark below — never returned alone. With neither, the
-  // caller falls back to the real lat/lng (+ GPS accuracy when available)
-  // instead of guessing a place name.
+  // A name is only ever returned when there's a real street, landmark, or
+  // at least an area/broader-region tag to anchor it. With absolutely
+  // none of those (extremely rare — essentially no OSM coverage at all,
+  // e.g. open desert/water), the caller falls back to the real lat/lng
+  // (+ GPS accuracy when available) instead of guessing a place name.
   if (landmark && street && area) return `${landmark}، ${street}، ${area}`;
   if (landmark && street) return `${landmark}، ${street}`;
   if (landmark && area) return `${landmark}، ${area}`;
   if (landmark) return landmark;
   if (street && area) return `${street}، ${area}`;
   if (street) return street;
+  if (area && broader && area !== broader) return `${area}، ${broader}`;
+  if (area) return area;
+  if (broader) return broader;
+  // Absolute last resort before giving up on a name entirely: the
+  // governorate alone (e.g. "نينوى") — coarser than ideal, but still an
+  // actual place name rather than the GPS-accuracy fallback text below.
+  if (a.state) return a.state;
   return null;
+}
+
+// location-system fix: renders a small tappable "open on map" link into
+// one of the (originally empty/hidden) pickupMapLink / dropoffMapLink
+// hint spans, using the exact saved coordinates — so both the customer
+// and, wherever this same trip data is displayed to a driver, anyone
+// reading the address text also has a one-tap way to open the precise
+// GPS point itself, never just a written name that could be ambiguous.
+// Purely presentational: does not read/write state.*LatLng or touch the
+// hidden #pickupLat/#pickupLng/#dropoffLat/#dropoffLng inputs used for
+// submission — those are already set by setPickup()/setDropoff() before
+// this ever runs.
+function showLocationMapLink(hintElId, lat, lng) {
+  const el = document.getElementById(hintElId);
+  if (!el) return;
+  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+  el.innerHTML = `<a href="${url}" target="_blank" rel="noopener">📍 فتح الموقع على الخريطة</a>`;
+  el.hidden = false;
 }
 
 // Fallback label used when reverse geocoding has no reliable street or
@@ -749,7 +794,7 @@ async function loadServiceDrivers(serviceType) {
 
     if (rosterError || !roster || roster.length === 0) return; // hidden entirely if no drivers exist yet for this service
 
-    const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر مستقبلي كاب`);
+    const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر يمّك`);
 
     // Pure real-GPS distance sort (see sortRosterByDistance). Falls
     // back to the roster's original order untouched when the customer
@@ -956,6 +1001,53 @@ async function loadCustomerAds() {
     renderAdsCarousel();
   } catch (err) {
     console.error('failed to load customer ads', err);
+  }
+}
+
+/* ============================================================
+   Future services teaser (المطاعم / الأسواق) — reads ACTIVE rows
+   from the admin-managed restaurants/markets tables (see the
+   "المطاعم والأسواق" tab in admin.js) and swaps the static "قريباً"
+   card content in index.html (#soonCardRestaurants/#soonCardMarkets)
+   for the real list of names, but ONLY once a category actually has
+   at least one active row. If a category has zero active rows, or
+   this read fails for any reason (offline, RLS, etc.), the existing
+   static "قريباً" markup already in index.html is left completely
+   untouched — there is no separate empty-state branch to maintain,
+   the original HTML already IS the empty state. Purely a read-only
+   display list: no click handler, no data-service attribute, no
+   ordering/booking logic is attached to these names, and nothing
+   about trip_requests/drivers/service_prices/customer_ads is read
+   or touched here.
+   ============================================================ */
+async function loadFutureServices() {
+  await Promise.all([
+    loadFutureServiceCategory('restaurants', 'soonCardRestaurants', '🍔', 'المطاعم'),
+    loadFutureServiceCategory('markets', 'soonCardMarkets', '🛒', 'الأسواق'),
+    loadFutureServiceCategory('other_services', 'soonCardOtherServices', '🛠️', 'خدمات أخرى'),
+  ]);
+}
+
+async function loadFutureServiceCategory(table, cardId, icon, label) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from(table)
+      .select('name')
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) return; // keep the static "قريباً" card as-is
+
+    const namesText = data.map((row) => escapeHtmlText(row.name)).join('، ');
+    card.innerHTML = `
+      <span class="soon-ic">${icon}</span>
+      <span class="soon-label">${label}</span>
+      <span class="soon-badge" style="background:transparent; color:var(--text-muted); font-weight:600; white-space:normal;">${namesText}</span>
+    `;
+  } catch (err) {
+    console.error(`failed to load ${table} for future services teaser`, err);
+    // network/RLS hiccup — silently keep showing the static "قريباً" card
   }
 }
 
@@ -1416,7 +1508,7 @@ function buildWhatsappLink(driverPhoneRaw) {
   if (!target) return null; // couldn't normalize — caller must not show a broken link
   const svc = SERVICES[s.service_type]?.label || s.service_type;
   const text = encodeURIComponent(
-    `مرحباً، لدي طلب رحلة على مستقبلي كاب\n` +
+    `مرحباً، لدي طلب رحلة على يمّك\n` +
     `رقم الطلب: ${s.request_number}\n` +
     `الخدمة: ${svc}\n` +
     `من: ${s.pickup}\n` +
@@ -1737,7 +1829,7 @@ function showInstallCard() {
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
     </span>
     <span class="pwa-text">
-      <b>ثبّت تطبيق مستقبلي</b>
+      <b>ثبّت تطبيق يمّك</b>
       <span>وصول أسرع بدون فتح المتصفح في كل مرة</span>
     </span>
     <button type="button" class="pwa-install-btn" id="pwaInstallBtn">تثبيت التطبيق</button>
@@ -2350,7 +2442,7 @@ function initViewportHandling() {
 }
 
 /* ============================================================
-   "مساعد مستقبلي" — FAQ accordion (home view, index.html only).
+   "مساعد يمّك" — FAQ accordion (home view, index.html only).
    The trigger button now lives in the top quick-access row
    (#helpToggleBtn) and the FAQ content (#helpAccordionWrap) is a
    separate sibling block — both get `open` toggled together by this
@@ -2707,13 +2799,35 @@ function initWelcomeScreen() {
     screen.hidden = true;
   }
 
-  // Saved login already on this device → skip the whole welcome
-  // screen (both steps) and open straight into the app.
-  if (getSavedLogin()) {
-    screen.hidden = true;
-  } else {
-    screen.hidden = false;
-    setWelcomeStep(1);
+  const introStep = document.getElementById('welcomeIntroStep');
+  const authStep = document.getElementById('welcomeAuthStep');
+  const introBtn = document.getElementById('welcomeIntroBtn');
+
+  // شاشة الترحيب التعريفية (الشعار + العبارة + الخدمات) تظهر في كل
+  // مرة يُفتح فيها التطبيق، بصرف النظر عن وجود تسجيل دخول محفوظ من
+  // عدمه. القرار بشأن تخطي تسجيل الدخول يُتخذ فقط عند الضغط على
+  // «ابدأ الآن» أدناه، وليس هنا — بذلك تبقى الشاشة التعريفية أول ما
+  // يظهر دائماً، دون أي تغيير في منطق الحجز/السواق/Supabase.
+  screen.hidden = false;
+  if (introStep) introStep.hidden = false;
+  if (authStep) authStep.hidden = true;
+  setWelcomeStep(1);
+
+  if (introBtn) {
+    introBtn.addEventListener('click', () => {
+      haptic();
+      if (getSavedLogin()) {
+        // بيانات دخول محفوظة مسبقاً على هذا الجهاز → الانتقال مباشرة
+        // للرئيسية دون إعادة طلب تسجيل الدخول.
+        dismiss();
+        return;
+      }
+      // لا توجد بيانات محفوظة → عرض خطوة تسجيل الدخول الحالية
+      // (Step 1) كما هي، بدون أي تعديل على منطقها.
+      if (introStep) introStep.hidden = true;
+      if (authStep) authStep.hidden = false;
+      setWelcomeStep(1);
+    });
   }
 
   syncWelcomeInstallVisibility();
@@ -2812,6 +2926,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initWelcomeScreen();
   loadServicePrices();
   loadCustomerAds();
+  loadFutureServices();
   document.getElementById('enableCustomerPushBtn')?.addEventListener('click', setupCustomerPushNotifications);
   // "Recent locations" feature removed — clear any stale data from
   // earlier sessions so nothing lingers unused.

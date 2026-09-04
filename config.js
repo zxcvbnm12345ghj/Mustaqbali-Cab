@@ -1,4 +1,4 @@
-// Mustaqbali Cab — Supabase configuration
+// Yammak — Supabase configuration
 // Replace the two placeholder values below with your own project's
 // Project URL and anon public key (Project Settings → API in the
 // Supabase dashboard). The anon key is safe to ship in the browser —

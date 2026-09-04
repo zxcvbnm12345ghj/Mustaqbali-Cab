@@ -1,9 +1,9 @@
-// Mustaqbali Cab — Service Worker
+// Yammak — Service Worker
 // Scope: customer app shell only (index.html + its static assets).
 // Deliberately does NOT cache Supabase, map tiles, or geocoding requests —
 // trip data must always be live/network, never served stale from cache.
 
-const CACHE_NAME = 'mustaqbali-shell-v2';
+const CACHE_NAME = 'yammak-shell-v3';
 // Flat repo layout: style.css, app.css, app.js, config.js, and the icon
 // PNGs all live in the project root — no css/, js/, or icons/ subfolders.
 const SHELL_ASSETS = [
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
    notifications for the customer app itself.
    ============================================================ */
 self.addEventListener('push', (event) => {
-  let data = { title: 'مستقبلي كاب', body: '', url: '/index.html' };
+  let data = { title: 'يمّك', body: '', url: '/index.html' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (_) { /* ignore malformed payloads */ }

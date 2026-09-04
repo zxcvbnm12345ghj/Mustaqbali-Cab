@@ -1,21 +1,33 @@
 {
-  "name": "مستقبلي كاب — Mustaqbali Cab",
-  "short_name": "مستقبلي",
-  "description": "مستقبلي كاب — نقل وتوصيل بسهولة وأمان في نينوى وبين المحافظات.",
-  "start_url": "/index.html",
-  "id": "/index.html",
+  "name": "يمّك | Yammak",
+  "short_name": "يمّك",
+  "description": "يمّك: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0B1E38",
-  "theme_color": "#0B1E38",
-  "dir": "rtl",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "lang": "ar",
+  "dir": "rtl",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

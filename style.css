@@ -1,5 +1,5 @@
 /* =========================================================
-   Mustaqbali Cab — Shared Design Tokens + Admin Panel Styles
+   Yammak — Shared Design Tokens + Admin Panel Styles
    Rebuilt to match the token names referenced throughout app.css
    and the component names described in README.md / admin.js.
    ========================================================= */
@@ -20,10 +20,10 @@
   --gold-dim:rgba(229,184,92,0.12);
   --gold-text:#A87B2E; /* accessible text/icon variant — gold/gold-soft stay light for fills only */
 
-  --teal:#1D6FD1;
-  --teal-soft:#5B93E0;
-  --teal-dim:rgba(29,111,209,0.12);
-  --teal-text:#123E73; /* accessible text/icon variant — teal stays light for fills only */
+  --teal:#4AADE8;
+  --teal-soft:#7CC7F0;
+  --teal-dim:rgba(74,173,232,0.12);
+  --teal-text:#1B6FA8; /* accessible text/icon variant — teal stays light for fills only */
 
   --text:#263746;
   --text-muted:#657786;

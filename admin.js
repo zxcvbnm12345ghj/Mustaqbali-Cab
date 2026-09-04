@@ -1,4 +1,4 @@
-// Mustaqbali Cab — Admin Panel
+// Yammak — Admin Panel
 // Auth via Supabase Auth (email/password). Access to actual trip data is
 // gated server-side by is_admin()/RLS (see schema.sql) — logging in alone
 // grants nothing; the admins table is the real gate. This file only
@@ -157,6 +157,8 @@ async function enterDashboard() {
   await loadPrices();
   await loadDriverStats();
   await loadAds();
+  await loadPlaces('restaurants');
+  await loadPlaces('markets');
   startRequestPolling();
 }
 
@@ -1163,6 +1165,126 @@ async function sendAdPush() {
 }
 
 /* ============================================================
+   Restaurants & Markets ("المطاعم والأسواق" tab) — additive only.
+   Two independent, admin-managed name lists (tables: restaurants /
+   markets), each just a name + active flag. Same add/toggle/delete
+   pattern as the ads table above (loadAds/renderAdsTable/
+   toggleAdActive/deleteAd). Does not touch trip_requests, drivers,
+   pricing, ads, GPS, or the requests table/modal in any way.
+   Active rows here are exactly what loadFutureServices() in app.js
+   reads and shows to customers instead of the static "قريباً" cards
+   — if a list has zero active rows, the customer app keeps showing
+   "قريباً" for that category entirely on its own (no action needed
+   here for that case).
+   ============================================================ */
+const placesState = { restaurants: [], markets: [] };
+
+const PLACE_TABLES = {
+  restaurants: { table: 'restaurants', bodyId: 'restaurantsBody', emptyId: 'restaurantsEmpty', inputId: 'newRestaurantName', errId: 'restaurantAddError', btnId: 'addRestaurantBtn', label: 'هذا المطعم' },
+  markets:     { table: 'markets',     bodyId: 'marketsBody',     emptyId: 'marketsEmpty',     inputId: 'newMarketName',     errId: 'marketAddError',     btnId: 'addMarketBtn',     label: 'هذا السوق' },
+};
+
+async function loadPlaces(kind) {
+  const cfg = PLACE_TABLES[kind];
+  const { data, error } = await supabaseClient
+    .from(cfg.table)
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error(error);
+    return;
+  }
+  placesState[kind] = data || [];
+  renderPlacesTable(kind);
+}
+
+function renderPlacesTable(kind) {
+  const cfg = PLACE_TABLES[kind];
+  const body = document.getElementById(cfg.bodyId);
+  const empty = document.getElementById(cfg.emptyId);
+  if (!body) return;
+
+  const rows = placesState[kind];
+  if (!rows.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = rows.map(row => `
+    <tr data-place-id="${escapeAttr(row.id)}">
+      <td>${escapeHtml(row.name)}</td>
+      <td><span class="ads-active-badge ${row.active ? '' : 'off'}" data-place-toggle="${escapeAttr(row.id)}" style="cursor:pointer;">${row.active ? 'نشط' : 'موقوف'}</span></td>
+      <td class="ads-row-actions">
+        <button type="button" class="danger" data-place-delete="${escapeAttr(row.id)}">حذف</button>
+      </td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-place-toggle]').forEach(el => {
+    el.addEventListener('click', () => togglePlaceActive(kind, el.dataset.placeToggle));
+  });
+  body.querySelectorAll('[data-place-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deletePlace(kind, btn.dataset.placeDelete));
+  });
+}
+
+async function togglePlaceActive(kind, id) {
+  const cfg = PLACE_TABLES[kind];
+  const row = placesState[kind].find(r => r.id === id);
+  if (!row) return;
+  const { error } = await supabaseClient.from(cfg.table).update({ active: !row.active }).eq('id', id);
+  if (error) {
+    console.error(error);
+    return;
+  }
+  await loadPlaces(kind);
+}
+
+async function deletePlace(kind, id) {
+  if (!id) return;
+  const cfg = PLACE_TABLES[kind];
+  if (!confirm(`حذف ${cfg.label} نهائياً؟`)) return;
+  const { error } = await supabaseClient.from(cfg.table).delete().eq('id', id);
+  if (error) {
+    console.error(error);
+    alert('تعذّر الحذف: ' + error.message);
+    return;
+  }
+  await loadPlaces(kind);
+}
+
+async function addPlace(kind) {
+  const cfg = PLACE_TABLES[kind];
+  const errEl = document.getElementById(cfg.errId);
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('show'); }
+
+  const nameEl = document.getElementById(cfg.inputId);
+  const name = nameEl.value.trim();
+  if (!name) {
+    if (errEl) { errEl.textContent = 'الاسم مطلوب.'; errEl.classList.add('show'); }
+    return;
+  }
+
+  const btn = document.getElementById(cfg.btnId);
+  if (btn) btn.disabled = true;
+
+  const { error } = await supabaseClient.from(cfg.table).insert({ name, active: true });
+
+  if (btn) btn.disabled = false;
+
+  if (error) {
+    console.error(error);
+    if (errEl) { errEl.textContent = 'تعذّر الإضافة: ' + error.message; errEl.classList.add('show'); }
+    return;
+  }
+
+  nameEl.value = '';
+  await loadPlaces(kind);
+}
+
+/* ============================================================
    Init
    ============================================================ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1187,6 +1309,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('saveAdBtn')?.addEventListener('click', saveAd);
   document.getElementById('deleteAdBtn')?.addEventListener('click', () => deleteAd(adsState.editingId));
   document.getElementById('sendAdPushBtn')?.addEventListener('click', sendAdPush);
+  document.getElementById('addRestaurantBtn')?.addEventListener('click', () => addPlace('restaurants'));
+  document.getElementById('addMarketBtn')?.addEventListener('click', () => addPlace('markets'));
   document.getElementById('driverStatsDate').addEventListener('change', (e) => {
     if (e.target.value) loadDriverStats(e.target.value);
   });

@@ -1,6 +1,6 @@
 /* =========================================================
-   Mustaqbali Cab — Customer App Shell (PWA)
-   "مستقبلي بلو" identity — primary blue + light gold accent
+   Yammak — Customer App Shell (PWA)
+   "يمّك بلو" identity — primary blue + light gold accent
    ---------------------------------------------------------
    Layout/shape system (kept from the prior pass, only recolored):
    - Asymmetric corner language (sheet, cards) instead of one
@@ -19,7 +19,7 @@
    ========================================================= */
 
 /* ---------------------------------------------------------
-   "مستقبلي بلو" tokens — overrides the gold/teal tokens from
+   "يمّك بلو" tokens — overrides the gold/teal tokens from
    style.css (this file always loads after, so these values win
    app-wide). Identity: confident primary blue carries the app's
    chrome (buttons, active states, focus rings, nav), with a soft,
@@ -29,7 +29,7 @@
    radius language used throughout this file.
    --------------------------------------------------------- */
 :root{
-  /* ---- Primary — Mustaqbali Blue ---- */
+  /* ---- Primary — Yammak Blue ---- */
   --teal: #1D6FD1;
   --teal-soft: #5B93E0;
   --teal-text: #123E73;
@@ -516,6 +516,33 @@ html, body.app-body{
 .promo-card span{ font-size:12px; color: var(--text-muted); }
 
 /* ============================================================
+   Future services teaser (المطاعم / الأسواق) — display-only
+   preview cards. Not clickable, no active service behind them;
+   purely visual so customers know what's coming next. Reuses the
+   existing spacing/radius tokens so it matches the rest of the
+   sheet without introducing a new visual language.
+   ============================================================ */
+.soon-grid{
+  display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.soon-card{
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding: var(--sp-4) var(--sp-2);
+  border-radius: var(--app-r-md);
+  border: 1px dashed var(--surface-brd);
+  background: var(--surface-2, rgba(29,111,209,0.05));
+  position:relative; opacity:.85;
+}
+.soon-ic{ font-size:22px; line-height:1; }
+.soon-label{ font-size:12.5px; font-weight:700; color: var(--text); }
+.soon-badge{
+  font-size:10px; font-weight:700; color: var(--gold-text);
+  background: var(--gold-dim); border-radius: 999px;
+  padding: 2px 9px; margin-top:2px;
+}
+
+/* ============================================================
    Customer ads carousel
    ============================================================ */
 .ads-carousel{
@@ -602,7 +629,7 @@ html, body.app-body{
 }
 .qa-icon svg{ width:13px; height:13px; }
 
-/* ---- "مساعد مستقبلي" — FAQ accordion content (home view) ---- */
+/* ---- "مساعد يمّك" — FAQ accordion content (home view) ---- */
 .help-accordion-wrap{
   display:grid;
   grid-template-rows: 0fr;
@@ -767,6 +794,19 @@ html, body.app-body{
 }
 .float-field.has-icon-btn label{ right: 16px; }
 .float-field .field-hint{ display:block; margin-top:6px; font-size:11.5px; color: var(--text-faint); padding-inline:2px; }
+/* location-system fix: "open on map" link shown under pickup/dropoff once
+   real coordinates exist. Additive only — reuses .field-hint's spacing,
+   just makes the link itself tappable/legible on mobile. */
+.field-hint.map-link-hint a{
+  color: var(--accent, #2f7dd1);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-hint.map-link-hint a:active{ opacity: 0.7; }
 .float-field .field-error{
   display:none; margin-top:6px; font-size:12px; font-weight:700; color: var(--danger); padding-inline:2px;
   align-items:center; gap:5px;
@@ -1406,3 +1446,57 @@ select.welcome-input option{ color: var(--text); background: #fff; }
 #welcomeSetupName{ color: var(--gold-text); }
 
 .welcome-footer p{ margin:2px 0; font-size: 11.5px; color: var(--text-faint); }
+
+/* ============================================================
+   Intro splash step (#welcomeIntroStep) — الشاشة التعريفية الأولى
+   التي تظهر في كل مرة يُفتح فيها التطبيق، قبل أي تحقق من تسجيل
+   الدخول. شعار Y جديد + عبارة رئيسية + سطر فرعي + شرائح خدمات
+   مختصرة + زر دخول واحد. حركة دخول واحدة خفيفة وسريعة فقط (fade +
+   scale بسيطة) — لا حركات متكررة أو مزعجة، ولا أي أثر على منطق
+   تسجيل الدخول/الحجز/السواق الذي يبقى بالكامل داخل #welcomeAuthStep.
+   ============================================================ */
+#welcomeIntroStep{
+  animation: welcomeIntroIn .38s cubic-bezier(.22,.8,.24,1) both;
+}
+@keyframes welcomeIntroIn{
+  from{ opacity:0; transform: translateY(10px) scale(.98); }
+  to{ opacity:1; transform: translateY(0) scale(1); }
+}
+
+/* شعار Y — نفس شكل شارة الشعار الحالية، بحجم أكبر ورمز Y صريح
+   بدل رمز التحقق/الدبوس السابق، ليكون هو العنصر البصري الرئيسي. */
+.welcome-logo-intro{
+  width:92px; height:92px; margin-bottom: 20px;
+  border-radius: 30px 30px 30px 10px;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-soft) 38%, var(--teal) 100%);
+  box-shadow: 0 18px 40px -14px rgba(29,111,209,0.45);
+}
+.welcome-logo-intro svg{ width:44px; height:44px; }
+
+.welcome-intro-title{
+  font-size: 26px; font-weight:900; letter-spacing:-.2px;
+  margin: 0 0 10px; color: var(--text); line-height:1.35;
+}
+.welcome-intro-dots{ color: var(--gold-text); }
+
+.welcome-intro-sub{
+  font-size: 14px; line-height:1.65; color: var(--text-muted);
+  margin: 0 0 24px; padding: 0 8px;
+}
+
+/* شرائح الخدمات المختصرة */
+.welcome-intro-services{
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+  gap:8px; margin-bottom: 28px;
+}
+.welcome-intro-chip{
+  display:inline-flex; align-items:center; gap:5px;
+  padding: 8px 13px; border-radius: 100px;
+  font-size: 12px; font-weight:700; color: var(--text);
+  background: rgba(255,255,255,0.78);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 6px 16px -10px rgba(50,90,120,0.25);
+  white-space: nowrap;
+}
+
+.welcome-intro-btn{ margin-top: 2px; }

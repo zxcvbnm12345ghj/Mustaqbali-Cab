@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-<title>مستقبلي كاب | Mustaqbali Cab</title>
-<meta name="description" content="مستقبلي كاب: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
+<title>يمّك | Yammak</title>
+<meta name="description" content="يمّك: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
 <meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="مستقبلي">
+<meta name="apple-mobile-web-app-title" content="يمّك">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -50,17 +50,53 @@
 
 <div class="welcome-screen" id="welcomeScreen" hidden>
   <div class="welcome-content">
-    <span class="welcome-logo">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
-    </span>
-    <h1>مستقبلي كاب</h1>
 
-    <!-- مؤشر الخطوتين -->
-    <div class="welcome-steps" id="welcomeSteps" aria-hidden="true">
-      <span class="welcome-step-dot active" data-step="1"></span>
-      <span class="welcome-step-line"></span>
-      <span class="welcome-step-dot" data-step="2"></span>
+    <!-- شاشة الترحيب التعريفية (Intro) — تظهر أولاً عند كل فتح
+         للتطبيق، بغض النظر عن وجود تسجيل دخول محفوظ من عدمه. هذه
+         الشاشة تعريفية بحتة (شعار + عبارة + خدمات + زر واحد) ولا
+         تلمس منطق تسجيل الدخول/الحجز/السواق ولا Supabase إطلاقاً؛
+         initWelcomeScreen في app.js هو من يقرر، عند الضغط على «ابدأ
+         الآن»، هل ينتقل مباشرة للرئيسية (يوجد دخول محفوظ) أو يعرض
+         خطوة تسجيل الدخول أدناه (#welcomeAuthStep) لأول مرة. -->
+    <div id="welcomeIntroStep">
+      <span class="welcome-logo welcome-logo-intro" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="none">
+          <path d="M27 17 L50 53 L73 17" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M50 53 L50 87" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
+        </svg>
+      </span>
+
+      <h1 class="welcome-intro-title">يمّك<span class="welcome-intro-dots">…</span> بكل خطوة</h1>
+      <p class="welcome-intro-sub">رحلتك تبدأ من هنا… وكل احتياجاتك ويّانا</p>
+
+      <div class="welcome-intro-services" aria-hidden="true">
+        <span class="welcome-intro-chip">🚗 رحلات وتوصيل</span>
+        <span class="welcome-intro-chip">🍔 مطاعم</span>
+        <span class="welcome-intro-chip">🛒 أسواق</span>
+        <span class="welcome-intro-chip">🛠️ خدمات</span>
+      </div>
+
+      <button type="button" class="app-btn welcome-intro-btn" id="welcomeIntroBtn">
+        <span>ابدأ الآن</span>
+      </button>
     </div>
+
+    <!-- خطوات تسجيل الدخول (Step 1) والإعداد (Step 2) الحالية —
+         بدون أي تعديل على منطقها أو معرّفاتها (IDs)، فقط أُحيطت
+         بحاوية واحدة (#welcomeAuthStep) تظهر بعد "ابدأ الآن" أعلاه
+         وفقط إذا لم توجد بيانات دخول محفوظة مسبقاً على الجهاز. -->
+    <div id="welcomeAuthStep" hidden>
+      <span class="welcome-logo">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 4 12 12.5 19 4" stroke="#0A0E1A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12.5V19" stroke="#0A0E1A" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="20.2" r="1.7" fill="#0A0E1A"/></svg>
+      </span>
+      <h1>يمّك</h1>
+
+      <!-- مؤشر الخطوتين -->
+      <div class="welcome-steps" id="welcomeSteps" aria-hidden="true">
+        <span class="welcome-step-dot active" data-step="1"></span>
+        <span class="welcome-step-line"></span>
+        <span class="welcome-step-dot" data-step="2"></span>
+      </div>
 
     <!-- Step 1 — تسجيل دخول بسيط (اسم + هاتف إلزاميان، المنطقة
          اختيارية). محفوظ محلياً فقط على الجهاز (localStorage) — لا
@@ -68,7 +104,7 @@
          وجود بيانات محفوظة سابقاً على هذا الجهاز، تُتخطى هذه الخطوة
          بالكامل في الزيارات القادمة (انظر initWelcomeScreen بـ app.js). -->
     <div id="welcomeLoginStep">
-      <p class="welcome-greeting">أهلاً بك في مستقبلي كاب</p>
+      <p class="welcome-greeting">أهلاً بك في يمّك</p>
       <p class="welcome-sub">أدخل بياناتك للمتابعة</p>
 
       <div class="welcome-login-form">
@@ -135,9 +171,10 @@
         </button>
       </div>
     </div>
+    </div><!-- /#welcomeAuthStep -->
 
     <div class="welcome-footer">
-      <p>© 2026 مستقبلي كاب — جميع الحقوق محفوظة</p>
+      <p>© 2026 يمّك — جميع الحقوق محفوظة</p>
       <p>تطوير وإدارة: محمد غازي</p>
     </div>
   </div>
@@ -191,6 +228,35 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
           </span>
           <div><b>وصول سريع خلال دقائق</b><span>اطلب الآن وتابع حالة رحلتك من نفس الشاشة</span></div>
+        </div>
+
+        <!-- Future services teaser — starts as display-only "قريباً"
+             cards (no click handler, no data-service attribute, no
+             booking logic). loadFutureServices() in app.js reads the
+             active rows from the restaurants/markets tables (managed
+             from the "المطاعم والأسواق" admin tab) and, ONLY if a
+             category has at least one active row, replaces that
+             card's inner content with the real list of names. If a
+             category has zero active rows (or the read fails), this
+             exact static "قريباً" markup is left untouched — that is
+             the fallback, not a separate code path. -->
+        <p class="section-label">خدمات قادمة قريباً</p>
+        <div class="soon-grid" aria-hidden="false">
+          <div class="soon-card" id="soonCardRestaurants">
+            <span class="soon-ic">🍔</span>
+            <span class="soon-label">المطاعم</span>
+            <span class="soon-badge">قريباً</span>
+          </div>
+          <div class="soon-card" id="soonCardMarkets">
+            <span class="soon-ic">🛒</span>
+            <span class="soon-label">الأسواق</span>
+            <span class="soon-badge">قريباً</span>
+          </div>
+          <div class="soon-card" id="soonCardOtherServices">
+            <span class="soon-ic">🛠️</span>
+            <span class="soon-label">خدمات أخرى</span>
+            <span class="soon-badge">قريباً</span>
+          </div>
         </div>
 
         <!-- Customer ads carousel — populated by loadCustomerAds() in
@@ -249,6 +315,11 @@
               </div>
               <span class="field-error" id="errPickup"></span>
               <span class="field-hint" id="pickupAreaHint" hidden></span>
+              <!-- location-system fix: shows a tappable "open on map" link
+                   once real GPS/pin coordinates exist for the pickup point,
+                   in addition to the readable address text above. Purely
+                   additive — no existing element removed or repurposed. -->
+              <span class="field-hint map-link-hint" id="pickupMapLink" hidden></span>
               <input type="hidden" id="pickupLat">
               <input type="hidden" id="pickupLng">
             </div>
@@ -257,6 +328,7 @@
               <input type="text" id="dropoff" placeholder=" " maxlength="300" autocomplete="off">
               <label for="dropoff">الوجهة</label>
               <span class="field-hint">اكتب العنوان أو اختره من الخريطة بزر "تحديد على الخريطة" أعلاه</span>
+              <span class="field-hint map-link-hint" id="dropoffMapLink" hidden></span>
               <input type="hidden" id="dropoffLat">
               <input type="hidden" id="dropoffLng">
             </div>
@@ -360,7 +432,7 @@
         <div class="status-actions">
           <a href="#" class="app-btn whatsapp" id="whatsappBtnApp" target="_blank" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
-            دعم مستقبلي كاب
+            دعم يمّك
           </a>
           <button type="button" class="app-btn" id="newRequestBtn">طلب رحلة جديدة</button>
         </div>
@@ -398,7 +470,7 @@
           <span class="qa-icon">
             <svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="16" cy="12" r="1" fill="currentColor"/></svg>
           </span>
-          <span class="help-header-label">مساعد مستقبلي — الأسئلة الشائعة</span>
+          <span class="help-header-label">مساعد يمّك — الأسئلة الشائعة</span>
           <svg class="help-chevron-main" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
 
@@ -425,7 +497,7 @@
                 <span>كيف أتواصل مع الدعم؟</span>
                 <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <div class="help-a-wrap"><div class="help-a"><p>تواصل مع دعم مستقبلي كاب على الرقم 07718828710.</p></div></div>
+              <div class="help-a-wrap"><div class="help-a"><p>تواصل مع دعم يمّك على الرقم 07718828710.</p></div></div>
             </div>
 
             <div class="help-item">
@@ -465,7 +537,7 @@
                 <span>ماذا أفعل إذا واجهت مشكلة؟</span>
                 <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <div class="help-a-wrap"><div class="help-a"><p>تواصل مباشرة مع دعم مستقبلي كاب وسيتم مساعدتك بأسرع وقت.</p></div></div>
+              <div class="help-a-wrap"><div class="help-a"><p>تواصل مباشرة مع دعم يمّك وسيتم مساعدتك بأسرع وقت.</p></div></div>
             </div>
           </div>
         </div>
@@ -484,7 +556,7 @@
 
           <button type="button" class="more-item" id="moreAssistantBtn">
             <span class="more-item-icon">❓</span>
-            <span class="more-item-label">مساعد مستقبلي</span>
+            <span class="more-item-label">مساعد يمّك</span>
             <span class="more-item-chevron">›</span>
           </button>
 
@@ -501,11 +573,11 @@
 
           <button type="button" class="more-item" data-more-toggle="about" aria-expanded="false">
             <span class="more-item-icon">ℹ️</span>
-            <span class="more-item-label">عن مستقبلي كاب</span>
+            <span class="more-item-label">عن يمّك</span>
             <span class="more-item-chevron">›</span>
           </button>
           <div class="more-panel" id="morePanel-about" hidden>
-            <p>مستقبلي كاب منصة عراقية لطلب التكسي، السيارة الخاصة، توصيل الطرود، والرحلات بين المحافظات — من تطبيق واحد وبضع نقرات فقط.</p>
+            <p>يمّك منصة عراقية لطلب التكسي، السيارة الخاصة، توصيل الطرود، والرحلات بين المحافظات — من تطبيق واحد وبضع نقرات فقط.</p>
           </div>
 
           <button type="button" class="more-item" data-more-toggle="terms" aria-expanded="false">
@@ -514,7 +586,7 @@
             <span class="more-item-chevron">›</span>
           </button>
           <div class="more-panel" id="morePanel-terms" hidden>
-            <p>باستخدامك تطبيق مستقبلي كاب فإنك توافق على تزويدنا ببيانات صحيحة عند تقديم الطلب، وعلى أن المنصة تربط الزبون بمزوّدي خدمة النقل ولا تتحمل مسؤولية سلوك الطرفين خارج نطاق الطلب. تُحدَّث هذه الشروط دورياً.</p>
+            <p>باستخدامك تطبيق يمّك فإنك توافق على تزويدنا ببيانات صحيحة عند تقديم الطلب، وعلى أن المنصة تربط الزبون بمزوّدي خدمة النقل ولا تتحمل مسؤولية سلوك الطرفين خارج نطاق الطلب. تُحدَّث هذه الشروط دورياً.</p>
           </div>
 
           <button type="button" class="more-item" data-more-toggle="privacy" aria-expanded="false">
@@ -529,7 +601,7 @@
 
         <div class="rights-card">
           <p class="rights-title">© حقوق المنصة</p>
-          <p>© 2026 مستقبلي كاب — جميع الحقوق محفوظة</p>
+          <p>© 2026 يمّك — جميع الحقوق محفوظة</p>
           <p>تطوير وإدارة: محمد غازي</p>
         </div>
       </section>

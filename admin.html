@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة الإدارة | مستقبلي كاب</title>
+<title>لوحة الإدارة | يمّك</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
@@ -191,7 +191,7 @@
       <span class="brand-mark">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.8"/><circle cx="11" cy="12" r="2" fill="#0A0E1A"/></svg>
       </span>
-      <span>مستقبلي — لوحة الإدارة</span>
+      <span>يمّك — لوحة الإدارة</span>
     </div>
     <h1>تسجيل الدخول</h1>
     <p>هذه اللوحة مخصصة للمشرفين المسجّلين في جدول admins فقط.</p>
@@ -215,7 +215,7 @@
   <div class="admin-topbar">
     <div class="brand-chip">
       <span class="brand-mark"></span>
-      <span>مستقبلي — لوحة الإدارة</span>
+      <span>يمّك — لوحة الإدارة</span>
     </div>
     <div class="admin-user">
       <span id="adminEmail"></span>
@@ -233,6 +233,7 @@
       <button type="button" class="admin-tab-btn" data-tab="drivers">السائقون</button>
       <button type="button" class="admin-tab-btn" data-tab="requests">الطلبات</button>
       <button type="button" class="admin-tab-btn" data-tab="ads">الإعلانات والإشعارات</button>
+      <button type="button" class="admin-tab-btn" data-tab="places">المطاعم والأسواق</button>
       <button type="button" class="admin-tab-btn" data-tab="settings">الإعدادات</button>
     </nav>
 
@@ -345,6 +346,75 @@
     </div>
     </div>
     <!-- /tabPanel-ads -->
+
+    <!-- المطاعم والأسواق -->
+    <div class="admin-tab-panel" id="tabPanel-places" data-tab-panel="places">
+    <!-- ============================================================
+         إدارة المطاعم والأسواق (Restaurants & Markets) — additive
+         only. Two independent name lists (tables: restaurants /
+         markets), each with add/toggle-active/delete, same pattern
+         as the ads table above. Does not touch driver stats,
+         pricing, ads, GPS, or the requests table/modal in any way.
+         Active rows here are what the customer app shows instead of
+         the "قريباً" cards on its home screen (see loadFutureServices()
+         in app.js) — if a list has zero active rows, the customer
+         app keeps showing "قريباً" for that category on its own.
+         ============================================================ -->
+    <div class="admin-driver-stats" id="restaurantsSection">
+      <div class="admin-ads-head">
+        <p class="section-label" style="margin:0;">🍔 المطاعم</p>
+      </div>
+      <p class="admin-driver-stats-hint">الأسماء "نشطة" هنا تظهر تلقائياً للزبائن في الشاشة الرئيسية بدل شارة "قريباً". لا حاجة لإعادة نشر الموقع أو تعديل أي كود — الإضافة/التفعيل/التعطيل/الحذف من هنا تنعكس مباشرة.</p>
+
+      <div class="admin-driver-add" id="restaurantAddForm">
+        <input type="text" id="newRestaurantName" class="admin-date-input" placeholder="اسم المطعم" maxlength="150">
+        <button type="button" class="admin-btn" id="addRestaurantBtn" style="width:auto; padding:8px 16px;">+ إضافة مطعم</button>
+      </div>
+      <div class="admin-error" id="restaurantAddError" style="margin-bottom:10px;"></div>
+
+      <div class="admin-ads-wrap">
+        <table class="admin-table" id="restaurantsTable">
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="restaurantsBody"></tbody>
+        </table>
+        <div class="admin-empty" id="restaurantsEmpty" style="display:none;">لا توجد مطاعم مضافة بعد. اضغط "إضافة مطعم" لإضافة أول اسم — يبقى قسم المطاعم في تطبيق الزبون يعرض "قريباً" حتى تُضاف أسماء وتُفعّل.</div>
+      </div>
+    </div>
+
+    <div class="admin-driver-stats" id="marketsSection">
+      <div class="admin-ads-head">
+        <p class="section-label" style="margin:0;">🛒 الأسواق</p>
+      </div>
+      <p class="admin-driver-stats-hint">نفس المبدأ: الأسماء "نشطة" هنا تظهر تلقائياً للزبائن بدل شارة "قريباً" الخاصة بالأسواق.</p>
+
+      <div class="admin-driver-add" id="marketAddForm">
+        <input type="text" id="newMarketName" class="admin-date-input" placeholder="اسم السوق" maxlength="150">
+        <button type="button" class="admin-btn" id="addMarketBtn" style="width:auto; padding:8px 16px;">+ إضافة سوق</button>
+      </div>
+      <div class="admin-error" id="marketAddError" style="margin-bottom:10px;"></div>
+
+      <div class="admin-ads-wrap">
+        <table class="admin-table" id="marketsTable">
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="marketsBody"></tbody>
+        </table>
+        <div class="admin-empty" id="marketsEmpty" style="display:none;">لا توجد أسواق مضافة بعد. اضغط "إضافة سوق" لإضافة أول اسم — يبقى قسم الأسواق في تطبيق الزبون يعرض "قريباً" حتى تُضاف أسماء وتُفعّل.</div>
+      </div>
+    </div>
+    </div>
+    <!-- /tabPanel-places -->
 
     <!-- الطلبات -->
     <div class="admin-tab-panel" id="tabPanel-requests" data-tab-panel="requests">
