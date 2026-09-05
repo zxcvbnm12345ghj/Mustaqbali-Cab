@@ -1,4 +1,4 @@
-// Yammak — driver-sw.js
+// Mustaqbali Cab — driver-sw.js
 // Scope: driver.html only. Does NOT touch or replace sw.js (the
 // customer app's service worker) — completely separate registration,
 // separate scope, zero interaction with the customer PWA's caching.

@@ -1128,6 +1128,184 @@ body.kb-open .map-skeleton,
 body.kb-open .recenter-fab{ opacity: 0; pointer-events: none; }
 body.kb-open .sheet{ transition: none; }
 
+/* ============================================================
+   Fixed full-screen layout pass
+   ------------------------------------------------------------
+   1) Any view other than "home" (booking, submitting, status,
+      orders, support, more, profile) is a full 100dvh screen:
+      the map/skeleton/recenter button disappear and the sheet
+      (already flex:1 in the .app-shell column) simply grows to
+      fill the freed space — no new height math needed. Toggled
+      by showView()/backToHome() in app.js via
+      .app-shell.is-fullscreen-view; no id/class removed.
+   2) The home view itself becomes a genuinely fixed, non-
+      scrolling screen: a compact search bar on top, then a
+      two-column row (6 core services / restaurants+markets+
+      other-services teaser) that fills exactly what's left
+      above the bottom nav. #quickServices, #soonCardRestaurants,
+      #soonCardMarkets, #soonCardOtherServices, .promo-card and
+      #adsCarousel all keep their exact ids/classes — only how
+      they're arranged/sized on screen changes. .promo-card and
+      #adsCarousel are hidden in this fixed layout (still fully
+      populated by app.js behind the scenes) since a genuinely
+      no-scroll two-column home screen has no vertical room left
+      for them.
+   ============================================================ */
+
+/* ---- 1) Full-screen non-home views ---- */
+.app-shell.is-fullscreen-view #map,
+.app-shell.is-fullscreen-view .map-skeleton,
+.app-shell.is-fullscreen-view .recenter-fab{
+  display: none;
+}
+.app-shell.is-fullscreen-view .sheet{
+  border-top-right-radius: 0;
+  border-top-left-radius: 0;
+  border-top: none;
+}
+.app-shell.is-fullscreen-view .sheet-scroll{
+  padding-top: calc(env(safe-area-inset-top) + var(--sp-3));
+}
+/* Non-home views keep a scroll fallback (booking has many required
+   fields; hard-blocking overflow there would hide the submit button
+   on shorter phones or with the keyboard open, which would break
+   real functionality — that is a worse outcome than an occasional,
+   near-invisible internal scroll). No swipe/drag "sheet" gesture of
+   any kind is possible either way — the sheet itself never moves. */
+.app-shell.is-fullscreen-view .sheet-scroll{
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---- 2) Home view — fixed, two-column, no scroll at all ---- */
+.app-shell:not(.is-fullscreen-view) .sheet-scroll{
+  overflow: hidden;
+  touch-action: none;
+  padding-bottom: calc(var(--bnav-h, 76px) + var(--sp-3) + env(safe-area-inset-bottom));
+}
+.sheet-view[data-view="home"]{ height: 100%; }
+.sheet-view[data-view="home"].active{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.home-fixed{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+.home-fixed .where-to{
+  flex: 0 0 auto;
+  margin: 0 0 var(--sp-3);
+  min-height: 46px;
+  padding: var(--sp-3) var(--sp-4);
+}
+.home-columns{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: var(--sp-3);
+}
+.home-col{
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-col .section-label{
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  margin-bottom: var(--sp-2);
+}
+/* .promo-card / #adsCarousel stay in the DOM (still populated by
+   loadCustomerAds()/etc.) but are not part of the fixed no-scroll
+   home layout. */
+.sheet-view[data-view="home"] > .promo-card,
+.sheet-view[data-view="home"] > .ads-carousel{
+  display: none;
+}
+
+/* Six core services — compact 2×3 grid instead of a tall vertical
+   list, so all six always fit inside their half of the screen with
+   no scroll. Same #quickServices id, same .qs-row markup/click
+   handler from buildQuickServiceChips() — only the visual shape of
+   each row changes (vertical icon+label tile instead of a full-width
+   row with subtitle + chevron). */
+.home-col-services #quickServices{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 0;
+}
+.home-col-services .qs-row{
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 4px 2px;
+  text-align: center;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-sm);
+  background: var(--surface);
+}
+.home-col-services .qs-row-ic{ width: 32px; height: 32px; }
+.home-col-services .qs-row-photo{ width: 30px; height: 30px; }
+.home-col-services .qs-row-ic svg{ width: 26px; height: 26px; }
+.home-col-services .qs-row-label{ align-items: center; gap: 0; }
+.home-col-services .qs-row-label b{ font-size: 10.5px; line-height: 1.15; }
+.home-col-services .qs-row-label span{ display: none; } /* tagline hidden to save space, not removed from the DOM */
+.home-col-services .qs-row-chev{ display: none; }
+.home-col-services .qs-skel{ height: 100%; border-bottom: none; border-radius: var(--app-r-sm); }
+
+/* Restaurants / markets / other-services teaser — single stacked
+   column (instead of a 2-col grid) so it lines up with the services
+   grid opposite it. Same #soonCard* ids, same loadFutureServices()
+   swap-in logic; text is clamped to 2 lines so a long real name list
+   from that RPC can never grow the card past the fixed row height. */
+.home-col-more .soon-grid{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 0;
+}
+.home-col-more .soon-card{
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--sp-2);
+  padding: 4px var(--sp-3);
+  min-height: 0;
+  overflow: hidden;
+}
+.home-col-more .soon-ic{ font-size: 18px; flex-shrink: 0; }
+.home-col-more .soon-label{ font-size: 11px; flex-shrink: 0; }
+.home-col-more .soon-badge{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  text-align: right;
+  margin-top: 0;
+  font-size: 10px;
+}
+
 /* ---------------- Responsive ----------------
    On wider viewports the ENTIRE fixed app shell (header, map card
    and content panel together) is framed as one centered, phone-width

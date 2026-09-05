@@ -669,6 +669,21 @@ function showView(name) {
   document.querySelectorAll('.sheet-view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
   document.getElementById('sheetScroll').scrollTop = 0;
   setActiveNavTab(name);
+  // Fixed full-screen layout — additive UI-only toggle, no request/driver
+  // logic touched. Any view other than "home" hides the map (and its
+  // controls) and lets the sheet grow to fill the entire app-shell via
+  // the flex layout already in app.css, matching a real full-screen
+  // service/detail screen. backToHome()/showView('home') removes this
+  // class again, restoring the home screen exactly as it was.
+  const shell = document.querySelector('.app-shell');
+  const wasFullscreen = shell && shell.classList.contains('is-fullscreen-view');
+  if (shell) shell.classList.toggle('is-fullscreen-view', name !== 'home');
+  // Leaflet renders blank/misaligned tiles if resized while its container
+  // was display:none — re-measure it the moment the map card becomes
+  // visible again (coming back from a full-screen view to home).
+  if (name === 'home' && wasFullscreen && state.map) {
+    setTimeout(() => state.map.invalidateSize(), 60);
+  }
 }
 
 function openBooking(serviceKey) {

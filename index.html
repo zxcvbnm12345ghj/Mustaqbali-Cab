@@ -208,66 +208,81 @@
   <div class="sheet" id="sheet">
     <div class="sheet-scroll" id="sheetScroll">
 
-      <!-- HOME view -->
+      <!-- HOME view — fixed, non-scrolling layout: compact search bar
+           on top, then two side-by-side columns (6 core services /
+           restaurants+markets+other-services teaser) sized to exactly
+           fill what's left after the map + bottom nav. No id/class
+           removed or renamed — #quickServices, #soonCardRestaurants,
+           #soonCardMarkets, #soonCardOtherServices, .promo-card,
+           #adsCarousel all keep working with app.js untouched.
+           .promo-card and #adsCarousel are still in the DOM and still
+           populated by app.js as before, but are visually hidden in
+           this fixed layout (see .home-fixed rules in app.css) — there
+           is no vertical room left for them alongside a genuinely
+           no-scroll two-column home screen. -->
       <section class="sheet-view active" data-view="home">
+      <div class="home-fixed">
         <button type="button" class="where-to" id="whereToBtn">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           <span>إلى أين تذهب؟</span>
         </button>
 
-        <p class="section-label">اختر خدمتك</p>
-        <div class="quick-services" id="quickServices">
-          <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards.
-               6 placeholders to match the fixed 3x2 grid of the 6 real services below —
-               prevents a layout jump/reflow when the real cards replace these. -->
-          <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
-        </div>
-
-        <div class="promo-card">
-          <span class="ic">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-          </span>
-          <div><b>وصول سريع خلال دقائق</b><span>اطلب الآن وتابع حالة رحلتك من نفس الشاشة</span></div>
-        </div>
-
-        <!-- Future services teaser — starts as display-only "قريباً"
-             cards (no click handler, no data-service attribute, no
-             booking logic). loadFutureServices() in app.js reads the
-             active rows from the restaurants/markets tables (managed
-             from the "المطاعم والأسواق" admin tab) and, ONLY if a
-             category has at least one active row, replaces that
-             card's inner content with the real list of names. If a
-             category has zero active rows (or the read fails), this
-             exact static "قريباً" markup is left untouched — that is
-             the fallback, not a separate code path. -->
-        <p class="section-label">خدمات قادمة قريباً</p>
-        <div class="soon-grid" aria-hidden="false">
-          <div class="soon-card" id="soonCardRestaurants">
-            <span class="soon-ic">🍔</span>
-            <span class="soon-label">المطاعم</span>
-            <span class="soon-badge">قريباً</span>
+        <div class="home-columns">
+          <div class="home-col home-col-services">
+            <p class="section-label">اختر خدمتك</p>
+            <div class="quick-services" id="quickServices">
+              <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards. -->
+              <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
+            </div>
           </div>
-          <div class="soon-card" id="soonCardMarkets">
-            <span class="soon-ic">🛒</span>
-            <span class="soon-label">الأسواق</span>
-            <span class="soon-badge">قريباً</span>
-          </div>
-          <div class="soon-card" id="soonCardOtherServices">
-            <span class="soon-ic">🛠️</span>
-            <span class="soon-label">خدمات أخرى</span>
-            <span class="soon-badge">قريباً</span>
+
+          <div class="home-col home-col-more">
+            <p class="section-label">المطاعم والأسواق</p>
+            <!-- Future services teaser — starts as display-only "قريباً"
+                 cards (no click handler, no data-service attribute, no
+                 booking logic). loadFutureServices() in app.js reads the
+                 active rows from the restaurants/markets tables (managed
+                 from the "المطاعم والأسواق" admin tab) and, ONLY if a
+                 category has at least one active row, replaces that
+                 card's inner content with the real list of names. If a
+                 category has zero active rows (or the read fails), this
+                 exact static "قريباً" markup is left untouched. -->
+            <div class="soon-grid" aria-hidden="false">
+              <div class="soon-card" id="soonCardRestaurants">
+                <span class="soon-ic">🍔</span>
+                <span class="soon-label">المطاعم</span>
+                <span class="soon-badge">قريباً</span>
+              </div>
+              <div class="soon-card" id="soonCardMarkets">
+                <span class="soon-ic">🛒</span>
+                <span class="soon-label">الأسواق</span>
+                <span class="soon-badge">قريباً</span>
+              </div>
+              <div class="soon-card" id="soonCardOtherServices">
+                <span class="soon-ic">🛠️</span>
+                <span class="soon-label">خدمات أخرى</span>
+                <span class="soon-badge">قريباً</span>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Customer ads carousel — populated by loadCustomerAds() in
-             app.js via the get_active_customer_ads() RPC. Hidden by
-             default; only shown when at least one ad is currently
-             active/in-schedule. Purely additive: does not replace or
-             alter promo-card above. -->
-        <div class="ads-carousel" id="adsCarousel" hidden>
-          <div class="ads-track" id="adsTrack"></div>
-          <div class="ads-dots" id="adsDots" hidden></div>
-        </div>
+      <div class="promo-card">
+        <span class="ic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </span>
+        <div><b>وصول سريع خلال دقائق</b><span>اطلب الآن وتابع حالة رحلتك من نفس الشاشة</span></div>
+      </div>
+
+      <!-- Customer ads carousel — populated by loadCustomerAds() in
+           app.js via the get_active_customer_ads() RPC. Still runs
+           exactly as before; hidden from view in the fixed home
+           layout only (see app.css). -->
+      <div class="ads-carousel" id="adsCarousel" hidden>
+        <div class="ads-track" id="adsTrack"></div>
+        <div class="ads-dots" id="adsDots" hidden></div>
+      </div>
       </section>
 
       <!-- BOOKING view -->

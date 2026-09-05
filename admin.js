@@ -528,7 +528,27 @@ function buildDriverLink(token) {
 }
 
 async function copyDriverLink(driver, btn) {
-  let token = driver.driver_token;
+  // Always re-read driver_token from Supabase right now, instead of
+  // trusting `driver.driver_token` from the in-memory `rows` snapshot
+  // (last populated by loadDriverStats()). If the token changed since
+  // this admin tab last loaded the roster — e.g. edited directly in
+  // Supabase — the cached value would be stale and this button would
+  // silently copy an old, no-longer-valid link. This guarantees the
+  // link always matches the CURRENT drivers.driver_token for this
+  // driver at the moment of copying/displaying it.
+  const { data: freshRow, error: fetchError } = await supabaseClient
+    .from('drivers')
+    .select('driver_token')
+    .eq('id', driver.id)
+    .single();
+
+  if (fetchError) {
+    console.error(fetchError);
+    alert('تعذّر جلب رابط السائق الحالي: ' + fetchError.message);
+    return;
+  }
+
+  let token = freshRow ? freshRow.driver_token : null;
 
   if (!token) {
     token = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/-/g, '');
@@ -541,17 +561,19 @@ async function copyDriverLink(driver, btn) {
       alert('تعذّر إنشاء رابط السائق: ' + error.message);
       return;
     }
-    driver.driver_token = token; // keep in-memory row in sync for subsequent clicks
+  }
 
-    // Reflect the newly-created token in the visible link cell right away,
-    // instead of only in the clipboard, so the admin can see it without
-    // re-clicking. Display-only; does not affect the copy behavior below.
-    const cell = btn ? btn.closest('.driver-link-cell') : null;
-    const textEl = cell ? cell.querySelector('.driver-link-text') : null;
-    if (textEl) {
-      textEl.textContent = buildDriverLink(token);
-      textEl.title = buildDriverLink(token);
-    }
+  driver.driver_token = token; // keep in-memory row in sync for subsequent clicks
+
+  // Reflect the current token in the visible link cell right away — not
+  // just in the clipboard — so the table always shows the same link
+  // that was just copied, whether the token was just-created or already
+  // existed but had drifted from what was shown before this click.
+  const cell = btn ? btn.closest('.driver-link-cell') : null;
+  const textEl = cell ? cell.querySelector('.driver-link-text') : null;
+  if (textEl) {
+    textEl.textContent = buildDriverLink(token);
+    textEl.title = buildDriverLink(token);
   }
 
   const link = buildDriverLink(token);
