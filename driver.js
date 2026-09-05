@@ -285,7 +285,7 @@ async function setupPushNotifications() {
 async function lookupDriverByToken(token) {
   try {
     const { data, error } = await supabaseClient.rpc('get_driver_by_token', {
-      p_token: token,
+      p_driver_token: token,
     });
     if (error) throw error;
     const driver = Array.isArray(data) ? (data[0] || null) : (data || null);
