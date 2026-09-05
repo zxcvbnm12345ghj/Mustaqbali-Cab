@@ -376,47 +376,35 @@ function drawRoute() {
 // Nominatim's reverse geocode returns a full administrative chain in
 // display_name (country, governorate, city, district, village...). The
 // customer needs the most precise detail actually available — a street/
-// road, plus a nearby landmark and/or area for context — never a bare
-// area/neighbourhood name standing in for a precise location, and never
-// the generic administrative chain. This only changes what's SHOWN in
-// the text field; the lat/lng hidden inputs are already set from the
-// raw coordinates before this ever runs (see setPickup/setDropoff above)
-// and are completely untouched by it.
+// road, plus a nearby landmark and/or hyper-local area for context —
+// never a governorate/qadaa/administrative-boundary name (e.g. "الموصل"
+// or "قضاء الموصل") standing in for a precise location. This only
+// changes what's SHOWN in the text field; the lat/lng hidden inputs are
+// already set from the raw coordinates before this ever runs (see
+// setPickup/setDropoff above) and are completely untouched by it.
 function shortAddressFromGeocode(data) {
   if (!data) return null;
   const a = data.address || {};
   const landmark = a.amenity || a.shop || a.tourism || a.building || a.office || a.leisure;
   const street = a.road;
+  // Hyper-local area tags only (neighbourhood/village-level) — deliberately
+  // excludes county/state_district/city/state (governorate/qadaa-level
+  // administrative names), which must never be shown or relied on in
+  // place of the real coordinates.
   const area = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.village || a.hamlet || a.town;
-  // Broader administrative name (county/district/nearest city) — used only
-  // as extra context next to `area`, or as the name itself when even a
-  // village/hamlet/suburb tag is missing. This is the fix for rural spots
-  // and road junctions (e.g. a junction south of Mosul) that Nominatim has
-  // no street/landmark/village tag for at all: previously that meant
-  // falling straight through to the GPS-accuracy fallback text below,
-  // even though OSM often still knows the surrounding county/city name —
-  // e.g. "جنوب الموصل"-style context — which reads as an actual place to
-  // the driver instead of nothing.
-  const broader = a.county || a.state_district || a.city || a.town;
 
   // A name is only ever returned when there's a real street, landmark, or
-  // at least an area/broader-region tag to anchor it. With absolutely
-  // none of those (extremely rare — essentially no OSM coverage at all,
-  // e.g. open desert/water), the caller falls back to the real lat/lng
-  // (+ GPS accuracy when available) instead of guessing a place name.
+  // at least a hyper-local area tag to anchor it. With none of those
+  // (rural spot, open desert, water, etc.), the caller falls back to the
+  // real lat/lng coordinates (see coordsLabel()) instead of a
+  // governorate/qadaa name or any other administrative-boundary guess.
   if (landmark && street && area) return `${landmark}، ${street}، ${area}`;
   if (landmark && street) return `${landmark}، ${street}`;
   if (landmark && area) return `${landmark}، ${area}`;
   if (landmark) return landmark;
   if (street && area) return `${street}، ${area}`;
   if (street) return street;
-  if (area && broader && area !== broader) return `${area}، ${broader}`;
   if (area) return area;
-  if (broader) return broader;
-  // Absolute last resort before giving up on a name entirely: the
-  // governorate alone (e.g. "نينوى") — coarser than ideal, but still an
-  // actual place name rather than the GPS-accuracy fallback text below.
-  if (a.state) return a.state;
   return null;
 }
 
@@ -438,22 +426,20 @@ function showLocationMapLink(hintElId, lat, lng) {
   el.hidden = false;
 }
 
-// Fallback label used when reverse geocoding has no reliable street or
-// landmark name to offer. Never shows the raw lat/lng digits to the
-// customer — those are already saved separately (hidden #pickupLat/
+// Fallback label used when reverse geocoding has no reliable street,
+// landmark, or hyper-local area name to offer (see shortAddressFromGeocode
+// above). Per the display requirement, this must never show raw lat/lng
+// digits or symbols, and never a governorate/qadaa/administrative-boundary
+// name — just a plain confirmation that the location was captured. The
+// real coordinates are already saved separately (hidden #pickupLat/
 // #pickupLng / #dropoffLat/#dropoffLng inputs + state.pickupLatLng/
 // state.dropoffLatLng, set in setPickup()/setDropoff() before this ever
 // runs) and are exactly what's used for GPS tracking, distance/price,
 // and the request sent to Supabase — this only controls what the
-// customer sees written in the address text field, which must always
-// read like a location, never like coordinates. `accuracy` is only ever
-// passed for a real device GPS fix (pickup), so its presence is what
-// distinguishes "your current location" from a manually chosen point.
-function coordsLabel(lat, lng, accuracy = null) {
-  if (accuracy != null && isFinite(accuracy)) {
-    return `موقعك الحالي (دقة تحديد GPS ±${Math.round(accuracy)} م تقريبًا)`;
-  }
-  return 'الموقع المحدد على الخريطة';
+// customer sees written in the address text field when no clear address
+// is available.
+function coordsLabel(lat, lng) {
+  return 'تم تحديد موقعك';
 }
 
 async function reverseGeocodePickup(lat, lng, accuracy = null) {
@@ -478,9 +464,9 @@ async function reverseGeocodePickup(lat, lng, accuracy = null) {
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}&accept-language=ar`);
     const data = await res.json();
-    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng, accuracy);
+    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng);
   } catch (err) {
-    if (!original) input.value = coordsLabel(lat, lng, accuracy);
+    if (!original) input.value = coordsLabel(lat, lng);
   }
   updateSubmitButtonState();
 }

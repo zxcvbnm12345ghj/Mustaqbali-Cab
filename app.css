@@ -145,6 +145,38 @@
   --app-map-h: clamp(260px, 36vh, 340px);
 }
 
+/* ============================================================
+   Customer-UI visual refresh (this pass) — CSS-only, no markup/
+   logic touched anywhere. Two things, both purely visual:
+   1) The old bright-white surface is replaced everywhere with an
+      elegant, cohesive off-white (soft blue-green tint) by
+      overriding the shared --surface/--surface-hi/--surface-brd/
+      --bg-deep tokens below — this file already loads after
+      style.css and is documented above as the layer whose values
+      "win app-wide", so every card/sheet/nav that already
+      consumes those tokens picks this up automatically.
+   2) A shared "modern blue → green" duo for the map area (tile
+      filter, map card glow) so it reads as one deliberate map
+      identity instead of default OSM colors.
+   No selector, id, class, spacing, or breakpoint that already
+   existed is removed — only color/shadow values.
+   ============================================================ */
+:root{
+  --surface: #F3F8F7;
+  --surface-hi: #E7F1EE;
+  --surface-brd: #D9E8E3;
+  --bg-deep: #0E2A3D;
+
+  --duo-blue: #1D6FD1;
+  --duo-green: #1FAE6B;
+  --duo-green-soft: #57C99A;
+
+  /* Slightly richer, faintly blue-tinted "premium" shadow — used
+     app-wide by every card that already references --elev-premium
+     (service cards, soon-cards, ios modal, etc.). */
+  --elev-premium: 0 22px 48px -26px rgba(11,32,54,0.32), 0 4px 11px -3px rgba(29,111,209,0.12);
+}
+
 html, body.app-body{
   height: 100%;
   /* iOS Safari-safe viewport units. Order matters: 100% first (universal
@@ -219,12 +251,16 @@ html, body.app-body{
   z-index: 1;
   background: var(--bg-deep);
   border: 1px solid var(--surface-brd);
-  box-shadow: var(--elev-2);
+  /* Soft blue→green ambient glow around the map card, reinforcing
+     the same duo used by the route line/tile filter. */
+  box-shadow: var(--elev-2), 0 26px 50px -32px rgba(29,111,209,0.4), 0 16px 34px -24px rgba(31,174,107,0.28);
   transform: translateZ(0);
   will-change: transform;
 }
 .leaflet-tile-pane{
-  filter: saturate(1.2) brightness(1.02) contrast(1.03) hue-rotate(-8deg);
+  /* Modern blue↔green map mood (was a flatter, more neutral tint) —
+     tile source/logic untouched, purely a color filter. */
+  filter: saturate(1.38) brightness(1.04) contrast(1.06) hue-rotate(-14deg);
 }
 .leaflet-control-zoom{ display:none; }
 /* Required by the OpenStreetMap tile usage policy (see initMap in
@@ -306,7 +342,7 @@ html, body.app-body{
 .fab{
   width: 44px; height: 44px;
   border-radius: var(--app-r-sm) var(--app-r-sm) var(--app-r-sm) 6px;
-  background: rgba(255,255,255,0.96);
+  background: rgba(243,248,247,0.96);
   border: 1px solid var(--surface-brd);
   display:flex; align-items:center; justify-content:center;
   color: var(--text);
@@ -364,7 +400,7 @@ html, body.app-body{
   height: var(--sheet-h, auto);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,251,255,0.99));
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 72%, var(--surface-hi) 100%);
   border: 1px solid var(--surface-brd);
   border-bottom: none;
   border-inline: none;
@@ -402,13 +438,21 @@ html, body.app-body{
 @keyframes sheet-in{ from{ opacity:0; transform: translateY(14px); } to{ opacity:1; transform: translateY(0); } }
 
 .sheet-title{ font-size: 21px; font-weight: 900; margin: 4px 0 16px; letter-spacing: -.2px; }
+/* Back button — made into a clearly-visible pill (was plain inline
+   text) so it always reads as a tappable control once a service
+   opens full-screen, per the "واضح" requirement. Same class/markup,
+   only its own visual shell changes. */
 .sheet-back{
-  display:inline-flex; align-items:center; gap:6px;
-  font-size: 13.5px; font-weight:700; color: var(--text-muted);
-  padding: 8px 0; margin-bottom: 6px;
-  transition: transform .15s, color .15s;
+  display:inline-flex; align-items:center; gap:7px;
+  font-size: 13.5px; font-weight:800; color: var(--teal-text);
+  padding: 9px 16px 9px 14px; margin: 0 0 14px;
+  border-radius: var(--app-r-pill);
+  background: var(--teal-dim);
+  border: 1px solid rgba(29,111,209,0.18);
+  box-shadow: 0 8px 18px -14px rgba(29,111,209,0.5);
+  transition: transform .15s, background .15s, box-shadow .15s;
 }
-.sheet-back:active{ transform: translateX(3px); color: var(--teal-text); }
+.sheet-back:active{ transform: translateX(3px) scale(0.97); background: var(--teal-dim); box-shadow: none; }
 .sheet-back svg{ width:16px; height:16px; }
 
 /* ---- Home view: search bar + recent + quick service chips ---- */
@@ -460,7 +504,7 @@ html, body.app-body{
 .quick-services{
   display:flex;
   flex-direction:column;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   background: transparent;
   border: none;
   box-shadow: none;
@@ -483,33 +527,42 @@ html, body.app-body{
    for every service — the only per-service variation anywhere in
    this template is the very light icon-badge tint below, which never
    touches the icon/photo itself, the label, or the price. */
+/* Mobile-first / narrow-column default: a compact vertical card
+   (icon on top, label centered below) — this is what renders at
+   every width up to 900px, since the app now keeps a real two-
+   column layout there too and each column is fairly narrow. The
+   original spacious horizontal row (icon beside label, chevron,
+   full label line) is restored below in the ≥900px block, where
+   each column has real desktop width to spare. */
 .qs-row{
-  display:flex; align-items:center; gap: var(--sp-4);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap: 7px;
   width:100%;
-  padding: 17px var(--sp-4) 17px calc(var(--sp-5) - 2px);
+  padding: 14px 6px 12px;
   background: var(--surface);
   border: 1px solid var(--surface-brd);
-  border-radius: 22px 22px 22px 10px;
+  border-radius: 18px 18px 18px 8px;
   box-shadow: var(--elev-premium);
   transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s, background .15s, border-color .15s;
-  min-height: 82px;
-  text-align: right;
+  min-height: 0;
+  text-align: center;
   position: relative;
   overflow: hidden;
 }
-/* Accent identity — a short, rounded "tick" inset from the edge
-   rather than a full-height bar: a quieter, more deliberate detail
-   that still makes each service instantly recognizable by color. */
+/* Accent identity — a short, rounded "tick" that still makes each
+   service instantly recognizable by color; sits along the top edge
+   in the compact card, moves back to the leading edge once the row
+   goes horizontal again at ≥900px (see that block). */
 .qs-row::before{
   content:'';
-  position:absolute; inset-inline-start:0; top:50%; transform:translateY(-50%);
-  width:3.5px; height:34px; border-radius: 0 3px 3px 0;
+  position:absolute; inset-inline-start:50%; top:0; transform:translateX(-50%);
+  width:26px; height:3.5px; border-radius: 0 0 3px 3px;
   background: transparent;
 }
 .qs-row:active{ background: var(--surface-hi); transform: scale(0.985); box-shadow: var(--elev-premium-active); }
 .qs-row-ic{
   flex-shrink:0;
-  width: 58px; height: 58px;
+  width: 48px; height: 48px;
   border-radius: 50%;
   background: var(--surface-hi);
   display:flex; align-items:center; justify-content:center;
@@ -522,7 +575,7 @@ html, body.app-body{
   background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), transparent 55%);
   pointer-events:none;
 }
-.qs-row-ic svg{ width:37px; height:37px; filter: drop-shadow(0 2px 3px rgba(11,32,54,0.16)); position:relative; z-index:1; }
+.qs-row-ic svg{ width:29px; height:29px; filter: drop-shadow(0 2px 3px rgba(11,32,54,0.16)); position:relative; z-index:1; }
 /* Real vehicle photo (replaces the flat SVG car icon). Circular crop,
    fills the same slot as the old icon, object-fit so any photo
    aspect ratio still reads as a clean round badge. Untouched image
@@ -530,20 +583,24 @@ html, body.app-body{
    per-service tint (see block below) as the sole distinguishing mark
    between otherwise identical cards. */
 .qs-row-photo{
-  width:46px; height:46px; border-radius:50%;
+  width:40px; height:40px; border-radius:50%;
   object-fit:cover; object-position:center;
   box-shadow: 0 2px 5px rgba(11,32,54,0.22), 0 0 0 2px var(--surface);
   background: var(--surface-hi);
   position: relative; z-index:1;
 }
 .qs-row:active .qs-row-ic{ transform: scale(1.06); }
-.qs-row-label{ flex:1; display:flex; flex-direction:column; gap:3px; min-width:0; }
-.qs-row-label b{ font-size:15px; font-weight:800; color: var(--text); letter-spacing:-.1px; }
-.qs-row-label span{ font-size:12px; font-weight:600; color: var(--text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.qs-row-label{ flex:none; width:100%; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+.qs-row-label b{ font-size:12.5px; font-weight:800; color: var(--text); letter-spacing:-.1px; line-height:1.25; }
+.qs-row-label span{ font-size:10.5px; font-weight:600; color: var(--text-faint); overflow:visible; text-overflow:unset; white-space:normal; line-height:1.3; }
+/* Chevron is decorative (the whole card is already tappable) and
+   has no room in the compact card — hidden here, restored at
+   ≥900px alongside the horizontal row layout. */
 .qs-row-chev{
+  display:none;
   flex-shrink:0; color: var(--text-faint); transform: scaleX(-1);
   width:28px; height:28px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
+  align-items:center; justify-content:center;
   background: var(--surface-hi);
 }
 .qs-row-chev svg{ width:16px; height:16px; }
@@ -612,7 +669,7 @@ html, body.app-body{
    sheet without introducing a new visual language.
    ============================================================ */
 .soon-grid{
-  display:grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3);
+  display:grid; grid-template-columns: 1fr; gap: var(--sp-3);
   margin-top: var(--sp-2);
   padding: 0;
   background: transparent;
@@ -1290,6 +1347,18 @@ body.kb-open .sheet{ transition: none; }
 .app-shell.is-fullscreen-view .recenter-fab{
   display: none;
 }
+/* Bottom nav hidden too while a service is full-screen, so the
+   screen is dedicated to that service only — no tab bar showing
+   underneath. #bottomNav is a DOM sibling right after .app-shell
+   (see note above the bottom-nav rules further down), so the
+   general sibling combinator reaches it without touching its id,
+   class, or any of app.js's own tab-switch logic. The exact same
+   .is-fullscreen-view toggle app.js already flips on "back" makes
+   it reappear automatically on the home screen — nothing new to
+   wire up. */
+.app-shell.is-fullscreen-view ~ .bottom-nav{
+  display: none;
+}
 .app-shell.is-fullscreen-view .sheet{
   border-top-right-radius: 0;
   border-top-left-radius: 0;
@@ -1297,6 +1366,11 @@ body.kb-open .sheet{ transition: none; }
 }
 .app-shell.is-fullscreen-view .sheet-scroll{
   padding-top: calc(env(safe-area-inset-top) + var(--sp-3));
+  /* No bottom nav to clear space for in this state, so the reserved
+     --bnav-h gap (used on the home screen below) is dropped here —
+     otherwise a full-screen service view would end in a dead empty
+     strip where the now-hidden tab bar used to be. */
+  padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
 }
 .app-shell.is-fullscreen-view .sheet-scroll{
   overflow-y: auto;
@@ -1322,17 +1396,22 @@ body.kb-open .sheet{ transition: none; }
   min-height: 46px;
   padding: var(--sp-3) var(--sp-4);
 }
-/* Stacked sections — services first, then the restaurants/markets/
-   other-services block underneath, each full width. Same
-   #quickServices / .soon-grid markup, just arranged as a column
-   instead of two side-by-side halves. */
+/* Two side-by-side sections at every width — transport services on
+   the right, restaurants/markets/other-services on the left (RTL
+   source order). Same #quickServices / .soon-grid markup; each
+   column's cards stack one under another internally (see .qs-row /
+   .soon-grid below) and only get roomier at the ≥900px breakpoint
+   further down — the columns themselves never collapse into one. */
 .home-columns{
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-6);
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--sp-3);
 }
 .home-col{
-  width: 100%;
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .home-col .section-label{ margin-bottom: var(--sp-3); }
 
@@ -1345,18 +1424,20 @@ body.kb-open .sheet{ transition: none; }
    (one softer, "designed" corner) plus a gentle ambient shadow gives
    each section the weight of a real panel rather than a flat tint. */
 .home-col-services{
-  padding: var(--sp-5) var(--sp-4) var(--sp-4);
-  border-radius: 26px 26px 26px 12px;
+  padding: var(--sp-4) var(--sp-2) var(--sp-3);
+  border-radius: 22px 22px 22px 10px;
   background: linear-gradient(165deg, var(--sec-transport-dim) 0%, rgba(255,255,255,0) 60%);
   border: 1px solid rgba(29,111,209,0.13);
   box-shadow: 0 18px 38px -30px rgba(29,111,209,0.45);
+  position: sticky;
+  top: var(--sp-2);
 }
 .home-col-services .section-label::before{
   background: linear-gradient(90deg, var(--sec-transport), var(--teal-soft));
 }
 .home-col-more{
-  padding: var(--sp-5) var(--sp-4) var(--sp-4);
-  border-radius: 26px 26px 26px 12px;
+  padding: var(--sp-4) var(--sp-2) var(--sp-3);
+  border-radius: 22px 22px 22px 10px;
   background: linear-gradient(165deg, var(--sec-market-dim) 0%, rgba(255,255,255,0) 60%);
   border: 1px solid rgba(193,98,45,0.15);
   box-shadow: 0 18px 38px -30px rgba(193,98,45,0.4);
@@ -1469,7 +1550,7 @@ body.kb-open .sheet{ transition: none; }
   height: calc(66px + env(safe-area-inset-bottom));
   padding: 0 4px calc(env(safe-area-inset-bottom));
   border-radius: var(--app-r-lg) var(--app-r-lg) 0 0;
-  background: rgba(255,255,255,0.98);
+  background: rgba(243,248,247,0.97);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid var(--surface-brd);
@@ -1480,6 +1561,73 @@ body.kb-open .sheet{ transition: none; }
      frame on wide viewports, matching .app-shell's own frame. */
   .bottom-nav{ left:50%; right:auto; transform: translateX(-50%); width: 430px; }
 }
+
+/* ============================================================
+   Large screens — same two-column home layout, more breathing room
+   ------------------------------------------------------------
+   The two-column layout itself (.home-columns row, #quickServices /
+   .home-col-services on the right — right side, since this is RTL —
+   and the restaurants/markets/مكتب المستقبل/other-services block,
+   .home-col-more, on the left) is now the DEFAULT at every width,
+   including mobile, so the layout never collapses to one column.
+   Below this breakpoint, each column is narrow (phone width), so
+   .qs-row renders as a compact vertical card (icon on top, label
+   below) — defined earlier in the file. At/above this breakpoint
+   there's real desktop width to spare, so this block only widens
+   the gap/padding back out and restores the roomier horizontal
+   .qs-row card (icon beside label, chevron visible). No id/class/
+   markup changed anywhere — layout and sizing only. The right
+   column (.home-col-services) stays pinned with `sticky` at every
+   width (set in its base rule) so the 6 transport services don't
+   drift past the left column while scrolling —
+   "خدمات ثابتة أثناء التمرير".
+   ============================================================ */
+@media (min-width: 900px){
+  .app-shell{
+    width: min(940px, 94vw);
+  }
+  .bottom-nav{ width: min(940px, 94vw); }
+  :root{ --app-map-h: clamp(300px, 40vh, 420px); }
+
+  .home-columns{
+    gap: var(--sp-6);
+  }
+  .home-col-services,
+  .home-col-more{
+    padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  }
+  .home-col-services{
+    top: var(--sp-3);
+  }
+  .quick-services{ gap: var(--sp-4); }
+
+  /* Roomier horizontal row card — restored now that each column has
+     real desktop width to spare. */
+  .qs-row{
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-4);
+    text-align: right;
+    padding: 17px var(--sp-4) 17px calc(var(--sp-5) - 2px);
+    border-radius: 22px 22px 22px 10px;
+    min-height: 82px;
+  }
+  .qs-row::before{
+    inset-inline-start:0; top:50%; transform:translateY(-50%);
+    width:3.5px; height:34px; border-radius: 0 3px 3px 0;
+  }
+  .qs-row-ic{ width:58px; height:58px; }
+  .qs-row-ic svg{ width:37px; height:37px; }
+  .qs-row-photo{ width:46px; height:46px; }
+  .qs-row-label{
+    flex:1; align-items: stretch; text-align: right; width:auto; gap:3px;
+  }
+  .qs-row-label b{ font-size:15px; line-height:normal; }
+  .qs-row-label span{ font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qs-row-chev{ display:flex; }
+}
+
 .bnav-item{
   flex:1;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
@@ -1587,7 +1735,7 @@ body.kb-open .sheet{ transition: none; }
   background:
     radial-gradient(760px 460px at 8% -12%, var(--gold-dim), transparent 58%),
     radial-gradient(640px 400px at 108% 112%, var(--teal-dim), transparent 55%),
-    linear-gradient(165deg, #FFFFFF 0%, var(--surface) 55%, #FFFFFF 100%);
+    linear-gradient(165deg, var(--surface-hi) 0%, var(--surface) 55%, var(--surface-hi) 100%);
 }
 .welcome-screen[hidden]{ display: none; }
 .welcome-content{

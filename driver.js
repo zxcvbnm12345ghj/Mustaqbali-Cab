@@ -19,6 +19,17 @@ const REPORT_INTERVAL_MS = 15000; // 15s — balances "real-time enough for
 const GEO_TIMEOUT_MS = 12000;
 const TOKEN_STORAGE_KEY = 'mustaqbali_driver_token';
 
+// Current-trip polling (get_driver_current_trip RPC) — separate, lighter
+// cadence from GPS reporting above. Purely additive: does not touch
+// reportTimer/REPORT_INTERVAL_MS or the driver-queue/location-ping flow.
+const TRIP_POLL_INTERVAL_MS = 15000;
+
+const TRIP_STATUS_LABELS = {
+  assigned: 'تم التعيين',
+  en_route: 'في الطريق',
+  arrived: 'وصل',
+};
+
 // Public VAPID key — safe to embed client-side by design (it's how the
 // browser verifies push messages came from OUR server, not a secret).
 // The matching PRIVATE key lives only in the push-sending Edge Function
@@ -30,6 +41,10 @@ let driverToken = null;
 let reportTimer = null;
 let paused = false;
 let consecutiveFailures = 0;
+
+// Current-trip state
+let currentTrip = null;
+let tripTimer = null;
 
 function getTokenFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -80,6 +95,11 @@ function setInvalidDetail(message) {
     el.textContent = '';
     el.hidden = true;
   }
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
 async function sendLocation(lat, lng) {
@@ -139,6 +159,76 @@ function stopReporting() {
   setStatus(null, 'متوقف مؤقتًا — لن يظهر موقعك للزبائن');
 }
 
+// ---- Current trip (get_driver_current_trip RPC) ----
+// Read-only lookup, independent of GPS reporting/pause state: the
+// driver's current trip and pickup location should still be visible
+// even while reporting is paused.
+
+function renderTrip(trip) {
+  currentTrip = trip;
+
+  const box = document.getElementById('driverTripBox');
+  const emptyEl = document.getElementById('driverTripEmpty');
+  const detailsEl = document.getElementById('driverTripDetails');
+  const mapBtn = document.getElementById('driverOpenMapBtn');
+  if (!box || !emptyEl || !detailsEl) return;
+
+  box.hidden = false;
+
+  if (!trip) {
+    emptyEl.hidden = false;
+    detailsEl.hidden = true;
+    if (mapBtn) mapBtn.hidden = true;
+    return;
+  }
+
+  emptyEl.hidden = true;
+  detailsEl.hidden = false;
+
+  setText('driverTripRequestNumber', trip.request_number || '');
+  setText('driverTripStatus', TRIP_STATUS_LABELS[trip.status] || trip.status || '');
+  setText('driverTripCustomer', trip.customer_name || '—');
+  setText('driverTripServiceType', trip.service_type || '—');
+  setText('driverTripPickupLocation', trip.pickup_location || '—');
+
+  if (mapBtn) {
+    // pickup_lat/pickup_lng are used exactly as returned by
+    // get_driver_current_trip — no conversion, no substitution with the
+    // text pickup_location.
+    if (trip.pickup_lat != null && trip.pickup_lng != null) {
+      mapBtn.hidden = false;
+      mapBtn.dataset.lat = trip.pickup_lat;
+      mapBtn.dataset.lng = trip.pickup_lng;
+    } else {
+      mapBtn.hidden = true;
+      delete mapBtn.dataset.lat;
+      delete mapBtn.dataset.lng;
+    }
+  }
+}
+
+async function fetchCurrentTrip() {
+  if (!driverToken) return;
+  try {
+    const { data, error } = await supabaseClient.rpc('get_driver_current_trip', {
+      p_token: driverToken,
+    });
+    if (error) throw error;
+    const trip = Array.isArray(data) ? (data[0] || null) : (data || null);
+    renderTrip(trip);
+  } catch (err) {
+    console.error('get_driver_current_trip failed', err);
+    // Non-fatal: leave whatever trip info was last shown in place
+    // rather than clearing it on a transient network error.
+  }
+}
+
+function startTripPolling() {
+  fetchCurrentTrip();
+  if (tripTimer) clearInterval(tripTimer);
+  tripTimer = setInterval(fetchCurrentTrip, TRIP_POLL_INTERVAL_MS);
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -195,7 +285,7 @@ async function setupPushNotifications() {
 async function lookupDriverByToken(token) {
   try {
     const { data, error } = await supabaseClient.rpc('get_driver_by_token', {
-      p_driver_token: token,
+      p_token: token,
     });
     if (error) throw error;
     const driver = Array.isArray(data) ? (data[0] || null) : (data || null);
@@ -254,14 +344,31 @@ async function initDriverPage() {
     });
   }
 
+  // Opens the customer's pickup location using pickup_lat/pickup_lng
+  // exactly as stored in trip_requests (read from the button's
+  // data-lat/data-lng, set in renderTrip from the RPC result) — no
+  // transformation, no fallback to pickup_location text.
+  const mapBtn = document.getElementById('driverOpenMapBtn');
+  if (mapBtn) {
+    mapBtn.addEventListener('click', () => {
+      const lat = mapBtn.dataset.lat;
+      const lng = mapBtn.dataset.lng;
+      if (!lat || !lng) return;
+      const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      window.open(url, '_blank', 'noopener');
+    });
+  }
+
   // Re-send promptly when the tab regains focus/visibility — mobile
   // browsers throttle background timers, so this recovers quickly
   // instead of waiting up to REPORT_INTERVAL_MS after switching back.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && !paused) reportOnce();
+    if (!document.hidden) fetchCurrentTrip();
   });
 
   startReporting();
+  startTripPolling();
   setupPushNotifications();
 }
 
