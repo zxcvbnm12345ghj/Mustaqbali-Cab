@@ -66,6 +66,33 @@
   --svc-cargo: #C97A3D;      --svc-cargo-soft: #E0A16A;   --svc-cargo-text: #8A4E1E;   --svc-cargo-dim: rgba(201,122,61,0.16);
   --svc-starx: #6E5CC4;      --svc-starx-soft: #9689DB;   --svc-starx-text: #453579;   --svc-starx-dim: rgba(110,92,196,0.14);
 
+  /* ---- Section identity — the two independent home sections each
+     carry one distinct, professional accent so they read as separate
+     product areas rather than one undifferentiated list:
+     - Transport & Delivery (6 ride/courier services): Yammak Blue,
+       reusing the existing --teal family already used app-wide.
+     - Restaurants / Markets / Other services (marketplace teaser):
+       a warm, restrained terracotta — clearly distinct from blue,
+       still muted/premium rather than loud. Each teaser card inside
+       that section additionally gets its own tasteful sub-accent
+       (food / grocery / services) nested under the shared section
+       identity. ---- */
+  --sec-transport: var(--teal);
+  --sec-transport-dim: var(--teal-dim);
+  --sec-market: #C1622D;     --sec-market-soft: #DE9868;  --sec-market-text: #8A431B;  --sec-market-dim: rgba(193,98,45,0.12);
+
+  --mk-food: #C1622D;    --mk-food-soft: #DE9868;   --mk-food-text: #8A431B;   --mk-food-dim: rgba(193,98,45,0.14);
+  --mk-grocery: #2F9E5C; --mk-grocery-soft: #6BC28C; --mk-grocery-text: #1C6B3D; --mk-grocery-dim: rgba(47,158,92,0.14);
+  /* "الخدمات الأخرى" (general/other services) — a muted warm
+     bronze, evoking maintenance/handyman work without competing
+     with the food (orange) or grocery (green) tones beside it. */
+  --mk-service: #A9772B; --mk-service-soft: #D2A868; --mk-service-text: #6B4A15; --mk-service-dim: rgba(169,119,43,0.14);
+  /* "مكتب المستقبل للقرطاسية والطباعة" — its own independent card,
+     given a de-saturated ink/navy identity (pen-and-paper, print)
+     that stays clearly distinct from the brighter Yammak Blue used
+     for transport. */
+  --mk-stationery: #3E4C63; --mk-stationery-soft: #7C8BA1; --mk-stationery-text: #232E3F; --mk-stationery-dim: rgba(62,76,99,0.13);
+
   /* ---- Shape tokens — the asymmetric-radius language used across
      the sheet, cards and buttons in this pass. ---- */
   --r-chip: 12px;
@@ -108,6 +135,12 @@
   --elev-1: 0 2px 10px -6px rgba(11,32,54,0.18);
   --elev-2: 0 12px 26px -14px rgba(11,32,54,0.24);
   --elev-3: 0 22px 46px -20px rgba(11,32,54,0.32);
+  /* Premium double-shadow — a soft, diffused ambient layer plus a
+     tight, low-opacity contact layer. Reads as an object resting
+     gently on the surface rather than a hard drop-shadow, which is
+     what makes flat cards feel "premium" instead of templated. */
+  --elev-premium: 0 20px 44px -26px rgba(11,32,54,0.30), 0 3px 8px -3px rgba(11,32,54,0.07);
+  --elev-premium-active: 0 10px 22px -16px rgba(11,32,54,0.26), 0 2px 5px -2px rgba(11,32,54,0.06);
 
   --app-map-h: clamp(260px, 36vh, 340px);
 }
@@ -191,7 +224,7 @@ html, body.app-body{
   will-change: transform;
 }
 .leaflet-tile-pane{
-  filter: saturate(1.1) brightness(1.02) hue-rotate(6deg);
+  filter: saturate(1.2) brightness(1.02) contrast(1.03) hue-rotate(-8deg);
 }
 .leaflet-control-zoom{ display:none; }
 /* Required by the OpenStreetMap tile usage policy (see initMap in
@@ -221,8 +254,8 @@ html, body.app-body{
   border-radius: var(--app-r-lg);
   overflow: hidden;
   background:
-    radial-gradient(60% 45% at 30% 35%, rgba(229,184,92,0.13), transparent 60%),
-    radial-gradient(50% 40% at 75% 65%, rgba(29,111,209,0.11), transparent 60%),
+    radial-gradient(60% 45% at 30% 35%, rgba(34,197,94,0.12), transparent 60%),
+    radial-gradient(50% 40% at 75% 65%, rgba(29,111,209,0.12), transparent 60%),
     var(--bg-deep);
   opacity: 1;
   transition: opacity .5s ease;
@@ -246,7 +279,7 @@ html, body.app-body{
   z-index:1;
 }
 .dropoff-pin::before{
-  background: radial-gradient(circle, rgba(229,184,92,0.4), transparent 70%);
+  background: radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%);
 }
 .pickup-pin.dropped{ animation: pin-drop .55s cubic-bezier(.34,1.56,.64,1); }
 @keyframes pin-drop{ 0%{ transform: translateY(-24px) scale(0.5); opacity:0; } 60%{ transform: translateY(4px) scale(1.08); opacity:1; } 100%{ transform: translateY(0) scale(1); } }
@@ -261,8 +294,13 @@ html, body.app-body{
   stroke-dasharray: 1 14;
   animation: decor-route-flow 1.4s linear infinite;
   opacity: 0.9;
-  filter: drop-shadow(0 0 4px rgba(229,184,92,0.5));
+  filter: drop-shadow(0 0 4px rgba(34,197,94,0.5));
 }
+/* Recolor the inline route gradient (defined in index.html) from
+   blue→gold to blue→green to match the map's new identity — done
+   entirely from CSS (stop-color is a presentation attribute and is
+   overridden by any stylesheet rule), so index.html stays untouched. */
+#appRouteGrad stop:last-child{ stop-color: #22C55E; }
 @keyframes decor-route-flow{ to{ stroke-dashoffset: -150; } }
 
 .fab{
@@ -399,11 +437,11 @@ html, body.app-body{
 
 .section-label{
   font-size: 12px; font-weight:800; color: var(--text-faint);
-  text-transform: uppercase; letter-spacing:0.05em; margin: 0 0 var(--sp-3);
+  text-transform: uppercase; letter-spacing:0.06em; margin: 0 0 var(--sp-4);
   display:flex; align-items:center; gap: var(--sp-2);
 }
 .section-label::before{
-  content:''; width:14px; height:4px; border-radius:3px;
+  content:''; width:16px; height:5px; border-radius:3px;
   background: linear-gradient(90deg, var(--gold), var(--teal)); flex-shrink:0;
 }
 
@@ -413,14 +451,19 @@ html, body.app-body{
    tiles. Fixed order, no drag/scroll — every service always visible,
    stacked top to bottom inside a single bordered card with dividers
    between rows. */
+/* Each of the 6 transport services is now its own standalone card,
+   stacked vertically — one unified card template (same radius,
+   border, shadow, spacing) for every service, per the agreed design:
+   no per-card color themes, no layout differences between services.
+   Same #quickServices id and .qs-row markup/click handler from
+   buildQuickServiceChips() — only the visual shape changes. */
 .quick-services{
   display:flex;
   flex-direction:column;
-  background: var(--surface);
-  border: 1px solid var(--surface-brd);
-  border-radius: var(--app-r-md);
-  box-shadow: var(--elev-1);
-  overflow: hidden;
+  gap: var(--sp-4);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   margin-bottom: var(--sp-5);
 }
 
@@ -435,64 +478,110 @@ html, body.app-body{
 .qs-row[data-service="starx"]{ order: 5; }
 .qs-row[data-service="intercity"]{ order: 6; }
 
-/* Each service is a full-width row: icon on one side, title+subtitle
-   stacked in the middle, chevron on the other — matching the
-   title+description row layout in the reference ride-option list
-   (price intentionally omitted — see note above buildQuickServiceChips
-   in app.js). */
+/* One unified card: icon on one side, title+subtitle stacked in the
+   middle, chevron on the other. Identical shape/size/radius/shadow
+   for every service — the only per-service variation anywhere in
+   this template is the very light icon-badge tint below, which never
+   touches the icon/photo itself, the label, or the price. */
 .qs-row{
-  display:flex; align-items:center; gap: var(--sp-3);
+  display:flex; align-items:center; gap: var(--sp-4);
   width:100%;
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--bg-deep);
-  border-bottom: 1px solid var(--surface-brd);
-  transition: background .15s;
-  min-height: 72px;
+  padding: 17px var(--sp-4) 17px calc(var(--sp-5) - 2px);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: 22px 22px 22px 10px;
+  box-shadow: var(--elev-premium);
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s, background .15s, border-color .15s;
+  min-height: 82px;
   text-align: right;
+  position: relative;
+  overflow: hidden;
 }
-.qs-row:last-child{ border-bottom: none; }
-.qs-row:active{ background: var(--surface-hi); }
+/* Accent identity — a short, rounded "tick" inset from the edge
+   rather than a full-height bar: a quieter, more deliberate detail
+   that still makes each service instantly recognizable by color. */
+.qs-row::before{
+  content:'';
+  position:absolute; inset-inline-start:0; top:50%; transform:translateY(-50%);
+  width:3.5px; height:34px; border-radius: 0 3px 3px 0;
+  background: transparent;
+}
+.qs-row:active{ background: var(--surface-hi); transform: scale(0.985); box-shadow: var(--elev-premium-active); }
 .qs-row-ic{
   flex-shrink:0;
-  width: 50px; height: 50px;
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  background: var(--surface-hi);
   display:flex; align-items:center; justify-content:center;
-  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), background .2s;
+  position: relative;
 }
-.qs-row-ic svg{ width:38px; height:38px; filter: drop-shadow(0 2px 3px rgba(11,32,54,0.16)); }
+.qs-row-ic::after{
+  content:'';
+  position:absolute; inset:0; border-radius:50%;
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), transparent 55%);
+  pointer-events:none;
+}
+.qs-row-ic svg{ width:37px; height:37px; filter: drop-shadow(0 2px 3px rgba(11,32,54,0.16)); position:relative; z-index:1; }
 /* Real vehicle photo (replaces the flat SVG car icon). Circular crop,
-   fills the same 50x50 slot as the old icon, object-fit so any photo
-   aspect ratio still reads as a clean round badge. */
+   fills the same slot as the old icon, object-fit so any photo
+   aspect ratio still reads as a clean round badge. Untouched image
+   itself — only the circular badge behind it gets a very light,
+   per-service tint (see block below) as the sole distinguishing mark
+   between otherwise identical cards. */
 .qs-row-photo{
-  width:44px; height:44px; border-radius:50%;
+  width:46px; height:46px; border-radius:50%;
   object-fit:cover; object-position:center;
   box-shadow: 0 2px 5px rgba(11,32,54,0.22), 0 0 0 2px var(--surface);
   background: var(--surface-hi);
+  position: relative; z-index:1;
 }
-.qs-row:active .qs-row-ic{ transform: scale(1.08); }
-.qs-row-label{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
-.qs-row-label b{ font-size:14.5px; font-weight:800; color: var(--text); }
+.qs-row:active .qs-row-ic{ transform: scale(1.06); }
+.qs-row-label{ flex:1; display:flex; flex-direction:column; gap:3px; min-width:0; }
+.qs-row-label b{ font-size:15px; font-weight:800; color: var(--text); letter-spacing:-.1px; }
 .qs-row-label span{ font-size:12px; font-weight:600; color: var(--text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.qs-row-chev{ flex-shrink:0; color: var(--text-faint); transform: scaleX(-1); }
-.qs-row-chev svg{ width:18px; height:18px; }
+.qs-row-chev{
+  flex-shrink:0; color: var(--text-faint); transform: scaleX(-1);
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--surface-hi);
+}
+.qs-row-chev svg{ width:16px; height:16px; }
 
-.svc-pill[data-service="taxi"].active{ background: linear-gradient(180deg, var(--svc-taxi-soft), var(--svc-taxi)); box-shadow: 0 6px 16px -6px rgba(29,111,209,0.55); color:#fff; }
-.svc-pill[data-service="private"].active{ background: linear-gradient(180deg, var(--svc-private-soft), var(--svc-private)); box-shadow: 0 6px 16px -6px rgba(52,64,110,0.55); color:#fff; }
-.svc-pill[data-service="courier"].active{ background: linear-gradient(180deg, var(--svc-courier-soft), var(--svc-courier)); box-shadow: 0 6px 16px -6px rgba(217,164,65,0.5); color:#4A3300; }
-.svc-pill[data-service="intercity"].active{ background: linear-gradient(180deg, var(--svc-intercity-soft), var(--svc-intercity)); box-shadow: 0 6px 16px -6px rgba(30,158,130,0.5); color:#fff; }
-.svc-pill[data-service="cargo"].active{ background: linear-gradient(180deg, var(--svc-cargo-soft), var(--svc-cargo)); box-shadow: 0 6px 16px -6px rgba(201,122,61,0.5); color:#fff; }
-.svc-pill[data-service="starx"].active{ background: linear-gradient(180deg, var(--svc-starx-soft), var(--svc-starx)); box-shadow: 0 6px 16px -6px rgba(110,92,196,0.5); color:#fff; }
+/* The only intentional per-service touch in the whole template: a
+   very soft tint behind the icon badge, reusing the existing --svc-*
+   "-dim" tokens (already defined above, already very light). Card
+   shape, size, border, shadow and spacing stay identical across all
+   six — this is a subtle cue, not a redesign of any single card. */
+.qs-row[data-service="taxi"] .qs-row-ic{ background: var(--svc-taxi-dim); box-shadow: inset 0 0 0 1.5px rgba(29,111,209,0.28); }
+.qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private-dim); box-shadow: inset 0 0 0 1.5px rgba(52,64,110,0.3); }
+.qs-row[data-service="courier"] .qs-row-ic{ background: var(--svc-courier-dim); box-shadow: inset 0 0 0 1.5px rgba(217,164,65,0.34); }
+.qs-row[data-service="cargo"] .qs-row-ic{ background: var(--svc-cargo-dim); box-shadow: inset 0 0 0 1.5px rgba(201,122,61,0.32); }
+.qs-row[data-service="starx"] .qs-row-ic{ background: var(--svc-starx-dim); box-shadow: inset 0 0 0 1.5px rgba(110,92,196,0.32); }
+.qs-row[data-service="intercity"] .qs-row-ic{ background: var(--svc-intercity-dim); box-shadow: inset 0 0 0 1.5px rgba(30,158,130,0.3); }
 
-/* Skeleton rows now match the new list shape (full-width bars) instead
-   of square tiles; the 6 placeholders already in index.html stack
-   naturally since .quick-services is a column now. */
+/* Accent tick — one distinct, professional color per service, the
+   main visible identity cue that lets each of the 6 transport rows
+   read as its own service at a glance while sharing the exact same
+   premium card template (shape/size/spacing untouched). */
+.qs-row[data-service="taxi"]::before{ background: var(--svc-taxi); }
+.qs-row[data-service="private"]::before{ background: var(--svc-private); }
+.qs-row[data-service="courier"]::before{ background: var(--svc-courier); }
+.qs-row[data-service="cargo"]::before{ background: var(--svc-cargo); }
+.qs-row[data-service="starx"]::before{ background: var(--svc-starx); }
+.qs-row[data-service="intercity"]::before{ background: var(--svc-intercity); }
+
+/* Skeleton cards match the new standalone-card shape (rounded, with
+   its own border) instead of flat dividing bars, so the loading state
+   previews the same card silhouette that will replace it. */
 .qs-skel{
-  height: 72px;
+  height: 82px;
+  border-radius: 22px 22px 22px 10px;
+  border: 1px solid var(--surface-brd);
   background: linear-gradient(100deg, var(--surface) 30%, var(--surface-hi) 50%, var(--surface) 70%);
   background-size: 200% 100%;
   animation: skel-shimmer 1.4s ease-in-out infinite;
-  border-bottom: 1px solid var(--surface-brd);
 }
-.qs-skel:last-child{ border-bottom: none; }
 
 /* Promo card rebuilt as a ribbon banner: icon medallion breaks out of
    the top edge instead of sitting inline, card leans on one strong
@@ -523,24 +612,57 @@ html, body.app-body{
    sheet without introducing a new visual language.
    ============================================================ */
 .soon-grid{
-  display:grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3);
+  display:grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3);
   margin-top: var(--sp-2);
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
+/* Base card shell — the per-teaser accent (background/border/badge
+   color) is set individually below by id, so "Restaurants",
+   "Markets" and "Other services / مكتب المستقبل" each carry their
+   own distinct, attractive identity while still belonging visually
+   to the shared marketplace section above. Same premium double-
+   shadow + soft asymmetric corner language as the transport rows. */
 .soon-card{
-  display:flex; flex-direction:column; align-items:center; gap:4px;
-  padding: var(--sp-4) var(--sp-2);
-  border-radius: var(--app-r-md);
-  border: 1px dashed var(--surface-brd);
-  background: var(--surface-2, rgba(29,111,209,0.05));
-  position:relative; opacity:.85;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding: 18px var(--sp-2) 15px;
+  border-radius: 20px 20px 20px 9px;
+  border: 1px solid var(--surface-brd);
+  background: var(--surface);
+  box-shadow: var(--elev-premium);
+  position:relative;
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
 }
-.soon-ic{ font-size:22px; line-height:1; }
-.soon-label{ font-size:12.5px; font-weight:700; color: var(--text); }
+.soon-card:active{ transform: scale(0.96); box-shadow: var(--elev-premium-active); }
+.soon-ic{
+  font-size:21px; line-height:1;
+  width:46px; height:46px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(255,255,255,0.6);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+}
+.soon-label{ font-size:12.5px; font-weight:800; color: var(--text); text-align:center; }
 .soon-badge{
-  font-size:10px; font-weight:700; color: var(--gold-text);
-  background: var(--gold-dim); border-radius: 999px;
-  padding: 2px 9px; margin-top:2px;
+  font-size:9.5px; font-weight:800; color: var(--teal-text);
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 999px;
+  padding: 3px 10px; margin-top:1px;
+  box-shadow: 0 2px 6px -3px rgba(11,32,54,0.25);
 }
+#soonCardRestaurants{ background: var(--mk-food-dim); border-color: rgba(193,98,45,0.22); }
+#soonCardRestaurants .soon-badge{ color: var(--mk-food-text); }
+#soonCardMarkets{ background: var(--mk-grocery-dim); border-color: rgba(47,158,92,0.22); }
+#soonCardMarkets .soon-badge{ color: var(--mk-grocery-text); }
+#soonCardOtherServices{ background: var(--mk-service-dim); border-color: rgba(169,119,43,0.24); }
+#soonCardOtherServices .soon-badge{ color: var(--mk-service-text); }
+/* مكتب المستقبل للقرطاسية والطباعة — fully independent card, its own
+   ink/navy identity (pen-and-paper, print) distinct from the other
+   three and from transport blue. */
+#soonCardFutureOffice{ background: var(--mk-stationery-dim); border-color: rgba(62,76,99,0.26); }
+#soonCardFutureOffice .soon-badge{ color: var(--mk-stationery-text); }
 
 /* ============================================================
    Customer ads carousel
@@ -675,42 +797,51 @@ html, body.app-body{
 /* ---- Skeleton shimmer (shared) ---- */
 @keyframes skel-shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
 
-/* ---- Booking view ----
-   Service pills are pinned in a wrapping row — every service is always
-   fully visible with no horizontal drag/swipe needed. */
-.svc-switch{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
-/* Stage — pill now shows the same realistic, full-color vehicle icon
-   used in the service list (the injected <svg>) instead of a hidden
-   svg + single-tone masked silhouette, so the active/selected service
-   is recognizable by its actual icon, not just a color change. */
+/* ---- Booking view — service switcher ----
+   Rebuilt as a vertical stack of cards (one per service, same unified
+   card template as the home list — same radius/border/shadow/spacing),
+   instead of a horizontal row of pills, so switching service while
+   booking reads as a proper option list rather than tags. Same
+   #svcSwitch id / .svc-pill markup and click handler from
+   buildServiceSwitch() in app.js — visual shape only. */
+.svc-switch{ display:flex; flex-direction:column; gap: var(--sp-3); margin-bottom: var(--sp-5); }
 .svc-pill{
-  flex: 1 1 auto;
-  display:flex; align-items:center; justify-content:center; gap:7px;
-  padding: 9px 14px;
-  border-radius: var(--r-pill);
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--app-r-md);
   background: var(--surface);
   border: 1px solid var(--surface-brd);
-  font-size: 13px; font-weight:700; color: var(--text-muted);
-  min-height: 44px;
-  white-space: nowrap;
-  transition: all .2s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: var(--elev-1);
+  font-size: 14px; font-weight:700; color: var(--text);
+  min-height: 64px;
+  text-align: right;
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .15s cubic-bezier(.34,1.56,.64,1);
 }
-.svc-pill:active{ transform: scale(0.94); }
-.svc-pill.active{ background: linear-gradient(180deg,var(--teal-soft),var(--teal)); color:#fff; border-color:transparent; box-shadow: 0 6px 16px -6px rgba(29,111,209,0.6); }
+.svc-pill:active{ transform: scale(0.985); }
+/* One unified active style for every service — a single accent
+   (primary blue), not a different color per card, matching the rest
+   of the design system. */
+.svc-pill.active{
+  background: var(--teal-dim);
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal) inset, var(--elev-1);
+  color: var(--teal-text);
+}
 .svc-pill svg{
-  width:20px; height:20px; flex-shrink:0;
-  filter: drop-shadow(0 1px 1px rgba(11,32,54,0.18));
+  width:34px; height:34px; flex-shrink:0;
+  filter: drop-shadow(0 1px 2px rgba(11,32,54,0.18));
   transition: transform .2s cubic-bezier(.34,1.56,.64,1);
 }
-.svc-pill.active svg{ transform: scale(1.08); }
+.svc-pill.active svg{ transform: scale(1.05); }
 /* Real vehicle photo version of the pill icon (see .qs-row-photo). */
 .svc-pill-photo{
-  width:22px; height:22px; border-radius:50%; flex-shrink:0;
+  width:40px; height:40px; border-radius:50%; flex-shrink:0;
   object-fit:cover; object-position:center;
-  box-shadow: 0 1px 3px rgba(11,32,54,0.25);
+  box-shadow: 0 2px 5px rgba(11,32,54,0.22), 0 0 0 2px var(--surface);
   transition: transform .2s cubic-bezier(.34,1.56,.64,1);
 }
-.svc-pill.active .svc-pill-photo{ transform: scale(1.08); box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 0 0 2px rgba(255,255,255,0.55); }
+.svc-pill.active .svc-pill-photo{ transform: scale(1.05); box-shadow: 0 2px 5px rgba(11,32,54,0.22), 0 0 0 2px var(--teal-soft); }
 
 .map-target-toggle{ display:flex; gap:8px; margin-bottom:14px; }
 .mt-btn{
@@ -755,7 +886,7 @@ html, body.app-body{
   box-shadow: 0 0 0 3px var(--surface);
 }
 .route-dot.start{ background: var(--teal); }
-.route-dot.end{ background: var(--gold); }
+.route-dot.end{ background: var(--green); }
 .route-line{
   flex:1; width:2px; margin: 4px 0;
   background-image: repeating-linear-gradient(180deg, var(--surface-brd) 0 4px, transparent 4px 8px);
@@ -1129,7 +1260,7 @@ body.kb-open .recenter-fab{ opacity: 0; pointer-events: none; }
 body.kb-open .sheet{ transition: none; }
 
 /* ============================================================
-   Fixed full-screen layout pass
+   Full-screen views + scrollable home layout
    ------------------------------------------------------------
    1) Any view other than "home" (booking, submitting, status,
       orders, support, more, profile) is a full 100dvh screen:
@@ -1137,19 +1268,20 @@ body.kb-open .sheet{ transition: none; }
       (already flex:1 in the .app-shell column) simply grows to
       fill the freed space — no new height math needed. Toggled
       by showView()/backToHome() in app.js via
-      .app-shell.is-fullscreen-view; no id/class removed.
-   2) The home view itself becomes a genuinely fixed, non-
-      scrolling screen: a compact search bar on top, then a
-      two-column row (6 core services / restaurants+markets+
-      other-services teaser) that fills exactly what's left
-      above the bottom nav. #quickServices, #soonCardRestaurants,
-      #soonCardMarkets, #soonCardOtherServices, .promo-card and
-      #adsCarousel all keep their exact ids/classes — only how
-      they're arranged/sized on screen changes. .promo-card and
-      #adsCarousel are hidden in this fixed layout (still fully
-      populated by app.js behind the scenes) since a genuinely
-      no-scroll two-column home screen has no vertical room left
-      for them.
+      .app-shell.is-fullscreen-view; no id/class removed. This
+      is exactly how the "open service full-screen, only that
+      service's data, back button returns to the full home
+      screen" behavior is implemented — unchanged here.
+   2) The home view is a normal, vertically scrollable screen
+      below the fixed map: search bar, then the 6 service cards
+      stacked one under another (one unified card template — see
+      .qs-row above), then the restaurants/markets/other-services
+      section as its own block underneath. #quickServices,
+      #soonCardRestaurants, #soonCardMarkets,
+      #soonCardOtherServices, .promo-card and #adsCarousel all
+      keep their exact ids/classes — only how they're arranged on
+      screen changes, and they are visible again now that the
+      screen scrolls instead of being locked to a fixed height.
    ============================================================ */
 
 /* ---- 1) Full-screen non-home views ---- */
@@ -1166,145 +1298,78 @@ body.kb-open .sheet{ transition: none; }
 .app-shell.is-fullscreen-view .sheet-scroll{
   padding-top: calc(env(safe-area-inset-top) + var(--sp-3));
 }
-/* Non-home views keep a scroll fallback (booking has many required
-   fields; hard-blocking overflow there would hide the submit button
-   on shorter phones or with the keyboard open, which would break
-   real functionality — that is a worse outcome than an occasional,
-   near-invisible internal scroll). No swipe/drag "sheet" gesture of
-   any kind is possible either way — the sheet itself never moves. */
 .app-shell.is-fullscreen-view .sheet-scroll{
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-/* ---- 2) Home view — fixed, two-column, no scroll at all ---- */
+/* ---- 2) Home view — normal scroll, stacked sections ---- */
 .app-shell:not(.is-fullscreen-view) .sheet-scroll{
-  overflow: hidden;
-  touch-action: none;
-  padding-bottom: calc(var(--bnav-h, 76px) + var(--sp-3) + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--bnav-h, 76px) + var(--sp-4) + env(safe-area-inset-bottom));
 }
-.sheet-view[data-view="home"]{ height: 100%; }
+.sheet-view[data-view="home"]{ height: auto; }
 .sheet-view[data-view="home"].active{
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
+  display: block;
 }
 .home-fixed{
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
+  display: block;
 }
 .home-fixed .where-to{
-  flex: 0 0 auto;
-  margin: 0 0 var(--sp-3);
+  margin: 0 0 var(--sp-5);
   min-height: 46px;
   padding: var(--sp-3) var(--sp-4);
 }
+/* Stacked sections — services first, then the restaurants/markets/
+   other-services block underneath, each full width. Same
+   #quickServices / .soon-grid markup, just arranged as a column
+   instead of two side-by-side halves. */
 .home-columns{
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
-  flex-direction: row;
-  gap: var(--sp-3);
+  flex-direction: column;
+  gap: var(--sp-6);
 }
 .home-col{
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.home-col .section-label{
-  flex: 0 0 auto;
-  font-size: 10.5px;
-  margin-bottom: var(--sp-2);
-}
-/* .promo-card / #adsCarousel stay in the DOM (still populated by
-   loadCustomerAds()/etc.) but are not part of the fixed no-scroll
-   home layout. */
-.sheet-view[data-view="home"] > .promo-card,
-.sheet-view[data-view="home"] > .ads-carousel{
-  display: none;
-}
-
-/* Six core services — compact 2×3 grid instead of a tall vertical
-   list, so all six always fit inside their half of the screen with
-   no scroll. Same #quickServices id, same .qs-row markup/click
-   handler from buildQuickServiceChips() — only the visual shape of
-   each row changes (vertical icon+label tile instead of a full-width
-   row with subtitle + chevron). */
-.home-col-services #quickServices{
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(3, 1fr);
-  gap: 6px;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  margin-bottom: 0;
-}
-.home-col-services .qs-row{
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 3px;
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding: 4px 2px;
-  text-align: center;
-  border: 1px solid var(--surface-brd);
-  border-radius: var(--app-r-sm);
-  background: var(--surface);
 }
-.home-col-services .qs-row-ic{ width: 32px; height: 32px; }
-.home-col-services .qs-row-photo{ width: 30px; height: 30px; }
-.home-col-services .qs-row-ic svg{ width: 26px; height: 26px; }
-.home-col-services .qs-row-label{ align-items: center; gap: 0; }
-.home-col-services .qs-row-label b{ font-size: 10.5px; line-height: 1.15; }
-.home-col-services .qs-row-label span{ display: none; } /* tagline hidden to save space, not removed from the DOM */
-.home-col-services .qs-row-chev{ display: none; }
-.home-col-services .qs-skel{ height: 100%; border-bottom: none; border-radius: var(--app-r-sm); }
+.home-col .section-label{ margin-bottom: var(--sp-3); }
 
-/* Restaurants / markets / other-services teaser — single stacked
-   column (instead of a 2-col grid) so it lines up with the services
-   grid opposite it. Same #soonCard* ids, same loadFutureServices()
-   swap-in logic; text is clamped to 2 lines so a long real name list
-   from that RPC can never grow the card past the fixed row height. */
-.home-col-more .soon-grid{
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 0;
+/* Each home section is its own independent, self-contained block —
+   a soft colored wash + hairline border in that section's accent,
+   so "Transport & Delivery" and "Restaurants / Markets / Other
+   services" read as two clearly separate product areas rather than
+   one continuous list. Purely a wrapping background on the existing
+   .home-col elements — no markup added or removed. Asymmetric corner
+   (one softer, "designed" corner) plus a gentle ambient shadow gives
+   each section the weight of a real panel rather than a flat tint. */
+.home-col-services{
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  border-radius: 26px 26px 26px 12px;
+  background: linear-gradient(165deg, var(--sec-transport-dim) 0%, rgba(255,255,255,0) 60%);
+  border: 1px solid rgba(29,111,209,0.13);
+  box-shadow: 0 18px 38px -30px rgba(29,111,209,0.45);
 }
-.home-col-more .soon-card{
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: var(--sp-2);
-  padding: 4px var(--sp-3);
-  min-height: 0;
-  overflow: hidden;
+.home-col-services .section-label::before{
+  background: linear-gradient(90deg, var(--sec-transport), var(--teal-soft));
 }
-.home-col-more .soon-ic{ font-size: 18px; flex-shrink: 0; }
-.home-col-more .soon-label{ font-size: 11px; flex-shrink: 0; }
-.home-col-more .soon-badge{
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
-  text-align: right;
-  margin-top: 0;
-  font-size: 10px;
+.home-col-more{
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  border-radius: 26px 26px 26px 12px;
+  background: linear-gradient(165deg, var(--sec-market-dim) 0%, rgba(255,255,255,0) 60%);
+  border: 1px solid rgba(193,98,45,0.15);
+  box-shadow: 0 18px 38px -30px rgba(193,98,45,0.4);
 }
+.home-col-more .section-label::before{
+  background: linear-gradient(90deg, var(--sec-market), var(--sec-market-soft));
+}
+
+/* .promo-card / #adsCarousel are shown again below the two sections
+   now that the home screen scrolls — still populated exactly as
+   before by loadCustomerAds()/etc., nothing in app.js changes. */
+.sheet-view[data-view="home"] > .promo-card{ margin-top: var(--sp-2); }
+.sheet-view[data-view="home"] > .ads-carousel{ margin-top: var(--sp-3); }
 
 /* ---------------- Responsive ----------------
    On wider viewports the ENTIRE fixed app shell (header, map card
@@ -1323,11 +1388,9 @@ body.kb-open .sheet{ transition: none; }
     border-inline: 1px solid var(--surface-brd);
     box-shadow: var(--elev-3);
   }
-  .bottom-nav{
-    left: 50%; right: auto;
-    transform: translateX(-50%);
-    width: calc(430px - 28px);
-  }
+  /* .bottom-nav's own wide-viewport rule lives with its definition
+     further down, since it is now an edge-to-edge bar rather than a
+     floating pill needing side margins here. */
 }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
@@ -1386,53 +1449,58 @@ body.kb-open .sheet{ transition: none; }
 }
 
 /* ============================================================
-   Bottom navigation bar — rebuilt as a detached floating pill
-   instead of an edge-to-edge bar: margin on both sides, fully
-   rounded corners, its own elevation. The active tab is raised
-   above the bar line as a solid gradient disc (a small "lift"
-   moment) instead of a soft tint pill sitting flush inside the
-   bar — a genuinely different navigation silhouette. Every id/
-   class app.js toggles (.active on .bnav-item) is unchanged.
+   Bottom navigation bar — v7: rebuilt as a solid, edge-to-edge
+   fixed bar (not a detached floating pill) so it can never leave a
+   visible gap to the screen edge on any device: its own background
+   extends all the way to the physical bottom edge, with the home-
+   indicator/safe-area strip baked into its own padding rather than
+   sitting below it. Position is `fixed` and never moves with
+   scrolling; .sheet-scroll's padding-bottom (above) already reserves
+   exactly --bnav-h so page content never sits under it. Every id/
+   class app.js toggles (.active on .bnav-item) is unchanged — only
+   the visual shell changes.
    ============================================================ */
-:root{ --bnav-h: 76px; }
+:root{ --bnav-h: 78px; }
 .bottom-nav{
   position: fixed;
-  left:14px; right:14px; bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 0; right: 0; bottom: 0;
   z-index: 50;
   display:flex; align-items:stretch;
-  height: 62px;
-  padding: 0 4px;
-  border-radius: var(--app-r-pill);
+  height: calc(66px + env(safe-area-inset-bottom));
+  padding: 0 4px calc(env(safe-area-inset-bottom));
+  border-radius: var(--app-r-lg) var(--app-r-lg) 0 0;
   background: rgba(255,255,255,0.98);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--surface-brd);
-  box-shadow: var(--elev-3);
+  border-top: 1px solid var(--surface-brd);
+  box-shadow: 0 -8px 24px -16px rgba(11,32,54,0.28);
+}
+@media (min-width: 640px){
+  /* Keeps the bar visually attached to the centered phone-width
+     frame on wide viewports, matching .app-shell's own frame. */
+  .bottom-nav{ left:50%; right:auto; transform: translateX(-50%); width: 430px; }
 }
 .bnav-item{
   flex:1;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   font-size: 9.5px; font-weight:800; letter-spacing:0.01em;
   color: var(--text-faint);
   position: relative;
 }
 .bnav-icon{
   display:flex; align-items:center; justify-content:center;
-  width:34px; height:34px;
-  border-radius: 50%;
-  transition: background .25s cubic-bezier(.34,1.56,.64,1), transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+  width:40px; height:26px;
+  border-radius: var(--app-r-pill);
+  transition: background .22s cubic-bezier(.34,1.56,.64,1), transform .18s cubic-bezier(.34,1.56,.64,1);
 }
-.bnav-icon svg{ width:19px; height:19px; transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
-.bnav-item.active{ color: var(--gold-text); }
+.bnav-icon svg{ width:19px; height:19px; transition: transform .2s cubic-bezier(.34,1.56,.64,1), color .2s; color: var(--text-faint); }
+.bnav-item.active{ color: var(--teal-text); }
 .bnav-item.active .bnav-icon{
-  background: linear-gradient(150deg, var(--gold-soft) 0%, var(--teal) 40%, var(--teal) 100%);
-  transform: translateY(-14px) scale(1.12);
-  box-shadow: 0 10px 20px -8px rgba(229,184,92,0.6);
+  background: var(--teal-dim);
 }
-.bnav-item.active .bnav-icon svg{ color:#fff; transform: scale(1.02); }
-.bnav-item.active span:last-child{ transform: translateY(-8px); }
-.bnav-item:active .bnav-icon{ transform: translateY(-14px) scale(0.94); }
-.bnav-item:not(.active):active .bnav-icon{ transform: scale(0.88); background: var(--surface-hi); }
+.bnav-item.active .bnav-icon svg{ color: var(--teal); transform: scale(1.04); }
+.bnav-item:active .bnav-icon{ transform: scale(0.9); }
+.bnav-item:not(.active):active .bnav-icon{ background: var(--surface-hi); }
 
 /* ============================================================
    In-place FAQ section header
