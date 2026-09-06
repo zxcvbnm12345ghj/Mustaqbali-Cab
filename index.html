@@ -199,6 +199,16 @@
     </defs>
   </svg>
 
+  <!-- Decorative search pill over the map, matching the reference's map
+       search bar. Purely additive: tapping it calls the exact same
+       openBooking() action as the "إلى أين تذهب؟" bar below (wired in
+       the additive script at the end of <body>) — no new destination,
+       no new logic, just a second, visually-obvious entry point. -->
+  <button type="button" class="map-search-pill" id="mapSearchPill" aria-label="ابحث عن موقع">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>ابحث عن موقع...</span>
+  </button>
+
   <button class="fab recenter-fab" id="recenterBtn" aria-label="تحديد موقعي الحالي">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     <span>موقعي الحالي</span>
@@ -237,7 +247,10 @@
           </div>
 
           <div class="home-col home-col-more">
-            <p class="section-label">المطاعم والأسواق</p>
+            <div class="section-label-row">
+              <p class="section-label">المطاعم والأسواق</p>
+              <span class="section-label-more">عرض الكل ‹</span>
+            </div>
             <!-- Future services teaser — starts as display-only "قريباً"
                  cards (no click handler, no data-service attribute, no
                  booking logic). loadFutureServices() in app.js reads the
@@ -293,23 +306,49 @@
       </div>
       </section>
 
-      <!-- BOOKING view -->
+      <!-- BOOKING view — presented as a 4-step wizard (الخدمة / الموقع /
+           بياناتك / التأكيد) to match the reference design's step flow.
+           IMPORTANT: this is a purely visual/navigational layer. Every
+           field below keeps its exact id, order and parent — nothing is
+           moved out of the <form>, nothing is renamed, no validation or
+           submit logic changes. Each existing block only gains a
+           data-wizard-step="N" attribute; a small additive script at the
+           end of <body> toggles which step is visible and drives the new
+           progress header + رجوع/التالي buttons (also new, additive —
+           the ORIGINAL .sheet-back "رجوع" button is untouched and still
+           always exits straight to the home screen exactly as before).
+           The real submit button (#bookSubmitBtn) only becomes visible
+           on the last step, but it is the exact same button/handler as
+           always — nothing fake is added; there is no invented pricing
+           tier here (the app only ever computes one real price per
+           service), so step 1 shows the real service picker only. -->
       <section class="sheet-view" data-view="booking">
         <button type="button" class="sheet-back" data-back="home">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           رجوع
         </button>
-        <h2 class="sheet-title">تفاصيل رحلتك</h2>
+        <h2 class="sheet-title">حجز رحلتك</h2>
 
-        <div class="svc-switch" id="svcSwitch"></div>
+        <div class="wizard-progress" aria-hidden="true">
+          <div class="wp-step" data-wp-step="1"><span class="wp-dot">1</span><span class="wp-label">الخدمة</span></div>
+          <span class="wp-line"></span>
+          <div class="wp-step" data-wp-step="2"><span class="wp-dot">2</span><span class="wp-label">الموقع</span></div>
+          <span class="wp-line"></span>
+          <div class="wp-step" data-wp-step="3"><span class="wp-dot">3</span><span class="wp-label">بياناتك</span></div>
+          <span class="wp-line"></span>
+          <div class="wp-step" data-wp-step="4"><span class="wp-dot">4</span><span class="wp-label">التأكيد</span></div>
+        </div>
 
-        <div class="drivers-list-app" id="driversListApp" hidden></div>
+        <div class="svc-switch" id="svcSwitch" data-wizard-step="1"></div>
+        <p class="svc-switch-caption" id="svcSwitchCaption" data-caption-for="taxi" data-wizard-step="1" aria-hidden="true"></p>
 
-        <div class="map-target-toggle" id="mapTargetToggle">
+        <div class="drivers-list-app" id="driversListApp" data-wizard-step="1" hidden></div>
+
+        <div class="map-target-toggle" id="mapTargetToggle" data-wizard-step="2">
           <button type="button" class="mt-btn active" data-target="pickup">📍 تحديد الانطلاق على الخريطة</button>
           <button type="button" class="mt-btn" data-target="dropoff">🏁 تحديد الوجهة على الخريطة</button>
         </div>
-        <div class="distance-tag" id="distanceTag" hidden></div>
+        <div class="distance-tag" id="distanceTag" data-wizard-step="2" hidden></div>
 
         <form id="requestForm" novalidate>
           <!-- Stage — pickup + dropoff now presented as one connected
@@ -320,7 +359,7 @@
                (same ids, same label-follows-input order), so every
                existing selector/listener in app.js/app.css keeps
                working exactly as before. -->
-          <div class="route-card">
+          <div class="route-card" data-wizard-step="2">
             <span class="route-connector" aria-hidden="true">
               <span class="route-dot start"></span>
               <span class="route-line"></span>
@@ -357,42 +396,51 @@
             </div>
           </div>
 
-          <div class="float-field">
+          <div class="float-field" data-wizard-step="3">
             <input type="text" id="customerName" placeholder=" " maxlength="100" required autocomplete="name">
             <label for="customerName">الاسم الكامل</label>
             <span class="field-error" id="errName"></span>
           </div>
 
-          <div class="float-field">
+          <div class="float-field" data-wizard-step="3">
             <input type="tel" id="phone" placeholder=" " maxlength="20" required autocomplete="tel" inputmode="tel">
             <label for="phone">رقم الجوال</label>
             <span class="field-hint">مثال: 07xxxxxxxxx</span>
             <span class="field-error" id="errPhone"></span>
           </div>
 
-          <div class="float-field">
+          <div class="float-field" data-wizard-step="3">
             <input type="datetime-local" id="scheduledAt" placeholder=" ">
             <label for="scheduledAt">موعد الرحلة (اختياري)</label>
           </div>
 
-          <div class="float-field">
+          <div class="float-field" data-wizard-step="3">
             <input type="text" id="notes" placeholder=" " maxlength="500" autocomplete="off">
             <label for="notes">ملاحظات (اختياري)</label>
           </div>
 
-          <div class="price-bar">
+          <div class="price-bar" data-wizard-step="4">
             <span>السعر</span>
             <b id="priceEstimate">— دينار</b>
           </div>
 
-          <label class="consent-check" for="consentCheck">
+          <label class="consent-check" for="consentCheck" data-wizard-step="4">
             <input type="checkbox" id="consentCheck">
             <span>أقرّ بصحة المعلومات المدخلة، وأتحمل مسؤولية أي معلومات غير صحيحة، وأوافق على شروط وأحكام الخدمة.</span>
           </label>
 
-          <button type="submit" class="app-btn" id="bookSubmitBtn" disabled><span id="bookBtnLabel">اطلب تكسي الآن</span></button>
-          <div class="app-msg" id="appMsg"></div>
+          <button type="submit" class="app-btn" id="bookSubmitBtn" data-wizard-step="4" disabled><span id="bookBtnLabel">اطلب تكسي الآن</span></button>
+          <div class="app-msg" id="appMsg" data-wizard-step="4"></div>
         </form>
+
+        <!-- New, additive wizard navigation — does not replace or alter
+             the "رجوع" button above (still exits to home unchanged) or
+             #bookSubmitBtn (still the real, only submit action, shown
+             automatically once step 4 is reached). -->
+        <div class="wizard-nav">
+          <button type="button" class="app-btn secondary" id="wizardBackBtn" hidden>السابق</button>
+          <button type="button" class="app-btn" id="wizardNextBtn">التالي</button>
+        </div>
       </section>
 
       <!-- SUBMITTING view -->
@@ -464,6 +512,18 @@
       <!-- ORDERS view (طلباتي) — current + past requests, by phone -->
       <section class="sheet-view" data-view="orders">
         <h2 class="sheet-title">طلباتي</h2>
+
+        <!-- Additive, client-side-only filter chips: they never change
+             what loadOrdersTab() fetches — only which of the already-
+             rendered .order-card elements stay visible. "الكل" is the
+             real, unfiltered list exactly as before. -->
+        <div class="orders-filter" id="ordersFilter">
+          <button type="button" class="of-chip active" data-order-filter="all">الكل</button>
+          <button type="button" class="of-chip" data-order-filter="تكسي">تكسي</button>
+          <button type="button" class="of-chip" data-order-filter="خصوصي">خصوصي</button>
+          <button type="button" class="of-chip" data-order-filter="دليفري">دليفري</button>
+        </div>
+
         <div class="orders-list" id="ordersList"></div>
         <div class="orders-empty" id="ordersEmpty" hidden>
           <span class="orders-empty-ic">
@@ -629,24 +689,108 @@
         </div>
       </section>
 
-      <!-- PROFILE view (بياناتي) -->
+      <!-- PROFILE view (حسابي) — restyled into a full account page
+           (header card + navigable list) to match the reference
+           design. Every original id (#profileName, #profilePhone,
+           #profileSaveBtn, #profileMsg) is untouched and in the same
+           relative order, so loadProfileIntoForm()/the save handler
+           in app.js keep working exactly as before. Everything else
+           here is new, additive markup: the header card and the
+           list rows are wired by a small additive script at the end
+           of <body> that only calls the existing showView()/more-
+           toggle logic already in app.js — no existing function is
+           modified. Rows for features that don't exist yet in the
+           app (favorites, saved addresses, payment methods, settings)
+           are shown as inert "قريباً" rows, the same pattern already
+           used for المطاعم/الأسواق on the home screen. -->
       <section class="sheet-view" data-view="profile">
-        <h2 class="sheet-title">بياناتي</h2>
-        <p class="section-label" style="margin-top:-8px;">تُستخدم هذه البيانات لتعبئة نموذج الطلب تلقائياً في كل مرة</p>
+        <h2 class="sheet-title">حسابي</h2>
 
-        <div class="float-field">
-          <input type="text" id="profileName" placeholder=" " maxlength="100" autocomplete="name">
-          <label for="profileName">الاسم الكامل</label>
+        <div class="account-card">
+          <span class="account-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span class="account-avatar-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.2l.8-1.4A2 2 0 0 1 9.7 3.6h4.6a2 2 0 0 1 1.7 1L17 6h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.5"/></svg>
+            </span>
+          </span>
+          <div class="account-id">
+            <b id="accountDisplayName">زائر</b>
+            <span id="accountDisplayPhone">أضف بياناتك أدناه</span>
+          </div>
+          <span class="account-badge">⭐ عضو يمّك</span>
         </div>
 
-        <div class="float-field">
-          <input type="tel" id="profilePhone" placeholder=" " maxlength="20" autocomplete="tel" inputmode="tel">
-          <label for="profilePhone">رقم الهاتف</label>
-          <span class="field-hint">مثال: 07xxxxxxxxx</span>
+        <p class="section-label">بياناتي الشخصية</p>
+        <div class="account-form-card">
+          <div class="float-field">
+            <input type="text" id="profileName" placeholder=" " maxlength="100" autocomplete="name">
+            <label for="profileName">الاسم الكامل</label>
+          </div>
+
+          <div class="float-field">
+            <input type="tel" id="profilePhone" placeholder=" " maxlength="20" autocomplete="tel" inputmode="tel">
+            <label for="profilePhone">رقم الهاتف</label>
+            <span class="field-hint">مثال: 07xxxxxxxxx</span>
+          </div>
+
+          <button type="button" class="app-btn" id="profileSaveBtn">حفظ البيانات</button>
+          <div class="app-msg" id="profileMsg"></div>
         </div>
 
-        <button type="button" class="app-btn" id="profileSaveBtn">حفظ البيانات</button>
-        <div class="app-msg" id="profileMsg"></div>
+        <div class="account-list">
+          <button type="button" class="account-row" data-account-link="orders">
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-7.15 7-12a7 7 0 1 0-14 0c0 4.85 7 12 7 12Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9" r="2.35" stroke="currentColor" stroke-width="1.7"/></svg></span>
+            <span class="account-row-label">طلباتي ونشاطي</span>
+            <span class="account-row-chev">‹</span>
+          </button>
+
+          <button type="button" class="account-row is-soon" disabled>
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.6-9.3-9A5.4 5.4 0 0 1 12 6a5.4 5.4 0 0 1 9.3 6c-2.3 4.4-9.3 9-9.3 9Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+            <span class="account-row-label">المفضلة</span>
+            <span class="account-row-soon">قريباً</span>
+          </button>
+
+          <button type="button" class="account-row is-soon" disabled>
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-7.15 7-12a7 7 0 1 0-14 0c0 4.85 7 12 7 12Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+            <span class="account-row-label">العناوين المحفوظة</span>
+            <span class="account-row-soon">قريباً</span>
+          </button>
+
+          <button type="button" class="account-row is-soon" disabled>
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M3 9.5h18" stroke="currentColor" stroke-width="1.7"/></svg></span>
+            <span class="account-row-label">وسائل الدفع</span>
+            <span class="account-row-soon">قريباً</span>
+          </button>
+
+          <button type="button" class="account-row is-soon" disabled>
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.86 2.86l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.56V19.6a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.87.34l-.07.06a2 2 0 1 1-2.86-2.86l.07-.06a1.7 1.7 0 0 0 .33-1.88 1.7 1.7 0 0 0-1.55-1H4.4a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.34-1.87l-.06-.07A2 2 0 1 1 8.51 2.6l.06.07a1.7 1.7 0 0 0 1.88.33H10.5a1.7 1.7 0 0 0 1-1.55V1.4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.86 2.86l-.06.06a1.7 1.7 0 0 0-.34 1.88V6.5a1.7 1.7 0 0 0 1.56 1H19.6a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+            <span class="account-row-label">الإعدادات</span>
+            <span class="account-row-soon">قريباً</span>
+          </button>
+
+          <button type="button" class="account-row" data-account-link="support">
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M6 8.6a6 6 0 0 1 12 0c0 3.15 1 4.55 1.6 5.35.4.53.1 1.35-.55 1.35H4.95c-.65 0-.95-.82-.55-1.35C5 13.15 6 11.75 6 8.6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.6 17.6a2.5 2.5 0 0 0 4.8 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+            <span class="account-row-label">المساعدة والدعم</span>
+            <span class="account-row-chev">‹</span>
+          </button>
+
+          <button type="button" class="account-row" data-account-link="more-terms">
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l3 3v15H6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9h6M9 13h6M9 17h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <span class="account-row-label">الشروط والأحكام</span>
+            <span class="account-row-chev">‹</span>
+          </button>
+
+          <button type="button" class="account-row" data-account-link="more-about">
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></span>
+            <span class="account-row-label">عن يمّك</span>
+            <span class="account-row-chev">‹</span>
+          </button>
+
+          <button type="button" class="account-row account-row-danger" data-account-link="logout">
+            <span class="account-row-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="account-row-label">تسجيل خروج</span>
+          </button>
+        </div>
       </section>
 
     </div>
@@ -703,5 +847,187 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+
+<!-- Account page (حسابي) wiring — purely additive, same spirit as the
+     screen-fit-fix script at the top of this file: it only reads the
+     same localStorage key app.js already uses for the saved profile
+     ('mustaqbali_profile'/'mustaqbali_login') and calls the existing
+     global showView() function already defined in app.js. No function
+     in app.js is modified, wrapped, or redefined, and no booking/
+     pricing/driver/Supabase logic is touched at all. -->
+<script>
+(function () {
+  function fillAccountHeader() {
+    var nameEl = document.getElementById('accountDisplayName');
+    var phoneEl = document.getElementById('accountDisplayPhone');
+    if (!nameEl || !phoneEl) return;
+    try {
+      var raw = localStorage.getItem('mustaqbali_profile');
+      var p = raw ? JSON.parse(raw) : null;
+      nameEl.textContent = (p && p.name) ? p.name : 'زائر';
+      phoneEl.textContent = (p && p.phone) ? p.phone : 'أضف بياناتك أدناه';
+    } catch (e) { /* non-critical */ }
+  }
+
+  function wireAccountRows() {
+    document.querySelectorAll('[data-account-link]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = btn.dataset.accountLink;
+        if (target === 'logout') {
+          try { localStorage.removeItem('mustaqbali_login'); } catch (e) {}
+          location.reload();
+          return;
+        }
+        if (target === 'more-terms' || target === 'more-about') {
+          if (typeof showView === 'function') showView('more');
+          var key = target === 'more-terms' ? 'terms' : 'about';
+          setTimeout(function () {
+            var toggle = document.querySelector('[data-more-toggle="' + key + '"]');
+            if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+          }, 60);
+          return;
+        }
+        if (typeof showView === 'function') showView(target);
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    fillAccountHeader();
+    wireAccountRows();
+    var profileTab = document.getElementById('bnavProfile');
+    if (profileTab) profileTab.addEventListener('click', fillAccountHeader);
+    var saveBtn = document.getElementById('profileSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', function () { setTimeout(fillAccountHeader, 30); });
+  });
+})();
+</script>
+
+<!-- Reference-mockup pass 2 — map search pill, orders filter chips, and
+     the booking wizard controller. All additive: every action below
+     only calls a function that already exists in app.js
+     (openBooking/showView/validateField) or toggles CSS-driven
+     visibility of elements that already exist — no business logic,
+     RPC call, or validation rule is added, removed, or modified. -->
+<script>
+(function () {
+  function wireMapSearchPill() {
+    var pill = document.getElementById('mapSearchPill');
+    if (!pill) return;
+    pill.addEventListener('click', function () {
+      if (typeof openBooking === 'function') openBooking();
+    });
+  }
+
+  function wireOrdersFilter() {
+    var filterBar = document.getElementById('ordersFilter');
+    var list = document.getElementById('ordersList');
+    if (!filterBar || !list) return;
+
+    function applyFilter() {
+      var active = filterBar.querySelector('.of-chip.active');
+      var value = active ? active.dataset.orderFilter : 'all';
+      list.querySelectorAll('.order-card').forEach(function (card) {
+        var svc = card.querySelector('.order-card-svc');
+        var label = svc ? svc.textContent.trim() : '';
+        card.style.display = (value === 'all' || label === value) ? '' : 'none';
+      });
+    }
+
+    filterBar.addEventListener('click', function (e) {
+      var chip = e.target.closest('.of-chip');
+      if (!chip) return;
+      filterBar.querySelectorAll('.of-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+      applyFilter();
+    });
+
+    // #ordersList is rebuilt asynchronously by the existing
+    // loadOrdersTab() each time the "طلباتي" tab opens — re-apply the
+    // current chip's filter whenever that happens, without touching
+    // loadOrdersTab itself.
+    new MutationObserver(applyFilter).observe(list, { childList: true });
+  }
+
+  function initBookingWizard() {
+    var section = document.querySelector('.sheet-view[data-view="booking"]');
+    var nextBtn = document.getElementById('wizardNextBtn');
+    var backBtn = document.getElementById('wizardBackBtn');
+    if (!section || !nextBtn || !backBtn) return;
+
+    function currentStep() { return Number(section.getAttribute('data-current-step') || '1'); }
+    function setStep(n) {
+      section.setAttribute('data-current-step', String(n));
+      backBtn.hidden = (n === 1);
+      nextBtn.hidden = (n === 4);
+      var scroll = document.getElementById('sheetScroll');
+      if (scroll) scroll.scrollTop = 0;
+    }
+    function validateStep(n) {
+      if (typeof validateField !== 'function') return true;
+      if (n === 2) return validateField('pickup');
+      if (n === 3) {
+        var okName = validateField('customerName');
+        var okPhone = validateField('phone');
+        return okName && okPhone;
+      }
+      return true;
+    }
+
+    nextBtn.addEventListener('click', function () {
+      var n = currentStep();
+      if (!validateStep(n)) return;
+      if (n < 4) setStep(n + 1);
+    });
+    backBtn.addEventListener('click', function () {
+      var n = currentStep();
+      if (n > 1) setStep(n - 1);
+    });
+
+    // Keep the step-1 caption line in sync with whichever service pill
+    // is active — delegated listener alongside app.js's own click
+    // handler on the same #svcSwitch container, purely for this one
+    // decorative caption element.
+    var svcSwitch = document.getElementById('svcSwitch');
+    var caption = document.getElementById('svcSwitchCaption');
+    if (svcSwitch && caption) {
+      svcSwitch.addEventListener('click', function (e) {
+        var pill = e.target.closest('.svc-pill');
+        if (pill && pill.dataset.service) caption.dataset.captionFor = pill.dataset.service;
+      });
+    }
+
+    // Jumping straight from the driver roster (step 1) to a specific
+    // driver's request should land the customer on the location step,
+    // same as it already focuses the pickup field — this only ADDS a
+    // step-2 jump alongside that existing behavior, as a second,
+    // independent listener on the same container/event.
+    var driversList = document.getElementById('driversListApp');
+    if (driversList) {
+      driversList.addEventListener('click', function (e) {
+        if (e.target.closest('[data-driver-action="request"]')) setStep(2);
+      });
+    }
+
+    // Reset to step 1 every time a booking is (re)opened, so a
+    // previous session's wizard progress never leaks into a new one.
+    // Wraps the existing global openBooking() without redefining it.
+    if (typeof window.openBooking === 'function') {
+      var originalOpenBooking = window.openBooking;
+      window.openBooking = function (serviceKey) {
+        originalOpenBooking(serviceKey);
+        setStep(1);
+      };
+    }
+
+    setStep(1);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    wireMapSearchPill();
+    wireOrdersFilter();
+    initBookingWizard();
+  });
+})();
+</script>
 </body>
 </html>

@@ -2546,18 +2546,29 @@ async function loadOrdersTab() {
       const isOpen = !['completed', 'cancelled'].includes(row.status);
       const statusCls = ORDER_STATUS_CLASS[row.status] || 'badge-live';
       const statusLabel = ORDER_STATUS_LABELS[row.status] || row.status;
+      // Presentational-only restructuring below (adds a data-service
+      // attribute + reuses the SAME vehicle image already used
+      // elsewhere in the app — no new icon/asset). All original class
+      // names (order-card-top/-svc/-route/-time, order-track-btn) are
+      // kept exactly as before, so nothing that reads them elsewhere
+      // breaks; only the wrapping markup around them changed.
       return `
-        <div class="order-card">
-          <div class="order-card-top">
-            <span class="req-chip">#${escapeHtml(row.request_number || '')}</span>
-            <span class="${statusCls}">${escapeHtml(statusLabel)}</span>
+        <div class="order-card" data-service="${escapeHtmlAttr(row.service_type || '')}">
+          <div class="order-card-row">
+            <span class="order-card-icon"><img src="${VEHICLE_PHOTOS[row.service_type] || ''}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></span>
+            <div class="order-card-main">
+              <div class="order-card-top">
+                <span class="req-chip">#${escapeHtml(row.request_number || '')}</span>
+                <span class="${statusCls}">${escapeHtml(statusLabel)}</span>
+              </div>
+              <div class="order-card-svc">${escapeHtml(SERVICES[row.service_type]?.label || row.service_type)}</div>
+              <div class="order-card-route">
+                <span>${escapeHtml(row.pickup_location || '—')}</span>
+                ${row.dropoff_location ? `<span class="order-arrow">←</span><span>${escapeHtml(row.dropoff_location)}</span>` : ''}
+              </div>
+              <div class="order-card-time">${formatOrderDateTime(row.created_at)}</div>
+            </div>
           </div>
-          <div class="order-card-svc">${escapeHtml(SERVICES[row.service_type]?.label || row.service_type)}</div>
-          <div class="order-card-route">
-            <span>${escapeHtml(row.pickup_location || '—')}</span>
-            ${row.dropoff_location ? `<span class="order-arrow">←</span><span>${escapeHtml(row.dropoff_location)}</span>` : ''}
-          </div>
-          <div class="order-card-time">${formatOrderDateTime(row.created_at)}</div>
           ${isOpen ? `<button type="button" class="app-btn secondary order-track-btn" data-track-order="${escapeHtml(row.request_number || '')}">تتبع الطلب</button>` : ''}
         </div>
       `;

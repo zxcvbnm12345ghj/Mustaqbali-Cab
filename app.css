@@ -1894,3 +1894,784 @@ select.welcome-input option{ color: var(--text); background: #fff; }
 }
 
 .welcome-intro-btn{ margin-top: 2px; }
+
+/* =========================================================================
+   ============  REDESIGN PASS — reference-image visual overhaul  ==========
+   =========================================================================
+   Added at the end of this file on purpose: CSS cascade order means every
+   rule below wins over an earlier rule of equal specificity for the same
+   selector, so this section can restyle the whole app — tokens, map card,
+   home layout, buttons, bottom nav, account page, orders, booking flow —
+   WITHOUT deleting or rewriting a single rule above it.
+
+   Nothing here:
+   - removes/renames any id or class app.js reads or toggles
+   - changes any function, event handler, RPC call, or business logic
+   - touches the six service images/icons themselves (only the colored
+     tile/background they sit on, via container styles — the <img> src,
+     size ratio and content are untouched)
+   - relies on style.css (not provided) — every custom property used
+     anywhere in this file that wasn't already defined above is defined
+     here from scratch, so this file is fully self-contained.
+   ========================================================================= */
+
+:root{
+  /* ---- Base tokens style.css would otherwise provide — defined here so
+     this file is self-contained and fully controls the palette. ---- */
+  --text: #101B2D;
+  --text-muted: #5C6B84;
+  --text-faint: #93A0B4;
+  --danger: #E5484D;
+  --success: #22C55E;
+  --accent: #F0B429;
+  --f-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+  --f-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+  --shadow-deep: 0 30px 60px -24px rgba(16,27,45,0.45), 0 10px 24px -12px rgba(16,27,45,0.22);
+
+  /* ---- Clean, bright surfaces (white cards on a soft blue-gray wash) ---- */
+  --surface: #FFFFFF;
+  --surface-hi: #F0F4FA;
+  --surface-brd: #E6ECF5;
+  --bg-deep: #0B1E38;
+
+  /* ---- Primary blue + gold membership accent, more saturated / confident ---- */
+  --teal: #2F6FE4;
+  --teal-soft: #6FA0F0;
+  --teal-text: #12408A;
+  --teal-dim: rgba(47,111,228,0.12);
+
+  --gold: #F0B429;
+  --gold-soft: #F7D67B;
+  --gold-text: #8A5A00;
+  --gold-dim: rgba(240,180,41,0.16);
+
+  /* ---- Vivid, distinct per-service colors, matching the reference's
+     colorful icon tiles. Used as SOLID tile backgrounds below — the
+     six existing service images sit on top of these, unmodified. ---- */
+  --svc-taxi: #FFC229;        --svc-taxi-soft: #FFE08A;   --svc-taxi-text: #8A5A00;   --svc-taxi-dim: rgba(255,194,41,0.18);
+  --svc-private: #2F6FE4;     --svc-private-soft: #7AA6F2; --svc-private-text: #12408A; --svc-private-dim: rgba(47,111,228,0.14);
+  --svc-courier: #FF7A33;     --svc-courier-soft: #FFAA7A; --svc-courier-text: #9A3F0B; --svc-courier-dim: rgba(255,122,51,0.16);
+  --svc-cargo: #22C55E;       --svc-cargo-soft: #6EE29A;  --svc-cargo-text: #14803D;  --svc-cargo-dim: rgba(34,197,94,0.16);
+  --svc-starx: #8B5CF6;       --svc-starx-soft: #B9A0FA;  --svc-starx-text: #5133A6;  --svc-starx-dim: rgba(139,92,246,0.16);
+  --svc-intercity: #1D6FD1;   --svc-intercity-soft: #5B93E0; --svc-intercity-text: #123E73; --svc-intercity-dim: rgba(29,111,209,0.14);
+
+  /* ---- Rounder shape language, closer to the reference's soft cards ---- */
+  --app-r-xs: 12px;  --app-r-sm: 16px;  --app-r-md: 20px;
+  --app-r-lg: 26px;  --app-r-xl: 32px;  --app-r-pill: 100px;
+
+  /* ---- Lighter, cleaner elevation — soft ambient shadows, not heavy ---- */
+  --elev-1: 0 2px 14px -8px rgba(16,27,45,0.12);
+  --elev-2: 0 14px 30px -18px rgba(16,27,45,0.16);
+  --elev-3: 0 24px 50px -22px rgba(16,27,45,0.22);
+  --elev-premium: 0 16px 34px -22px rgba(16,27,45,0.18), 0 2px 6px -2px rgba(16,27,45,0.05);
+  --elev-premium-active: 0 8px 18px -12px rgba(16,27,45,0.16);
+
+  --app-map-h: clamp(230px, 32vh, 300px);
+}
+
+/* ---------------------------------------------------------------
+   Background / map card — softer card, thinner border, gentler glow
+   --------------------------------------------------------------- */
+html, body.app-body{ background: var(--bg-deep); }
+.app-shell{ background: var(--bg-deep); }
+#map{
+  border-radius: var(--app-r-xl) var(--app-r-xl) var(--app-r-md) var(--app-r-md);
+  border: none;
+  box-shadow: var(--elev-2);
+}
+.map-skeleton{ border-radius: var(--app-r-xl) var(--app-r-xl) var(--app-r-md) var(--app-r-md); }
+.leaflet-tile-pane{ filter: saturate(1.08) brightness(1.03) contrast(1.02); }
+
+/* Recenter control — icon-only circular button (reference shows a small
+   plain circular map control, not a text pill). Label kept in the DOM
+   for accessibility/app.js, just visually hidden. */
+.recenter-fab{
+  width: 46px; height: 46px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+  inset-inline-end: var(--sp-4);
+  top: calc(env(safe-area-inset-top) + var(--sp-3) + var(--app-map-h) - 58px);
+  background: #fff;
+  box-shadow: var(--elev-2);
+}
+.recenter-fab span{ display:none; }
+.recenter-fab svg{ width:20px; height:20px; }
+
+/* ---------------------------------------------------------------
+   Sheet — cleaner white panel, rounder top corners
+   --------------------------------------------------------------- */
+.sheet{
+  background: var(--surface);
+  border: none;
+  border-top-right-radius: var(--app-r-xl);
+  border-top-left-radius: var(--app-r-xl);
+  box-shadow: 0 -10px 30px -20px rgba(16,27,45,0.3);
+}
+.sheet::before{
+  content:'';
+  top: 10px; inset-inline: 0; height: 4px; width: 44px;
+  margin: 0 auto;
+  border-radius: 100px;
+  background: var(--surface-brd);
+}
+.sheet-scroll{ padding-top: var(--sp-4); }
+
+/* ---------------------------------------------------------------
+   "إلى أين تذهب؟" — floating rounded search/location card
+   --------------------------------------------------------------- */
+.home-fixed .where-to,
+.where-to{
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg);
+  box-shadow: var(--elev-1);
+  padding: 15px var(--sp-4);
+  gap: var(--sp-3);
+}
+.where-to svg{ color: var(--teal); flex-shrink:0; }
+.where-to span{ font-weight: 800; color: var(--text); }
+
+/* ---------------------------------------------------------------
+   HOME — stacked, scrolling sections (search → 5 services + one
+   full-width "بين المحافظات" banner → مطاعم/أسواق row → promo banner)
+   instead of the two side-by-side columns, matching the reference's
+   single vertical flow. No markup added/removed — only how the
+   existing #quickServices / .soon-grid / .promo-card blocks are laid
+   out on screen.
+   --------------------------------------------------------------- */
+.home-columns{
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.home-col{ width:100%; flex:none; }
+.home-col-services,
+.home-col-more{
+  position: static;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+.home-col-services .section-label::before,
+.home-col-more .section-label::before{ display:none; }
+
+/* 5 compact icon tiles in one row + the 6th service (بين المحافظات)
+   spanning the full width as its own banner underneath — this mirrors
+   the reference exactly, since Yammak's SERVICES object already has
+   6 entries and "intercity" is the natural banner candidate. */
+.quick-services{
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-2);
+}
+.qs-row{
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: 6px;
+}
+.qs-row::before{ display:none; }
+.qs-row:active{ background:transparent; box-shadow:none; }
+.qs-row-ic{
+  width: 54px; height: 54px;
+  border-radius: 17px;
+  box-shadow: none !important;
+}
+.qs-row-photo{
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  box-shadow: none;
+  background: transparent;
+  object-fit: contain;
+}
+.qs-row-label span{ display:none; }
+.qs-row-label b{ font-size: 11.5px; }
+.qs-row[data-service="taxi"] .qs-row-ic{ background: var(--svc-taxi); }
+.qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private); }
+.qs-row[data-service="courier"] .qs-row-ic{ background: var(--svc-courier); }
+.qs-row[data-service="cargo"] .qs-row-ic{ background: var(--svc-cargo); }
+.qs-row[data-service="starx"] .qs-row-ic{ background: var(--svc-starx); }
+
+/* The 6th service — "بين المحافظات" — as a full-width gradient banner,
+   just like the reference's blue intercity-travel band. Same button,
+   same data-service, same click handler; only its layout/skin differs. */
+.qs-row[data-service="intercity"]{
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: right;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  padding: 16px 18px;
+  border-radius: var(--app-r-lg);
+  background: linear-gradient(120deg, #2F6FE4 0%, #123E73 100%);
+  box-shadow: 0 16px 30px -18px rgba(29,111,209,0.55);
+}
+.qs-row[data-service="intercity"] .qs-row-ic{
+  background: rgba(255,255,255,0.22);
+  width: 50px; height: 50px; border-radius: 14px; flex-shrink:0;
+}
+.qs-row[data-service="intercity"] .qs-row-photo{ width:32px; height:32px; }
+.qs-row[data-service="intercity"] .qs-row-label{
+  flex: 1; align-items: flex-start; width:auto; gap:3px;
+}
+.qs-row[data-service="intercity"] .qs-row-label b{ color:#fff; font-size:15px; }
+.qs-row[data-service="intercity"] .qs-row-label span{
+  display:block; color: rgba(255,255,255,0.85); font-size:11.5px;
+}
+
+/* "المطاعم والأسواق" — 4-across compact tiles, same pattern as the
+   service icons above (icon tile + label, no card chrome). */
+.soon-grid{ grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); }
+.soon-card{
+  padding: 4px 2px 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  gap: 6px;
+}
+.soon-card:active{ box-shadow:none; }
+.soon-ic{
+  width: 54px; height: 54px;
+  border-radius: 17px;
+  font-size: 22px;
+  background: var(--surface-hi);
+  box-shadow: none;
+}
+#soonCardRestaurants .soon-ic{ background: #FDE7DC; }
+#soonCardMarkets .soon-ic{ background: #DFF5E7; }
+#soonCardOtherServices .soon-ic{ background: #F1E7D6; }
+#soonCardFutureOffice .soon-ic{ background: #E4E9F0; }
+.soon-label{ font-size: 11px; }
+.soon-badge{
+  font-size: 8.5px;
+  background: var(--surface-hi);
+  border-color: var(--surface-brd);
+  box-shadow: none;
+  color: var(--text-faint) !important;
+}
+
+/* Promo banner — vivid gift/offer gradient, like the reference's daily
+   offers ribbon. Same .promo-card element, populated the same way. */
+.promo-card{
+  background: linear-gradient(120deg, #7C3AED 0%, #C026D3 55%, #F0B429 130%);
+  border: none;
+  box-shadow: 0 18px 34px -20px rgba(124,58,237,0.55);
+  margin-top: var(--sp-3);
+}
+.promo-card .ic{
+  background: rgba(255,255,255,0.24);
+  box-shadow: none;
+  color:#fff;
+}
+.promo-card b{ color:#fff; }
+.promo-card span{ color: rgba(255,255,255,0.85); }
+
+/* ---------------------------------------------------------------
+   Buttons — solid confident blue pill (reference uses flat, solid
+   blue CTAs rather than a gold→blue gradient)
+   --------------------------------------------------------------- */
+.app-btn{
+  background: var(--teal);
+  border-radius: var(--app-r-pill);
+  box-shadow: 0 14px 26px -14px rgba(47,111,228,0.55);
+}
+.app-btn.secondary{
+  background: #fff;
+  border: 1.5px solid var(--surface-brd);
+  color: var(--text);
+}
+.consent-check{ color: var(--text-muted); }
+.consent-check input{ accent-color: var(--teal); }
+.price-bar b{ color: var(--teal-text); }
+
+/* ---------------------------------------------------------------
+   Booking flow — route card / fields, a touch rounder + cleaner
+   --------------------------------------------------------------- */
+.route-card{
+  border-radius: var(--app-r-lg);
+  background: var(--surface-hi);
+  border: 1px solid var(--surface-brd);
+  padding: var(--sp-4);
+}
+.float-field input, .float-field textarea{
+  border-radius: var(--app-r-sm);
+  background: #fff;
+  border: 1.5px solid var(--surface-brd);
+}
+/* FIX: an earlier rule (.route-card .float-field input) explicitly sets
+   background: var(--bg-deep) — which this redesign repurposes as the
+   dark map/shell backdrop color. That selector is MORE specific than
+   the general one above, so it was winning and rendering the pickup/
+   dropoff inputs as unreadable dark-on-dark text. Matching that exact
+   selector here (same specificity, later in the file wins) restores a
+   plain white input background without touching the original rule. */
+.route-card .float-field input{ background: #fff; }
+.svc-pill{
+  border-radius: var(--app-r-md);
+}
+.svc-pill.active{
+  border-color: var(--teal);
+  background: var(--teal-dim);
+}
+
+/* ---------------------------------------------------------------
+   Orders (طلباتي) — rounder modern cards
+   --------------------------------------------------------------- */
+.order-card{
+  border-radius: var(--app-r-md);
+  border-inline-start: 4px solid var(--teal);
+  box-shadow: var(--elev-1);
+}
+.order-card-svc{ color: var(--teal-text); }
+.order-track-btn{ border-radius: var(--app-r-pill); }
+
+/* ---------------------------------------------------------------
+   Bottom navigation — cleaner white bar, subtle top accent on the
+   active tab, matching the reference's flatter nav style
+   --------------------------------------------------------------- */
+.bottom-nav{
+  background: rgba(255,255,255,0.98);
+  border-top: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg) var(--app-r-lg) 0 0;
+  box-shadow: 0 -6px 20px -18px rgba(16,27,45,0.3);
+}
+.bnav-item.active{ color: var(--teal); }
+.bnav-item.active .bnav-icon{ background: transparent; }
+.bnav-item.active .bnav-icon svg{ color: var(--teal); }
+.bnav-item.active::before{
+  content:'';
+  position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+  width: 22px; height: 3px; border-radius: 0 0 4px 4px;
+  background: var(--teal);
+}
+
+/* =========================================================================
+   Account page (حسابي) — new header card + navigable list, styled to
+   match the reference closely. All classes below are new (added only to
+   the "profile" view's markup) — nothing here is reused by any other
+   screen, so it can't affect anything else in the app.
+   ========================================================================= */
+.account-card{
+  display:flex; align-items:center; gap: var(--sp-3);
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  box-shadow: var(--elev-1);
+}
+.account-avatar{
+  width: 54px; height: 54px; border-radius: 50%; flex-shrink:0;
+  background: var(--teal-dim);
+  color: var(--teal);
+  display:flex; align-items:center; justify-content:center;
+}
+.account-avatar svg{ width:26px; height:26px; }
+.account-id{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.account-id b{ font-size:15.5px; color: var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-id span{ font-size:12.5px; color: var(--text-faint); direction:ltr; text-align:right; }
+.account-badge{
+  flex-shrink:0;
+  font-size: 11px; font-weight:800; color: var(--gold-text);
+  background: var(--gold-dim);
+  border: 1px solid rgba(240,180,41,0.4);
+  border-radius: var(--app-r-pill);
+  padding: 6px 11px;
+  white-space:nowrap;
+}
+.account-form-card{
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  box-shadow: var(--elev-1);
+}
+.account-form-card .float-field:last-of-type{ margin-bottom: var(--sp-4); }
+.account-list{
+  display:flex; flex-direction:column; gap:2px;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg);
+  overflow: hidden;
+  box-shadow: var(--elev-1);
+  margin-bottom: var(--sp-5);
+}
+.account-row{
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%;
+  padding: 14px var(--sp-4);
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid var(--surface-brd);
+  font-size: 14px; font-weight:700; color: var(--text);
+  text-align: right;
+}
+.account-list .account-row:last-child{ border-bottom:none; }
+.account-row:active{ background: var(--surface-hi); }
+.account-row-icon{
+  width:34px; height:34px; border-radius:10px; flex-shrink:0;
+  background: var(--surface-hi); color: var(--teal-text);
+  display:flex; align-items:center; justify-content:center;
+}
+.account-row-icon svg{ width:17px; height:17px; }
+.account-row-label{ flex:1; }
+.account-row-chev{ color: var(--text-faint); font-size:18px; font-weight:700; transform: scaleX(-1); }
+.account-row-soon{
+  font-size: 10px; font-weight:800; color: var(--text-faint);
+  background: var(--surface-hi);
+  border-radius: var(--app-r-pill);
+  padding: 4px 9px;
+  flex-shrink:0;
+}
+.account-row.is-soon{ opacity: 0.6; pointer-events:none; }
+.account-row-danger{ color: var(--danger); }
+.account-row-danger .account-row-icon{ background: rgba(229,72,77,0.1); color: var(--danger); }
+
+/* =========================================================================
+   ========  REDESIGN PASS 2 — reference "يمّك / Yamak" mockup match  ======
+   =========================================================================
+   Builds on REDESIGN PASS above (same rules: cascade-order override only,
+   no id/class removed, no app.js business logic touched — the one small
+   app.js edit in this pass only restructures the order-card's own HTML
+   template to add a data-service attribute + reuse an existing vehicle
+   image; the RPC call, data, and click wiring inside that function are
+   byte-for-byte the same). New additive elements introduced this pass
+   (map search pill, wizard progress header, wizard nav buttons, order
+   filter chips, avatar camera badge, "عرض الكل" label) are all inert
+   decoration or call ONLY pre-existing functions (openBooking, showView,
+   validateField) via the small script at the end of index.html.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------
+   Palette refinement — closer to the reference's clean blue/white
+   --------------------------------------------------------------- */
+:root{
+  --surface-hi: #EEF3FB;
+  --surface-brd: #E3EAF5;
+  --teal: #2F6FE4;
+  --teal-text: #1550B8;
+}
+
+/* ---------------------------------------------------------------
+   "إلى أين تذهب؟" — location-discovery card with a generated
+   subtitle line (text-only, no HTML/JS change) matching the
+   reference's two-line location hint card.
+   --------------------------------------------------------------- */
+.where-to{
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: linear-gradient(120deg, #EAF1FF 0%, #F5F8FF 100%);
+  border: 1px solid #DCE7FB;
+  padding: 14px 16px;
+}
+.where-to svg{ display:none; }
+.where-to span{ font-size: 14px; }
+.where-to::after{
+  content: "نحن هنا لخدمتك دائماً — اضغط لتحديد رحلتك";
+  display:block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.where-to::before{
+  content:'';
+  position:absolute; inset-inline-start:14px; top:14px;
+  width:8px; height:8px; border-radius:50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 4px var(--teal-dim);
+}
+.home-fixed .where-to{ position: relative; padding-inline-start: 32px; }
+
+/* Search pill floating over the map, top-inline-start corner —
+   purely decorative entry point wired to the same openBooking(). */
+/* FIX: the original fullscreen-view rule hides #map/.map-skeleton/
+   .recenter-fab but predates this pass's new .map-search-pill, which
+   is a sibling of #map (not nested inside it) — so without this it
+   stayed fixed on screen and overlapped every non-home view's title.
+   Matching that same toggle here, without editing the original rule. */
+.app-shell.is-fullscreen-view .map-search-pill{ display:none; }
+
+.map-search-pill{
+  position: absolute;
+  z-index: 12;
+  top: calc(env(safe-area-inset-top) + var(--sp-3));
+  inset-inline: var(--sp-4);
+  display:flex; align-items:center; gap:10px;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-pill);
+  padding: 12px 16px;
+  box-shadow: var(--elev-2);
+  color: var(--text-faint);
+  font-size: 13px;
+  font-weight: 600;
+}
+.map-search-pill svg{ width:17px; height:17px; color: var(--teal); flex-shrink:0; }
+
+/* ---------------------------------------------------------------
+   "بين المحافظات" banner — moody gradient + a simple decorative
+   road illustration (drawn in CSS, not a photo), closer to the
+   reference's image-backed intercity banner.
+   --------------------------------------------------------------- */
+.qs-row[data-service="intercity"]{
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(100deg, rgba(11,30,56,0.88) 0%, rgba(11,30,56,0.35) 60%, rgba(11,30,56,0.1) 100%),
+    linear-gradient(135deg, #2F6FE4 0%, #0B1E38 100%);
+  min-height: 84px;
+}
+.qs-row[data-service="intercity"]::after{
+  content:'';
+  position:absolute; inset-inline-end:-10px; bottom:-18px;
+  width:130px; height:60px;
+  border-top: 3px dashed rgba(255,255,255,0.35);
+  border-radius: 50%;
+  pointer-events:none;
+}
+.qs-row[data-service="intercity"] .qs-row-ic{ position:relative; z-index:1; }
+.qs-row[data-service="intercity"] .qs-row-label{ position:relative; z-index:1; }
+
+/* ---------------------------------------------------------------
+   "المطاعم والأسواق" — header row with a trailing "عرض الكل" label,
+   and the 4 teaser tiles as a horizontally-scrollable strip of
+   slightly larger, card-style tiles (closer to the reference's
+   single wide photo card) instead of a static 4-column grid.
+   --------------------------------------------------------------- */
+.section-label-row{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-bottom: var(--sp-3);
+}
+.section-label-row .section-label{ margin-bottom:0; }
+.section-label-more{
+  font-size: 11.5px; font-weight:700; color: var(--teal-text);
+  flex-shrink:0;
+}
+.soon-grid{
+  display:flex;
+  grid-template-columns: unset;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.soon-grid::-webkit-scrollbar{ display:none; }
+.soon-card{
+  flex: 0 0 92px;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-md);
+  padding: 14px 6px 12px;
+  box-shadow: var(--elev-1);
+}
+.soon-ic{ border-radius: 14px; }
+
+/* ---------------------------------------------------------------
+   Account (حسابي) — blue gradient hero header, closer to reference
+   --------------------------------------------------------------- */
+.account-card{
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  background: linear-gradient(135deg, #2F6FE4 0%, #12408A 100%);
+  border: none;
+  border-radius: var(--app-r-xl) var(--app-r-xl) var(--app-r-md) var(--app-r-md);
+  padding: 26px var(--sp-4) 22px;
+  box-shadow: 0 18px 34px -20px rgba(47,111,228,0.55);
+}
+.account-card::before{
+  content:'✨';
+  position:absolute; top:18px; inset-inline-start:18px;
+  font-size:16px; opacity:0.9;
+}
+.account-avatar{
+  position: relative;
+  width: 64px; height:64px;
+  background: rgba(255,255,255,0.18);
+  color:#fff;
+}
+.account-avatar-badge{
+  position:absolute; bottom:-3px; inset-inline-end:-3px;
+  width:22px; height:22px; border-radius:50%;
+  background:#fff; color: var(--teal);
+  display:flex; align-items:center; justify-content:center;
+  border: 2px solid #12408A;
+}
+.account-avatar-badge svg{ width:12px; height:12px; }
+.account-id b{ color:#fff; font-size:17px; }
+.account-id span{ color: rgba(255,255,255,0.8); }
+.account-badge{
+  background: rgba(255,255,255,0.2);
+  color:#fff; border-color: rgba(255,255,255,0.35);
+}
+
+/* ---------------------------------------------------------------
+   طلباتي — filter chips + horizontal card layout with a
+   per-service icon (reusing the exact same vehicle image asset).
+   --------------------------------------------------------------- */
+.orders-filter{
+  display:flex; gap:8px; overflow-x:auto; margin-bottom: var(--sp-4);
+  scrollbar-width:none;
+}
+.orders-filter::-webkit-scrollbar{ display:none; }
+.of-chip{
+  flex-shrink:0;
+  padding: 9px 16px;
+  border-radius: var(--app-r-pill);
+  background: #fff;
+  border: 1.5px solid var(--surface-brd);
+  color: var(--text-muted);
+  font-size: 12.5px; font-weight:700;
+}
+.of-chip.active{
+  background: var(--teal);
+  border-color: var(--teal);
+  color:#fff;
+}
+.order-card-row{ display:flex; align-items:flex-start; gap: var(--sp-3); }
+.order-card-icon{
+  flex-shrink:0;
+  width: 42px; height:42px; border-radius: 13px;
+  background: var(--surface-hi);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.order-card-icon img{ width:30px; height:30px; object-fit:contain; }
+.order-card-main{ flex:1; min-width:0; }
+.order-card[data-service="taxi"] .order-card-icon{ background: var(--svc-taxi-dim); }
+.order-card[data-service="private"] .order-card-icon{ background: var(--svc-private-dim); }
+.order-card[data-service="courier"] .order-card-icon{ background: var(--svc-courier-dim); }
+.order-card[data-service="cargo"] .order-card-icon{ background: var(--svc-cargo-dim); }
+.order-card[data-service="starx"] .order-card-icon{ background: var(--svc-starx-dim); }
+.order-card[data-service="intercity"] .order-card-icon{ background: var(--svc-intercity-dim); }
+.order-track-btn{ margin-top: var(--sp-3); }
+
+/* =========================================================================
+   Booking wizard — progress header, per-step visibility, nav buttons
+   ========================================================================= */
+.wizard-progress{
+  display:flex; align-items:center; justify-content:space-between;
+  margin: 4px 2px 20px;
+}
+.wp-step{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; }
+.wp-dot{
+  width:26px; height:26px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--surface-hi); color: var(--text-faint);
+  font-size:12px; font-weight:800;
+  border: 2px solid var(--surface-brd);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.wp-label{ font-size:9.5px; font-weight:700; color: var(--text-faint); white-space:nowrap; }
+.wp-line{ flex:1; height:2px; background: var(--surface-brd); margin: 0 -4px 17px; }
+
+/* Step visibility — driven by data-current-step on the booking
+   <section>. Everything tagged data-wizard-step is hidden by default;
+   only the block matching the current step is shown, restoring each
+   element's ORIGINAL display value (flex/grid/block as appropriate)
+   so its own existing layout rules keep working untouched. */
+.sheet-view[data-view="booking"] [data-wizard-step]{ display:none; }
+.sheet-view[data-view="booking"][data-current-step="1"] [data-wizard-step="1"]{ display:flex; }
+.sheet-view[data-view="booking"][data-current-step="2"] [data-wizard-step="2"]{ display:block; }
+.sheet-view[data-view="booking"][data-current-step="2"] .map-target-toggle[data-wizard-step="2"]{ display:flex; }
+.sheet-view[data-view="booking"][data-current-step="3"] [data-wizard-step="3"]{ display:block; }
+.sheet-view[data-view="booking"][data-current-step="4"] [data-wizard-step="4"]{ display:block; }
+.sheet-view[data-view="booking"][data-current-step="4"] .consent-check[data-wizard-step="4"]{ display:flex; }
+/* #driversListApp keeps its own "hidden" attribute logic from app.js
+   (only shown once drivers actually load) layered on top of this. */
+.sheet-view[data-view="booking"][data-current-step="1"] #driversListApp[data-wizard-step="1"]:not([hidden]){ display:flex; }
+
+.wp-step[data-wp-step="1"] .wp-dot{ background: var(--teal); color:#fff; border-color: var(--teal); }
+.sheet-view[data-current-step="2"] .wp-step[data-wp-step="1"] .wp-dot,
+.sheet-view[data-current-step="3"] .wp-step[data-wp-step="1"] .wp-dot,
+.sheet-view[data-current-step="4"] .wp-step[data-wp-step="1"] .wp-dot{ background: var(--success); border-color: var(--success); }
+.sheet-view[data-current-step="2"] .wp-step[data-wp-step="2"] .wp-dot{ background: var(--teal); color:#fff; border-color: var(--teal); }
+.sheet-view[data-current-step="3"] .wp-step[data-wp-step="2"] .wp-dot,
+.sheet-view[data-current-step="4"] .wp-step[data-wp-step="2"] .wp-dot{ background: var(--success); border-color: var(--success); }
+.sheet-view[data-current-step="3"] .wp-step[data-wp-step="3"] .wp-dot{ background: var(--teal); color:#fff; border-color: var(--teal); }
+.sheet-view[data-current-step="4"] .wp-step[data-wp-step="3"] .wp-dot{ background: var(--success); border-color: var(--success); }
+.sheet-view[data-current-step="4"] .wp-step[data-wp-step="4"] .wp-dot{ background: var(--teal); color:#fff; border-color: var(--teal); }
+
+.wizard-nav{ display:flex; gap:10px; margin-top: 6px; }
+.wizard-nav .app-btn{ flex:1; }
+/* FIX: .app-btn{ display:flex } (defined earlier for all buttons using
+   that class) has higher specificity than the browser's own [hidden]
+   UA-stylesheet rule, so #wizardBackBtn's `hidden` attribute was being
+   silently ignored and the button stayed visible on step 1. This
+   restores the native hidden behavior for these two buttons only. */
+.wizard-nav .app-btn[hidden]{ display:none; }
+#wizardBackBtn{ flex: 0 0 34%; }
+
+/* Service picker — all 6 options stay visible at once (wrapped chips)
+   so the customer can actually compare/switch services in step 1,
+   instead of the active one growing to 100% width and pushing the
+   other five off-screen out of view (that was hiding real, existing
+   services behind a scroll the user had no cue to try). Same #svcSwitch
+   id / .svc-pill markup / click handler — only sizing changed. */
+.svc-switch{
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.svc-pill{
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1.5px solid var(--surface-brd);
+}
+.svc-pill-photo{ width:30px; height:30px; }
+.svc-pill.active{
+  background: var(--teal-dim);
+  border-color: var(--teal);
+  box-shadow: none;
+}
+.svc-pill.active .svc-pill-photo{ width:30px; height:30px; }
+.svc-pill.active span{ font-weight:800; color: var(--teal-text); }
+/* The active service's one-line tagline now sits as its own caption
+   below the chip row (not inside/growing any single chip), still the
+   same static per-service copy, still decorative-only. */
+.svc-switch-caption{
+  display:block; margin: 2px 2px var(--sp-4); font-size:12px; font-weight:600; color: var(--text-faint);
+}
+.svc-switch-caption[data-caption-for="taxi"]::before{ content: "🚕 الخيار الأفضل لتنقلاتك اليومية"; }
+.svc-switch-caption[data-caption-for="private"]::before{ content: "🚘 رحلة خاصة وراحة أكثر"; }
+.svc-switch-caption[data-caption-for="courier"]::before{ content: "📦 توصيل سريع للطرود"; }
+.svc-switch-caption[data-caption-for="intercity"]::before{ content: "🚌 رحلات بين المحافظات"; }
+.svc-switch-caption[data-caption-for="cargo"]::before{ content: "🚚 نقل الأغراض والحمولات"; }
+.svc-switch-caption[data-caption-for="starx"]::before{ content: "👥 نقل عدة أشخاص دفعة واحدة"; }
+
+/* ---------------------------------------------------------------
+   Live tracking (STATUS view) — show the real map behind it, like
+   the reference's "جاري الوصول" screen, instead of the plain full-
+   screen white card every other secondary view uses. Uses :has()
+   (supported in current Chromium/Safari/Firefox) to special-case
+   ONLY this one view; every other view's existing fullscreen/hide-
+   map behavior is completely untouched.
+   --------------------------------------------------------------- */
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) #map,
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) .map-skeleton{
+  display: block;
+}
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) .sheet{
+  flex: 1 1 auto;
+  border-top-right-radius: var(--app-r-xl);
+  border-top-left-radius: var(--app-r-xl);
+  border-top: none;
+  box-shadow: 0 -10px 30px -20px rgba(16,27,45,0.3);
+  margin-top: -22px;
+  position: relative;
+  z-index: 3;
+}
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) .sheet-scroll{
+  padding-top: var(--sp-4);
+}
