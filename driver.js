@@ -142,6 +142,22 @@ function setStatus(dotClass, text) {
   if (txt) txt.textContent = text;
 }
 
+// FIX (invalid-link-shows-with-main-screen bug): `.hidden = true/false`
+// alone only works if no author CSS rule (e.g. `.driver-screen { display:
+// flex }`) overrides the browser's default `[hidden]{display:none}` —
+// which is exactly what was happening: both screens rendered at once.
+// Setting inline style.display explicitly always wins over any class-
+// based CSS rule (hidden or not), without editing driver.css/style.css
+// at all. 'none' when hiding; '' (cleared) when showing, so the
+// stylesheet's own display value (flex/block/whatever it is) still
+// applies normally to the visible screen — this only forces the HIDDEN
+// one off, it never dictates how the shown one looks.
+function setScreenVisible(el, visible) {
+  if (!el) return;
+  el.hidden = !visible;
+  el.style.display = visible ? '' : 'none';
+}
+
 function setLastSent(date) {
   const el = document.getElementById('driverLastSent');
   if (!el) return;
@@ -402,8 +418,8 @@ async function initDriverPage() {
     console.log('[DIAG] initDriverPage() branch entered -> NO TOKEN'); // TEMP DIAG
     updateDiag({ finalBranch: 'NO TOKEN' }); // TEMP DIAG UI
     setInvalidDetail(null);
-    invalidScreen.hidden = false;
-    mainScreen.hidden = true;
+    setScreenVisible(invalidScreen, true);
+    setScreenVisible(mainScreen, false);
     return;
   }
 
@@ -417,8 +433,8 @@ async function initDriverPage() {
     // a real infrastructure problem (network/permissions/schema). Show
     // it instead of silently reusing the generic "invalid link" copy,
     // and do NOT clear the saved token: it hasn't been proven invalid.
-    invalidScreen.hidden = false;
-    mainScreen.hidden = true;
+    setScreenVisible(invalidScreen, true);
+    setScreenVisible(mainScreen, false);
     setInvalidDetail('خطأ تقني: ' + (error.message || error.code || String(error)));
     updateDiag({ finalBranch: 'RPC ERROR' }); // TEMP DIAG UI
     return;
@@ -431,8 +447,8 @@ async function initDriverPage() {
     // link" screen as before, and drop it from localStorage so a stale
     // token doesn't keep silently failing on future visits.
     setInvalidDetail(null);
-    invalidScreen.hidden = false;
-    mainScreen.hidden = true;
+    setScreenVisible(invalidScreen, true);
+    setScreenVisible(mainScreen, false);
     updateDiag({ finalBranch: 'NO DRIVER' }); // TEMP DIAG UI
     try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (_) {}
     return;
@@ -441,8 +457,8 @@ async function initDriverPage() {
   console.log('[DIAG] initDriverPage() branch entered -> SUCCESS, showing main screen'); // TEMP DIAG
   updateDiag({ finalBranch: 'SUCCESS' }); // TEMP DIAG UI
 
-  mainScreen.hidden = false;
-  invalidScreen.hidden = true;
+  setScreenVisible(mainScreen, true);
+  setScreenVisible(invalidScreen, false);
 
   const toggleBtn = document.getElementById('driverToggleBtn');
   if (toggleBtn) {

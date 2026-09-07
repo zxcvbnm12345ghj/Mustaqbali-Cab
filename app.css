@@ -851,6 +851,40 @@ html, body.app-body{
   font-size: 12.5px; line-height:1.7; color: var(--text-muted);
 }
 
+/* ---- Install-instructions FAQ answer — same accordion, richer
+   content (steps for iPhone + Android + an in-app-browser tip). Reuses
+   .step-num (defined further below for the iOS modal) so the numbered
+   circles match everywhere the app already numbers steps. ---- */
+.help-install-guide{
+  display:flex; flex-direction:column; gap:14px;
+  padding: 0 16px 16px;
+}
+.help-install-guide .help-install-intro{
+  margin:0; padding:0;
+  font-size: 12.5px; line-height:1.7; color: var(--text-muted);
+}
+.help-install-block h4{
+  margin:0 0 10px; font-size:12.5px; font-weight:800; color: var(--teal-text);
+}
+.help-install-steps{
+  list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap:10px;
+}
+.help-install-steps li{
+  display:flex; align-items:flex-start; gap:10px;
+  font-size:12.5px; line-height:1.6; color: var(--text-muted);
+}
+.help-install-steps b{ color: var(--text); font-weight:700; }
+.help-install-note{
+  display:flex; align-items:flex-start; gap:8px;
+  padding: 10px 12px;
+  border-radius: var(--app-r-sm);
+  background: var(--teal-dim);
+  border: 1px solid rgba(29,111,209,0.16);
+  font-size: 12px; line-height:1.65; color: var(--teal-text);
+}
+.help-install-note-ic{ flex-shrink:0; }
+
 /* ---- Skeleton shimmer (shared) ---- */
 @keyframes skel-shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
 
@@ -1347,17 +1381,17 @@ body.kb-open .sheet{ transition: none; }
 .app-shell.is-fullscreen-view .recenter-fab{
   display: none;
 }
-/* Bottom nav hidden too while a service is full-screen, so the
-   screen is dedicated to that service only — no tab bar showing
-   underneath. #bottomNav is a DOM sibling right after .app-shell
-   (see note above the bottom-nav rules further down), so the
-   general sibling combinator reaches it without touching its id,
-   class, or any of app.js's own tab-switch logic. The exact same
-   .is-fullscreen-view toggle app.js already flips on "back" makes
-   it reappear automatically on the home screen — nothing new to
-   wire up. */
+/* FIX (bottom-nav must stay visible everywhere, including fullscreen
+   service views): previously hidden here via `display:none`, which
+   caused the "dead-end" screens with no way to switch tabs. #bottomNav
+   is a DOM sibling right after .app-shell — the general sibling
+   combinator below now keeps it pinned above the fullscreen sheet
+   instead of removing it, so every tab (الرئيسية/طلباتي/الدعم/حسابي/
+   المزيد) is always reachable, and tapping one jumps straight to that
+   screen (app.js's own showView()/data-nav logic is untouched — this
+   is CSS visibility only). */
 .app-shell.is-fullscreen-view ~ .bottom-nav{
-  display: none;
+  display: flex;
 }
 .app-shell.is-fullscreen-view .sheet{
   border-top-right-radius: 0;
@@ -1366,11 +1400,11 @@ body.kb-open .sheet{ transition: none; }
 }
 .app-shell.is-fullscreen-view .sheet-scroll{
   padding-top: calc(env(safe-area-inset-top) + var(--sp-3));
-  /* No bottom nav to clear space for in this state, so the reserved
-     --bnav-h gap (used on the home screen below) is dropped here —
-     otherwise a full-screen service view would end in a dead empty
-     strip where the now-hidden tab bar used to be. */
-  padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  /* FIX: bottom nav is now visible in fullscreen views too (see the
+     .bottom-nav display fix above), so this must reserve the same
+     --bnav-h gap as the home screen — otherwise content sits under
+     the fixed nav bar. */
+  padding-bottom: calc(var(--bnav-h, 76px) + var(--sp-4) + env(safe-area-inset-bottom));
 }
 .app-shell.is-fullscreen-view .sheet-scroll{
   overflow-y: auto;
@@ -2674,4 +2708,508 @@ html, body.app-body{ background: var(--bg-deep); }
 }
 .app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) .sheet-scroll{
   padding-top: var(--sp-4);
+}
+
+/* ---------------------------------------------------------------
+   Reference-parity pass 3 — header, booking step 2 map, confirmation
+   summary card, bottom-nav polish. Additive only: every rule below
+   is new/scoped to new elements or to one specific existing state
+   (data-current-step="2"), so nothing already styled elsewhere in
+   this file is overridden outside that scope.
+   --------------------------------------------------------------- */
+
+/* Header location pill — sits above .map-search-pill on the Home
+   screen only (same is-fullscreen-view hide rule as the search pill,
+   added right below), matching the reference's light top location
+   bar. .map-search-pill is pushed down by one pill-height + gap so
+   the two never overlap. */
+.map-location-bar{
+  position: absolute;
+  z-index: 12;
+  top: calc(env(safe-area-inset-top) + var(--sp-3));
+  inset-inline: var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-pill);
+  padding: 8px 14px 8px 10px;
+  box-shadow: var(--elev-1);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.map-location-ic{ display:flex; color: var(--teal); flex-shrink:0; }
+.map-location-ic svg{ width:15px; height:15px; }
+.app-shell.is-fullscreen-view .map-location-bar{ display:none; }
+
+.map-search-pill{
+  top: calc(env(safe-area-inset-top) + var(--sp-3) + 34px + 8px);
+}
+
+/* Confirmation summary card (Step 4) — vehicle/service row + a
+   from/to/name/phone list, echoing the reference's "تأكيد الحجز"
+   card. Reuses the same surface/border/radius/text tokens as every
+   other card in this file (.driver-card-app, .trip-summary-app). */
+.confirm-summary-card{
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-1);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.confirm-summary-head{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px dashed var(--surface-brd);
+}
+.confirm-summary-icon{
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--teal-dim);
+  overflow: hidden;
+}
+.confirm-summary-icon img{ width: 100%; height: 100%; object-fit: cover; }
+.confirm-summary-icon svg{ width: 24px; height: 24px; }
+.confirm-summary-head-text{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.confirm-summary-head-text b{ font-size: 15px; color: var(--text); }
+.confirm-summary-head-text span{ font-size: 11.5px; font-weight: 600; color: var(--text-faint); }
+.confirm-summary-rows{ display: flex; flex-direction: column; gap: 10px; }
+.csr-row{ display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.csr-row span{ font-size: 12.5px; color: var(--text-muted); flex-shrink: 0; }
+.csr-row b{ font-size: 12.5px; font-weight: 700; color: var(--text); text-align: end; overflow-wrap: anywhere; }
+
+/* Booking Step 2 ("الموقع") — show the real map behind the location
+   fields instead of a blank white gap, matching the reference's
+   pickup/dropoff screen. Same proven pattern already used for the
+   STATUS view above: only #map/.map-skeleton are restored to
+   display:block, and only while step 2 of the booking wizard is the
+   one currently visible — every other step/view keeps the existing
+   fullscreen white-card behavior untouched. */
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="booking"].active[data-current-step="2"]) #map,
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="booking"].active[data-current-step="2"]) .map-skeleton,
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="booking"].active[data-current-step="2"]) .recenter-fab{
+  display: block;
+}
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="booking"].active[data-current-step="2"]) .sheet{
+  border-top-right-radius: var(--app-r-xl);
+  border-top-left-radius: var(--app-r-xl);
+  border-top: none;
+  box-shadow: 0 -10px 30px -20px rgba(16,27,45,0.3);
+}
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="booking"].active[data-current-step="2"]) .sheet-scroll{
+  padding-top: var(--sp-4);
+}
+
+/* Bottom navigation — small active-tab polish (rounded highlight chip
+   behind the active icon), closer to the reference's raised-icon
+   look, without changing the tab count or removing "المزيد" (kept so
+   install/support/legal entries already there aren't lost). */
+.bnav-item.active .bnav-icon{
+  background: var(--teal-dim);
+  border-radius: var(--app-r-md);
+}
+
+/* =========================================================================
+   يمّك — Visual Refresh (new reference mood board)
+   -------------------------------------------------------------------------
+   Appended, not inserted — nothing above this line is edited, removed, or
+   reordered, in the same spirit as every other "Stage" section already in
+   this file. This section only repaints existing elements: no id/class/
+   data-attribute app.js reads or toggles is added, renamed, or removed, no
+   HTML changes anywhere, and nothing about requests/drivers/pricing/GPS/
+   login/Supabase/RPCs is touched — colour, gradient, shadow and radius only.
+
+   What changes:
+   1) A light, softly blue/green-tinted app background replaces the flat
+      white / dark-navy one (one token — every element that already reads
+      var(--bg-deep) — body, .app-shell, #map, .map-skeleton — updates
+      automatically, so the map card is lighter too, even before tiles
+      load).
+   2) A signature blue → green gradient (--brand-grad) is introduced and
+      applied to the existing primary-button class (.app-btn), so every
+      "التالي / تأكيد الحجز / تحديد الموقع / حفظ البيانات" button gets it
+      at once.
+   3) The booking-wizard step dot, the bottom-nav active highlight and the
+      account/profile hero header pick up the same brand gradient so the
+      whole app reads as one consistent identity.
+   All six service icons/photos, every label, price and status pill keep
+   their exact existing colours/markup — untouched by this section.
+   ========================================================================= */
+
+:root{
+  /* Signature brand gradient — blue → green — reused wherever a primary
+     action or accent previously used a flat single colour. */
+  --brand-grad: linear-gradient(135deg, #1D6FD1 0%, #1CAE72 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(29,111,209,0.16) 0%, rgba(28,174,114,0.16) 100%);
+
+  /* App-wide background token — every rule already using var(--bg-deep)
+     (body, .app-shell, #map, .map-skeleton) picks this up automatically,
+     no need to restate any of those selectors here. A soft, light wash
+     with a faint blue/green tint instead of plain white or dark navy. */
+  --bg-deep:
+    radial-gradient(120% 55% at 12% -12%, rgba(28,174,114,0.10) 0%, transparent 55%),
+    radial-gradient(110% 60% at 105% 0%, rgba(29,111,209,0.11) 0%, transparent 55%),
+    #F6FAF9;
+}
+
+/* Map tiles — a touch brighter/clearer so the live map reads as modern
+   blue/green rather than dense/dark, matching the now-lighter chrome
+   around it. Same tile source, same attribution, same click/geolocate
+   logic — purely a CSS colour filter, exactly like the rule it refines. */
+.leaflet-tile-pane{
+  filter: saturate(1.28) brightness(1.09) contrast(1.02) hue-rotate(-10deg);
+}
+
+/* Primary buttons — brand gradient instead of a flat colour. Same class,
+   same markup, same click handlers everywhere (.app-btn is used by
+   "التالي", "تأكيد الحجز", "تحديد الموقع", "حفظ البيانات", "اطلب رحلة
+   الآن", etc.) — restyled once, applied everywhere. */
+.app-btn{
+  background: var(--brand-grad);
+  box-shadow: 0 14px 26px -14px rgba(28,150,110,0.45), 0 10px 22px -16px rgba(29,111,209,0.4);
+}
+.app-btn.secondary{
+  background: #fff;
+  color: var(--text);
+  border: 1.5px solid var(--surface-brd);
+  box-shadow: none;
+}
+.app-btn.whatsapp{
+  background: linear-gradient(135deg, #34D399 0%, #1CAE72 100%);
+  box-shadow: 0 12px 28px -12px rgba(28,174,114,0.5);
+}
+
+/* Booking wizard — current step's numbered dot in the brand gradient
+   instead of flat teal (completed steps keep their existing green
+   var(--success) fill untouched). */
+.wp-step[data-wp-step="1"] .wp-dot,
+.sheet-view[data-current-step="2"] .wp-step[data-wp-step="2"] .wp-dot,
+.sheet-view[data-current-step="3"] .wp-step[data-wp-step="3"] .wp-dot,
+.sheet-view[data-current-step="4"] .wp-step[data-wp-step="4"] .wp-dot{
+  background: var(--brand-grad);
+  border-color: transparent;
+  box-shadow: 0 6px 14px -6px rgba(29,111,209,0.5);
+}
+
+/* Bottom navigation — active tab highlight now carries a faint brand-
+   gradient tint instead of a flat teal tint, same rounded chip/shape. */
+.bnav-item.active .bnav-icon{
+  background: var(--brand-grad-soft);
+}
+
+/* Account (حسابي) hero header — same card, same avatar/badge markup,
+   now in the brand blue → green gradient instead of blue → dark-blue. */
+.account-card{
+  background: var(--brand-grad);
+  box-shadow: 0 18px 34px -20px rgba(28,150,110,0.45);
+}
+.account-avatar-badge{ border-color: #146854; }
+
+/* =========================================================================
+   يمّك — Visual Refresh, pass 2 (header + discover banner + step-4
+   summary + map polish + floating driver card)
+   -------------------------------------------------------------------------
+   Appended after everything above — nothing existing is edited, removed
+   or reordered. Builds on the same brand tokens (--brand-grad,
+   --brand-grad-soft, --bg-deep) already introduced above; no new tokens
+   are redefined here. Two tiny, purely-additive elements were added in
+   index.html for this pass (#mapAvatarBtn, .discover-banner) — both are
+   static/decorative or just call showView()/openBooking(), which already
+   existed; nothing about requests, drivers, pricing, GPS, login, Supabase
+   or RPCs changes, and the driver "busy" (مشغول → .badge-onjob) colour
+   rule is untouched below. Service icons/labels/prices are untouched.
+   ========================================================================= */
+
+/* ---- 1) Map header row: location pill + new avatar shortcut ---- */
+.map-avatar-btn{
+  position: absolute;
+  z-index: 12;
+  top: calc(env(safe-area-inset-top) + var(--sp-3));
+  inset-inline-end: var(--sp-4);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid var(--surface-brd);
+  border-radius: 50%;
+  box-shadow: var(--elev-1);
+  color: var(--teal-text);
+  padding: 0;
+}
+.map-avatar-btn svg{ width:18px; height:18px; }
+.map-avatar-btn:active{ transform: scale(0.94); }
+.app-shell.is-fullscreen-view .map-avatar-btn{ display:none; }
+
+/* ---- 2) "اكتشف خدماتنا في منطقتك" discover banner ---- */
+.discover-banner{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background: var(--brand-grad-soft);
+  border: 1px solid rgba(29,111,209,0.16);
+  border-radius: var(--app-r-pill);
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal-text);
+  width: fit-content;
+  max-width: 100%;
+}
+.discover-banner-ic{ display:flex; flex-shrink:0; color: var(--duo-green, #1CAE72); }
+.discover-banner-ic svg{ width:14px; height:14px; }
+.discover-banner span:last-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---- 3) Step 4 — merge the summary card + price bar into one card,
+   confirming both already show real, existing data (service/from/to/
+   name/phone from the customer's own inputs, price from the existing
+   #priceEstimate logic) — styling only, no value here is invented. ---- */
+.confirm-summary-card{
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+  padding-bottom: 14px;
+  box-shadow: none;
+}
+/* NOTE — a previous session hid .price-bar app-wide with
+   `display:none !important` at its base rule (comment there: price
+   hidden from the customer per an earlier request; app.js's price
+   math was left untouched). .price-bar is only ever used once in the
+   whole file — this exact step-4 row — so this explicit current
+   request ("show the real existing price in step 4") is restored
+   ONLY here, scoped tightly enough to win on specificity without
+   touching that base rule. The number itself still comes from the
+   same unmodified #priceEstimate/updatePriceBar() calculation. */
+.price-bar[data-wizard-step="4"]{
+  display: flex !important;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  background: var(--brand-grad-soft);
+  border: 1px solid rgba(29,111,209,0.16);
+  border-top: 1px dashed rgba(29,111,209,0.25);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: var(--r-card);
+  border-bottom-right-radius: var(--r-card);
+  margin-top: -1px;
+}
+.price-bar[data-wizard-step="4"] span{ padding-top: 3px; }
+.price-bar[data-wizard-step="4"] b{
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: end;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.price-bar[data-wizard-step="4"] b{
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.confirm-summary-icon{
+  background: var(--brand-grad-soft);
+}
+
+/* ---- 4) Map — visual-only polish (tile filter already added above).
+   Clearer pickup/dropoff pins and route line, brighter blue/green mood.
+   No coordinates, geolocation call, or marker-placement logic touched —
+   these only restyle the existing .pickup-pin/.decor-route classes
+   app.js already assigns via className. ---- */
+.pickup-pin::before{
+  box-shadow: 0 0 0 6px rgba(29,111,209,0.12);
+}
+.dropoff-pin::before{
+  box-shadow: 0 0 0 6px rgba(28,174,114,0.14);
+}
+.decor-route{
+  filter: drop-shadow(0 2px 4px rgba(16,27,45,0.18));
+}
+.recenter-fab{
+  box-shadow: var(--elev-2), 0 1px 0 rgba(16,27,45,0.04);
+}
+.map-search-pill{
+  box-shadow: var(--elev-2), 0 1px 0 rgba(16,27,45,0.04);
+}
+
+/* ---- 5) Tracking screen — driver card floating over the (already
+   visible, see the earlier "reference-parity pass 2" block) map.
+   Styling only: elevation, radius and spacing so it reads as a
+   distinct floating card rather than a plain list row. The "مشغول"
+   state's colours (.badge-onjob, .badge-busy, .badge-live, .badge-done)
+   are not touched by any rule below. ---- */
+.app-shell.is-fullscreen-view:has(.sheet-view[data-view="status"].active) .driver-card-app{
+  box-shadow: 0 16px 32px -16px rgba(16,27,45,0.28), 0 2px 0 rgba(16,27,45,0.03);
+  border-color: rgba(255,255,255,0.6);
+}
+.driver-card-app{
+  border-radius: var(--r-card);
+}
+.driver-avatar{
+  box-shadow: 0 4px 10px -4px rgba(16,27,45,0.25);
+}
+.driver-eta{
+  border-inline-start: 1px dashed rgba(29,111,209,0.25);
+}
+.status-header{
+  background: var(--brand-grad-soft);
+  border-radius: var(--app-r-md);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+/* ---- 6) Bottom navigation — unchanged in count/behaviour; no rule in
+   this pass targets .bottom-nav or .bnav-item beyond what pass 1 above
+   already applied. Listed here only as a confirmation checkpoint. ---- */
+
+/* =========================================================================
+   ========  REDESIGN PASS 3 — Welcome & Login: real identity + guides  ====
+   =========================================================================
+   Builds on the passes above (same rule: cascade-order override only —
+   no id/class removed or renamed, no button behaviour changed). Covers
+   exactly what this pass adds in index.html:
+   1) The real يمّك app icon (icon-192.png, already linked in <head> for
+      the favicon/PWA icon) replacing the drawn "Y" glyph in both welcome
+      logos — same asymmetric badge shape/shadow kept for continuity,
+      only the fill changes from a gradient+SVG glyph to the actual icon.
+   2) Intro service chips restyled as icon-circle badges. The 4 chips'
+      emoji + labels are byte-for-byte the same ones already in
+      index.html — only the wrapper markup added there is styled here.
+   3) Compact iPhone/Android guidance rows under the install + enable-
+      notifications buttons, and an in-app-browser (Facebook/Instagram)
+      notice banner — hidden by default, toggled only by the small
+      additive script at the end of index.html. Nothing here calls
+      Supabase, app.js, or any booking/pricing/driver logic.
+   4) Login form fields restyled with circular icon badges for a more
+      modern, professional look — same field ids/inputs, cosmetic only.
+   5) A short-viewport tweak so the intro step stays comfortable on
+      smaller iPhone/Android screens without introducing any blank
+      space (the screen already scrolls via .welcome-screen when
+      content is taller than the viewport).
+   ========================================================================= */
+
+/* ---- 1) Real app icon in both welcome-screen logo spots ---- */
+.welcome-logo,
+.welcome-logo-intro{
+  background: #fff;
+  overflow: hidden;
+}
+.welcome-logo-img{
+  width: 68%;
+  height: 68%;
+  object-fit: contain;
+  display: block;
+}
+.welcome-logo-intro .welcome-logo-img{ width: 72%; height: 72%; }
+
+/* ---- 2) Intro service chips → icon-circle badges, same 4 items ---- */
+.welcome-intro-services{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  max-width: 320px;
+  margin: 0 auto 20px;
+}
+.welcome-intro-chip{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px 10px;
+  border-radius: 18px 18px 18px 6px;
+  white-space: normal;
+}
+.welcome-intro-chip-ic{
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-dim), var(--teal-dim));
+  font-size: 16px;
+}
+.welcome-intro-chip-label{
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+/* ---- 3) iPhone / Android guidance rows + in-app-browser notice ---- */
+.welcome-platform-guides{
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.welcome-platform-guide{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: 12px 12px 12px 4px;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--surface-brd);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-align: center;
+}
+.welcome-platform-guide-title{
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.welcome-inapp-notice{
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 13px;
+  margin-bottom: 14px;
+  border-radius: 14px 14px 14px 5px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-soft);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--gold-text);
+  text-align: right;
+}
+.welcome-inapp-notice[hidden]{ display: none; }
+.welcome-inapp-notice-ic{ font-size: 15px; line-height: 1; flex-shrink: 0; }
+
+/* ---- 4) Modern login form field icon badges ---- */
+.welcome-field-icon{
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--teal-dim);
+  right: 10px;
+  font-size: 12px;
+}
+.welcome-field .welcome-input{ padding-right: 46px; }
+
+.welcome-login-form{
+  border-radius: 24px 24px 12px 24px;
+}
+
+/* ---- 5) Short-viewport comfort (small iPhone/Android screens) ---- */
+@media (max-height: 700px){
+  .welcome-logo-intro{ width: 76px; height: 76px; margin-bottom: 14px; }
+  .welcome-intro-title{ font-size: 22px; margin-bottom: 8px; }
+  .welcome-intro-sub{ margin-bottom: 16px; }
+  .welcome-intro-services{ margin-bottom: 16px; }
+  .welcome-actions{ gap: 12px; margin-bottom: 20px; }
 }

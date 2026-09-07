@@ -44,7 +44,27 @@
   window.addEventListener('orientationchange', setAppVh);
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', setAppVh);
+    window.visualViewport.addEventListener('scroll', setAppVh);
   }
+  // FIX (white gap on Facebook/Instagram/Messenger in-app browsers):
+  // those webviews often finish drawing their OWN top/bottom chrome
+  // (address pill, bottom action bar) a moment AFTER this first paint,
+  // without firing a `resize`/`visualViewport resize` event at all — so
+  // the very first setAppVh() call above can capture a taller height
+  // than what's actually left once their chrome settles, leaving a
+  // blank strip exactly the height of that chrome. Re-measuring a few
+  // times right after load (cheap, harmless if nothing changed) catches
+  // that late settle on every host without depending on any event this
+  // particular webview may or may not fire. Also re-measures on
+  // pageshow (in-app browsers commonly restore the page from bfcache
+  // when the user switches tabs/apps and back, which changes the
+  // visible height but is not a "resize").
+  document.addEventListener('DOMContentLoaded', setAppVh);
+  window.addEventListener('load', setAppVh);
+  window.addEventListener('pageshow', setAppVh);
+  [50, 150, 300, 600, 1200].forEach(function (delay) {
+    setTimeout(setAppVh, delay);
+  });
 })();
 </script>
 
@@ -59,21 +79,18 @@
          الآن»، هل ينتقل مباشرة للرئيسية (يوجد دخول محفوظ) أو يعرض
          خطوة تسجيل الدخول أدناه (#welcomeAuthStep) لأول مرة. -->
     <div id="welcomeIntroStep">
-      <span class="welcome-logo welcome-logo-intro" aria-hidden="true">
-        <svg viewBox="0 0 100 100" fill="none">
-          <path d="M27 17 L50 53 L73 17" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M50 53 L50 87" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
-        </svg>
+      <span class="welcome-logo welcome-logo-intro">
+        <img src="icon-192.png" alt="يمّك" class="welcome-logo-img">
       </span>
 
       <h1 class="welcome-intro-title">يمّك<span class="welcome-intro-dots">…</span> بكل خطوة</h1>
       <p class="welcome-intro-sub">رحلتك تبدأ من هنا… وكل احتياجاتك ويّانا</p>
 
       <div class="welcome-intro-services" aria-hidden="true">
-        <span class="welcome-intro-chip">🚗 رحلات وتوصيل</span>
-        <span class="welcome-intro-chip">🍔 مطاعم</span>
-        <span class="welcome-intro-chip">🛒 أسواق</span>
-        <span class="welcome-intro-chip">🛠️ خدمات</span>
+        <span class="welcome-intro-chip"><span class="welcome-intro-chip-ic">🚗</span><span class="welcome-intro-chip-label">رحلات وتوصيل</span></span>
+        <span class="welcome-intro-chip"><span class="welcome-intro-chip-ic">🍔</span><span class="welcome-intro-chip-label">مطاعم</span></span>
+        <span class="welcome-intro-chip"><span class="welcome-intro-chip-ic">🛒</span><span class="welcome-intro-chip-label">أسواق</span></span>
+        <span class="welcome-intro-chip"><span class="welcome-intro-chip-ic">🛠️</span><span class="welcome-intro-chip-label">خدمات</span></span>
       </div>
 
       <button type="button" class="app-btn welcome-intro-btn" id="welcomeIntroBtn">
@@ -87,7 +104,7 @@
          وفقط إذا لم توجد بيانات دخول محفوظة مسبقاً على الجهاز. -->
     <div id="welcomeAuthStep" hidden>
       <span class="welcome-logo">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M5 4 12 12.5 19 4" stroke="#0A0E1A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12.5V19" stroke="#0A0E1A" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="20.2" r="1.7" fill="#0A0E1A"/></svg>
+        <img src="icon-192.png" alt="يمّك" class="welcome-logo-img">
       </span>
       <h1>يمّك</h1>
 
@@ -152,11 +169,30 @@
       <p class="welcome-sub">خطوة أخيرة لتجربة أفضل</p>
 
       <div class="welcome-actions">
+
+        <!-- تنبيه المتصفح الداخلي (فيسبوك/انستغرام) — مخفي افتراضياً،
+             يُظهره فقط سكربت كشف User-Agent إضافي في نهاية الصفحة. عرض
+             توجيهي بحت، لا يلمس أي منطق تثبيت/إشعارات/تسجيل دخول قائم. -->
+        <div class="welcome-inapp-notice" id="welcomeInAppNotice" hidden>
+          <span class="welcome-inapp-notice-ic">⚠️</span>
+          <span>تفتح يمّك حالياً من متصفح داخلي (فيسبوك/انستغرام) لا يدعم التثبيت والإشعارات. اضغط <b>(⋯)</b> أو <b>(⋮)</b> أعلى الشاشة واختر <b>«فتح في المتصفح»</b> (Safari على آيفون، Chrome على أندرويد) ثم أكمل الخطوات أدناه.</span>
+        </div>
+
         <div class="welcome-action-group">
           <button type="button" class="app-btn welcome-install-btn" id="welcomeInstallBtn" hidden>
             <span>📲</span> تثبيت التطبيق على الشاشة الرئيسية
           </button>
           <p class="welcome-hint" id="welcomeInstallHint">وصول أسرع لحجز رحلتك دون فتح المتصفح في كل مرة.</p>
+          <div class="welcome-platform-guides" aria-hidden="true">
+            <div class="welcome-platform-guide">
+              <span class="welcome-platform-guide-title">📱 آيفون</span>
+              <span>مشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية»</span>
+            </div>
+            <div class="welcome-platform-guide">
+              <span class="welcome-platform-guide-title">🤖 أندرويد</span>
+              <span>قائمة ⋮ ثم «تثبيت التطبيق»</span>
+            </div>
+          </div>
         </div>
 
         <div class="welcome-action-group">
@@ -164,6 +200,16 @@
             <span>🔔</span> تفعيل إشعارات الرحلة والعروض
           </button>
           <p class="welcome-hint">لتصلك تنبيهات فور تحديث حالة رحلتك وأحدث العروض.</p>
+          <div class="welcome-platform-guides" aria-hidden="true">
+            <div class="welcome-platform-guide">
+              <span class="welcome-platform-guide-title">📱 آيفون</span>
+              <span>يلزم تثبيت التطبيق أولاً، ثم اضغط «سماح»</span>
+            </div>
+            <div class="welcome-platform-guide">
+              <span class="welcome-platform-guide-title">🤖 أندرويد</span>
+              <span>اضغط الزر واختر «سماح/Allow»</span>
+            </div>
+          </div>
         </div>
 
         <button type="button" class="app-btn" id="welcomeContinueBtn">
@@ -198,6 +244,34 @@
       </radialGradient>
     </defs>
   </svg>
+
+  <!-- Reference-parity header — a light location pill pinned above the
+       map on the Home screen, matching the reference's top bar
+       ("بغداد، العراق" style). Purely additive/display-only: it never
+       calls Supabase, never blocks any tap on the map behind it, and
+       is hidden on every non-home view by the same existing
+       .is-fullscreen-view rule already used for .map-search-pill (see
+       app.css). Its text is filled in by a small additive script at
+       the end of <body> that only reads the region the customer
+       already typed into the existing #loginRegion field at login
+       (localStorage key app.js already writes to) — no new input, no
+       new data collected. -->
+  <div class="map-location-bar" id="mapLocationBar" aria-hidden="true">
+    <span class="map-location-ic">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>
+    </span>
+    <span id="mapLocationText">العراق</span>
+  </div>
+
+  <!-- Header avatar shortcut — purely a navigation shortcut into the
+       existing "حسابي" tab, sitting opposite the location pill so the
+       two form one header row over the map (Home screen only, same
+       hide rule as the pill above). Tapping it only calls the already-
+       existing showView('profile') — no new view, no new data, no new
+       element ids that app.js doesn't already know how to ignore. -->
+  <button type="button" class="map-avatar-btn" id="mapAvatarBtn" aria-label="حسابي" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z" stroke="currentColor" stroke-width="1.7"/><path d="M4.5 20.2c1.4-3.4 4.3-5.4 7.5-5.4s6.1 2 7.5 5.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+  </button>
 
   <!-- Decorative search pill over the map, matching the reference's map
        search bar. Purely additive: tapping it calls the exact same
@@ -239,6 +313,16 @@
 
         <div class="home-columns">
           <div class="home-col home-col-services">
+            <!-- Discover banner — purely decorative/static, matching the
+                 reference's "اكتشف خدماتنا في منطقتك" card. No click
+                 handler, no data, no id app.js reads — just a one-line
+                 intro sitting above the existing service grid. -->
+            <div class="discover-banner" aria-hidden="true">
+              <span class="discover-banner-ic">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>
+              </span>
+              <span>اكتشف خدماتنا في منطقتك</span>
+            </div>
             <p class="section-label">اختر خدمتك</p>
             <div class="quick-services" id="quickServices">
               <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards. -->
@@ -419,6 +503,32 @@
             <label for="notes">ملاحظات (اختياري)</label>
           </div>
 
+          <!-- Confirmation summary card (Step 4) — matches the reference's
+               "تأكيد الحجز" card. Purely a read-only display of data the
+               customer already entered in earlier steps (service, pickup,
+               dropoff, name, phone); a small additive script at the end of
+               <body> fills these spans in on every visit to step 4 by
+               reading the exact same #pickup/#dropoff/#customerName/#phone
+               fields and the already-active .svc-pill icon — nothing new
+               is collected, nothing is sent anywhere, and #priceEstimate/
+               .price-bar right below is completely untouched (price stays
+               hidden exactly as already configured). -->
+          <div class="confirm-summary-card" data-wizard-step="4" id="confirmSummaryCard">
+            <div class="confirm-summary-head">
+              <span class="confirm-summary-icon" id="confirmSummaryIcon" aria-hidden="true"></span>
+              <div class="confirm-summary-head-text">
+                <b id="confirmSummaryService">—</b>
+                <span id="confirmSummaryTagline"></span>
+              </div>
+            </div>
+            <div class="confirm-summary-rows">
+              <div class="csr-row"><span>من</span><b id="confirmSummaryPickup">—</b></div>
+              <div class="csr-row"><span>إلى</span><b id="confirmSummaryDropoff">—</b></div>
+              <div class="csr-row"><span>الاسم</span><b id="confirmSummaryName">—</b></div>
+              <div class="csr-row"><span>الهاتف</span><b id="confirmSummaryPhone">—</b></div>
+            </div>
+          </div>
+
           <div class="price-bar" data-wizard-step="4">
             <span>السعر</span>
             <b id="priceEstimate">— دينار</b>
@@ -596,7 +706,38 @@
                 <span>كيف أثبت التطبيق؟</span>
                 <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <div class="help-a-wrap"><div class="help-a"><p>اضغط زر "تثبيت" في أعلى الشاشة، وستظهر لك خطوات التثبيت المناسبة لجهازك تلقائياً.</p></div></div>
+              <div class="help-a-wrap">
+                <div class="help-a">
+                  <div class="help-install-guide">
+                    <p class="help-install-intro">يمكنك تثبيت يمّك على شاشتك الرئيسية خلال ثوانٍ، ليعمل كتطبيق مستقل بدون فتح المتصفح في كل مرة:</p>
+
+                    <div class="help-install-block">
+                      <h4>📱 على آيفون (iPhone)</h4>
+                      <ol class="help-install-steps">
+                        <li><span class="step-num">1</span><span>افتح يمّك من متصفح <b>Safari</b></span></li>
+                        <li><span class="step-num">2</span><span>اضغط أيقونة المشاركة <b>⬆️ (السهم للأعلى)</b> بشريط المتصفح</span></li>
+                        <li><span class="step-num">3</span><span>مرّر للأسفل واختر <b>«إضافة إلى الشاشة الرئيسية»</b></span></li>
+                        <li><span class="step-num">4</span><span>اضغط <b>«إضافة»</b> أعلى الشاشة لإكمال التثبيت</span></li>
+                      </ol>
+                    </div>
+
+                    <div class="help-install-block">
+                      <h4>🤖 على أندرويد (Android)</h4>
+                      <ol class="help-install-steps">
+                        <li><span class="step-num">1</span><span>افتح يمّك من متصفح <b>Chrome</b></span></li>
+                        <li><span class="step-num">2</span><span>اضغط زر <b>«تثبيت التطبيق»</b> الذي يظهر تلقائياً، أو افتح قائمة المتصفح <b>(⋮)</b></span></li>
+                        <li><span class="step-num">3</span><span>اختر <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b></span></li>
+                        <li><span class="step-num">4</span><span>أكّد الإضافة — ستظهر أيقونة يمّك في قائمة تطبيقاتك</span></li>
+                      </ol>
+                    </div>
+
+                    <div class="help-install-note">
+                      <span class="help-install-note-ic">⚠️</span>
+                      <span>إذا فتحت الرابط من داخل <b>فيسبوك</b> أو <b>إنستغرام</b> أو أي تطبيق آخر: لن يعمل التثبيت مباشرة من هناك. اضغط زر <b>(⋯)</b> أو <b>(⋮)</b> أعلى الشاشة واختر <b>«فتح في Safari»</b> (آيفون) أو <b>«فتح في Chrome»</b> (أندرويد)، ثم كرّر خطوات التثبيت أعلاه.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="help-item">
@@ -843,6 +984,9 @@
   </div>
 </div>
 
+
+
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
@@ -919,6 +1063,17 @@
     });
   }
 
+  // Header avatar shortcut — only calls the existing showView('profile'),
+  // the exact same navigation the "حسابي" bottom-nav tab already
+  // triggers. No new view, no new state.
+  function wireMapAvatarBtn() {
+    var btn = document.getElementById('mapAvatarBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (typeof showView === 'function') showView('profile');
+    });
+  }
+
   function wireOrdersFilter() {
     var filterBar = document.getElementById('ordersFilter');
     var list = document.getElementById('ordersList');
@@ -955,10 +1110,67 @@
     if (!section || !nextBtn || !backBtn) return;
 
     function currentStep() { return Number(section.getAttribute('data-current-step') || '1'); }
+
+    // Fills the read-only confirmation card (added alongside #priceEstimate
+    // in index.html) from the exact same fields/state app.js already
+    // maintains — no new data, no Supabase call, nothing sent anywhere.
+    function updateConfirmSummary() {
+      var svcLabelEl = document.getElementById('confirmSummaryService');
+      var taglineEl = document.getElementById('confirmSummaryTagline');
+      var iconWrap = document.getElementById('confirmSummaryIcon');
+      var pickupEl = document.getElementById('confirmSummaryPickup');
+      var dropoffEl = document.getElementById('confirmSummaryDropoff');
+      var nameEl = document.getElementById('confirmSummaryName');
+      var phoneEl = document.getElementById('confirmSummaryPhone');
+      if (!svcLabelEl) return;
+
+      try {
+        var activePill = document.querySelector('#svcSwitch .svc-pill.active');
+        if (activePill) {
+          var label = activePill.querySelector('span');
+          if (svcLabelEl) svcLabelEl.textContent = (label && label.textContent.trim()) || '—';
+          if (iconWrap) {
+            // Covers both states of the pill's icon: a real vehicle photo
+            // (<img class="svc-pill-photo">) or, if that photo file is
+            // missing, app.js's own vehiclePhotoFallback() already swaps
+            // it for a bare <svg> — match either so the confirmation
+            // card's icon never ends up blank.
+            var iconSrc = activePill.querySelector('.svc-pill-photo, svg');
+            iconWrap.innerHTML = iconSrc ? iconSrc.outerHTML : '';
+          }
+        }
+        // Same short taglines already shown under the step-1 service
+        // switcher (.svc-switch-caption[data-caption-for] in app.css) —
+        // duplicated here as plain text only because CSS ::before
+        // generated content isn't readable from the DOM.
+        var TAGLINES = {
+          taxi: '🚕 الخيار الأفضل لتنقلاتك اليومية',
+          private: '🚘 رحلة خاصة وراحة أكثر',
+          courier: '📦 توصيل سريع للطرود',
+          intercity: '🚌 رحلات بين المحافظات',
+          cargo: '🚚 نقل الأغراض والحمولات',
+          starx: '👥 نقل عدة أشخاص دفعة واحدة',
+        };
+        var captionEl = document.getElementById('svcSwitchCaption');
+        var svcKey = captionEl && captionEl.dataset.captionFor;
+        if (taglineEl) taglineEl.textContent = (svcKey && TAGLINES[svcKey]) || '';
+      } catch (e) { /* non-critical, decorative only */ }
+
+      var pickupInput = document.getElementById('pickup');
+      var dropoffInput = document.getElementById('dropoff');
+      var nameInput = document.getElementById('customerName');
+      var phoneInput = document.getElementById('phone');
+      if (pickupEl) pickupEl.textContent = (pickupInput && pickupInput.value.trim()) || '—';
+      if (dropoffEl) dropoffEl.textContent = (dropoffInput && dropoffInput.value.trim()) || '—';
+      if (nameEl) nameEl.textContent = (nameInput && nameInput.value.trim()) || '—';
+      if (phoneEl) phoneEl.textContent = (phoneInput && phoneInput.value.trim()) || '—';
+    }
+
     function setStep(n) {
       section.setAttribute('data-current-step', String(n));
       backBtn.hidden = (n === 1);
       nextBtn.hidden = (n === 4);
+      if (n === 4) updateConfirmSummary();
       var scroll = document.getElementById('sheetScroll');
       if (scroll) scroll.scrollTop = 0;
     }
@@ -1024,9 +1236,59 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     wireMapSearchPill();
+    wireMapAvatarBtn();
     wireOrdersFilter();
     initBookingWizard();
   });
+})();
+</script>
+
+<!-- Header location pill (Home screen) — purely display, reads the
+     optional region the customer already typed into #loginRegion at
+     login (same 'mustaqbali_login' localStorage key app.js already
+     writes to in initWelcomeScreen()). No new data collected, no
+     network/Supabase call, no existing function touched. -->
+<script>
+(function () {
+  function fillMapLocationText() {
+    var el = document.getElementById('mapLocationText');
+    if (!el) return;
+    try {
+      var raw = localStorage.getItem('mustaqbali_login');
+      var p = raw ? JSON.parse(raw) : null;
+      el.textContent = (p && p.region) ? (p.region + '، العراق') : 'العراق';
+    } catch (e) { /* non-critical */ }
+  }
+  document.addEventListener('DOMContentLoaded', fillMapLocationText);
+  // Refresh right after a successful login on the welcome screen too,
+  // without waiting for a full page reload.
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#welcomeLoginBtn')) {
+      setTimeout(fillMapLocationText, 50);
+    }
+  });
+})();
+</script>
+
+<!-- كشف المتصفح الداخلي لفيسبوك/انستغرام (In-App Browser) — سكربت
+     عرضي إضافي بحت: يفحص navigator.userAgent فقط لإظهار تنبيه
+     #welcomeInAppNotice المضاف أعلاه في خطوة الإعداد. لا يستدعي أي
+     دالة من app.js ولا يعدّل أي سلوك تثبيت/إشعارات/تسجيل دخول قائم؛
+     إن فشل الفحص لأي سبب يبقى التنبيه مخفياً كما هو افتراضياً. -->
+<script>
+(function () {
+  function isInAppBrowser(ua) {
+    ua = ua || '';
+    return /FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Twitter/i.test(ua);
+  }
+  function showInAppNoticeIfNeeded() {
+    var notice = document.getElementById('welcomeInAppNotice');
+    if (!notice) return;
+    try {
+      if (isInAppBrowser(navigator.userAgent)) notice.hidden = false;
+    } catch (e) { /* non-critical */ }
+  }
+  document.addEventListener('DOMContentLoaded', showInAppNoticeIfNeeded);
 })();
 </script>
 </body>
