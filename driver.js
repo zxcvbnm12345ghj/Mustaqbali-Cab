@@ -46,70 +46,10 @@ let consecutiveFailures = 0;
 let currentTrip = null;
 let tripTimer = null;
 
-// ===== TEMP DIAG: log helper, masks the token to length-only. Delete
-// this whole function when removing the diagnostic. =====
-function diagMaskLen(t) {
-  return t ? `(len=${t.length})` : '(none)';
-}
-
-// ===== TEMP DIAG UI START — on-screen diagnostic box for iPhone/no-DevTools
-// debugging of the "رابط غير صالح" issue. Purely additive: only READS
-// state that the existing code already computes and only WRITES to its
-// own #tempDiagBox element. Does not change resolveDriverToken(),
-// lookupDriverByToken(), initDriverPage()'s branching, or any Supabase/
-// RPC call. Never shows the full token, only its length. Delete this
-// whole block (state object + render function) plus every
-// `updateDiag(...)` call site when removing the diagnostic. =====
-const diagState = {
-  urlHasToken: null,      // true/false — was ?driver_token= present in the URL
-  tokenSource: null,      // 'url' | 'localStorage' | 'none'
-  tokenLength: 0,         // length only, never the token itself
-  rpcCalled: false,       // was get_driver_by_token actually invoked
-  rpcResultShape: null,   // 'array(len=N)' | 'object' | 'null' | '(not called)'
-  rpcErrorMessage: null,  // full error message/code, or null if no error
-  finalBranch: null,      // 'NO TOKEN' | 'RPC ERROR' | 'NO DRIVER' | 'SUCCESS'
-};
-
-function updateDiag(patch) {
-  Object.assign(diagState, patch);
-  renderDiagBox();
-}
-
-function renderDiagBox() {
-  let box = document.getElementById('tempDiagBox');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'tempDiagBox';
-    box.setAttribute('dir', 'ltr');
-    box.style.cssText = [
-      'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:999999',
-      'background:#111', 'color:#0f0', 'font-family:monospace',
-      'font-size:11px', 'line-height:1.5', 'padding:8px 10px',
-      'white-space:pre-wrap', 'word-break:break-word',
-      'max-height:45vh', 'overflow:auto', 'direction:ltr', 'text-align:left',
-      'border-bottom:2px solid #0f0',
-    ].join(';');
-    // document.body always exists by the time this is called (only
-    // triggered from code that runs after/at DOMContentLoaded).
-    document.body.appendChild(box);
-  }
-  const s = diagState;
-  box.textContent =
-    'TEMP DIAG (remove after debugging)\n' +
-    '1) URL has driver_token? ' + (s.urlHasToken === null ? '(not checked yet)' : s.urlHasToken) + '\n' +
-    '2) Token source: ' + (s.tokenSource || '(none yet)') + ' | length: ' + s.tokenLength + '\n' +
-    '3) get_driver_by_token called? ' + s.rpcCalled + '\n' +
-    '4) RPC result shape: ' + (s.rpcResultShape || '(not called)') + '\n' +
-    '5) RPC error: ' + (s.rpcErrorMessage || '(none)') + '\n' +
-    '6) FINAL BRANCH: ' + (s.finalBranch || '(pending)');
-}
-// ===== TEMP DIAG UI END (state object + render function) =====
-
 function getTokenFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const t = params.get('driver_token');
   const result = t && t.trim() ? t.trim() : null;
-  console.log('[DIAG] getTokenFromUrl() ->', diagMaskLen(result)); // TEMP DIAG
   return result;
 }
 
@@ -121,17 +61,12 @@ function getTokenFromUrl() {
 // purely additive convenience and never overrides an explicit URL token.
 function resolveDriverToken() {
   const fromUrl = getTokenFromUrl();
-  updateDiag({ urlHasToken: !!fromUrl }); // TEMP DIAG UI
   if (fromUrl) {
     try { localStorage.setItem(TOKEN_STORAGE_KEY, fromUrl); } catch (_) {}
-    console.log('[DIAG] resolveDriverToken() using URL token ->', diagMaskLen(fromUrl)); // TEMP DIAG
-    updateDiag({ tokenSource: 'url', tokenLength: fromUrl.length }); // TEMP DIAG UI
     return fromUrl;
   }
   let stored = null;
   try { stored = localStorage.getItem(TOKEN_STORAGE_KEY); } catch (_) { stored = null; }
-  console.log('[DIAG] resolveDriverToken() no URL token, using localStorage ->', diagMaskLen(stored)); // TEMP DIAG
-  updateDiag({ tokenSource: stored ? 'localStorage' : 'none', tokenLength: stored ? stored.length : 0 }); // TEMP DIAG UI
   return stored;
 }
 
@@ -367,34 +302,9 @@ async function setupPushNotifications() {
 // caller (initDriverPage) uses this to show the actual reason instead
 // of always defaulting to the same "invalid link" copy.
 async function lookupDriverByToken(token) {
-  console.log('[DIAG] lookupDriverByToken() called, token length =', token ? token.length : 0); // TEMP DIAG
-  updateDiag({ rpcCalled: true }); // TEMP DIAG UI
   try {
     const { data, error } = await supabaseClient.rpc('get_driver_by_token', {
       p_driver_token: token,
-    });
-
-    // TEMP DIAG — safe inspection of the raw RPC result, no full token,
-    // no logic change below this block.
-    console.log('[DIAG] get_driver_by_token raw error ->', error ? JSON.stringify({
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    }) : 'null');
-    console.log('[DIAG] get_driver_by_token raw data is Array? ->', Array.isArray(data));
-    console.log('[DIAG] get_driver_by_token raw data length ->', Array.isArray(data) ? data.length : '(not an array)');
-    if (Array.isArray(data) && data.length > 0) {
-      console.log('[DIAG] first row ->', JSON.stringify({ id: data[0].id, name: data[0].name }));
-    } else if (data && !Array.isArray(data)) {
-      console.log('[DIAG] non-array data ->', JSON.stringify({ id: data.id, name: data.name }));
-    }
-    // ===== END TEMP DIAG block for this section =====
-
-    // TEMP DIAG UI — record result shape + error message for the on-page box
-    updateDiag({
-      rpcResultShape: Array.isArray(data) ? `array(len=${data.length})` : (data ? 'object' : 'null'),
-      rpcErrorMessage: error ? (error.message || error.code || String(error)) : null,
     });
 
     if (error) throw error;
@@ -402,7 +312,6 @@ async function lookupDriverByToken(token) {
     return { driver, error: null };
   } catch (err) {
     console.error('get_driver_by_token failed', err);
-    updateDiag({ rpcErrorMessage: err ? (err.message || err.code || String(err)) : '(unknown error)' }); // TEMP DIAG UI
     return { driver: null, error: err };
   }
 }
@@ -412,11 +321,7 @@ async function initDriverPage() {
   const invalidScreen = document.getElementById('driverInvalidScreen');
   const mainScreen = document.getElementById('driverMainScreen');
 
-  console.log('[DIAG] initDriverPage() driverToken exists? ->', !!driverToken); // TEMP DIAG
-
   if (!driverToken) {
-    console.log('[DIAG] initDriverPage() branch entered -> NO TOKEN'); // TEMP DIAG
-    updateDiag({ finalBranch: 'NO TOKEN' }); // TEMP DIAG UI
     setInvalidDetail(null);
     setScreenVisible(invalidScreen, true);
     setScreenVisible(mainScreen, false);
@@ -425,10 +330,7 @@ async function initDriverPage() {
 
   const { driver, error } = await lookupDriverByToken(driverToken);
 
-  console.log('[DIAG] initDriverPage() after lookup -> driver exists?', !!driver, '| error exists?', !!error); // TEMP DIAG
-
   if (error) {
-    console.log('[DIAG] initDriverPage() branch entered -> RPC ERROR'); // TEMP DIAG
     // The RPC call itself failed — token may well be correct, this is
     // a real infrastructure problem (network/permissions/schema). Show
     // it instead of silently reusing the generic "invalid link" copy,
@@ -436,12 +338,10 @@ async function initDriverPage() {
     setScreenVisible(invalidScreen, true);
     setScreenVisible(mainScreen, false);
     setInvalidDetail('خطأ تقني: ' + (error.message || error.code || String(error)));
-    updateDiag({ finalBranch: 'RPC ERROR' }); // TEMP DIAG UI
     return;
   }
 
   if (!driver) {
-    console.log('[DIAG] initDriverPage() branch entered -> NO DRIVER (empty result)'); // TEMP DIAG
     // RPC succeeded and cleanly returned no row — token is genuinely
     // wrong, revoked, or belongs to an inactive driver. Same "invalid
     // link" screen as before, and drop it from localStorage so a stale
@@ -449,13 +349,9 @@ async function initDriverPage() {
     setInvalidDetail(null);
     setScreenVisible(invalidScreen, true);
     setScreenVisible(mainScreen, false);
-    updateDiag({ finalBranch: 'NO DRIVER' }); // TEMP DIAG UI
     try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (_) {}
     return;
   }
-
-  console.log('[DIAG] initDriverPage() branch entered -> SUCCESS, showing main screen'); // TEMP DIAG
-  updateDiag({ finalBranch: 'SUCCESS' }); // TEMP DIAG UI
 
   setScreenVisible(mainScreen, true);
   setScreenVisible(invalidScreen, false);

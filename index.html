@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>يمّك | Yammak</title>
-<meta name="description" content="يمّك: احجز تاكسي، سيارة خاصة، توصيل طرود، أو رحلة بين المدن في ثوانٍ.">
+<meta name="description" content="يمّك — خدماتك وتنقلك في مكان واحد">
 <meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -574,33 +574,71 @@
         <p class="section-label">حالة الطلب</p>
         <div class="timeline-app" id="timelineApp"></div>
 
+        <!-- بطاقة السائق — إعادة تصميم بصرية بالكامل (Uber/Careem-style)
+             على نفس هوية التطبيق (الذهبي/التركوازي والخطوط الحالية).
+             كل الـ IDs التي يستخدمها app.js (driverCard, driverAvatar,
+             driverPendingText, driverPendingSub, driverMeta,
+             driverRatingTag, driverCarTag, driverPlateTag, driverEta,
+             driverEtaVal, driverActions, callDriverBtn,
+             whatsappDriverBtn) بقيت كما هي بدون أي تغيير في منطقها —
+             فقط أُضيفت عناصر اختيارية جديدة (لون السيارة، شارة الحالة،
+             نقطة الأونلاين) تُملأ من applyDriverInfo() في app.js فقط
+             إذا كانت بياناتها الحقيقية موجودة فعلاً في قاعدة البيانات،
+             وتبقى مخفية تماماً غير ذلك. لا بيانات وهمية أُضيفت هنا. -->
         <div class="driver-card-app driver-pending" id="driverCard">
-          <span class="driver-avatar" id="driverAvatar">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 17h1a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h1v-5l-2.5-5.5A2 2 0 0 0 15.7 5H8.3a2 2 0 0 0-1.8 1.5L4 12v5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-          <div class="driver-info">
-            <b id="driverPendingText">بانتظار تعيين سائق</b>
-            <span id="driverPendingSub">سنُعلمك فور تعيين السائق</span>
-            <div class="driver-meta" id="driverMeta" hidden>
-              <span class="driver-rating" id="driverRatingTag">4.8 ★</span>
-              <span id="driverCarTag">—</span>
-              <span class="driver-plate" id="driverPlateTag">—</span>
+          <div class="driver-card-top">
+            <span class="driver-avatar" id="driverAvatar">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 17h1a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h1v-5l-2.5-5.5A2 2 0 0 0 15.7 5H8.3a2 2 0 0 0-1.8 1.5L4 12v5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="driver-status-dot" id="driverStatusDot" hidden></span>
+            </span>
+
+            <div class="driver-info">
+              <div class="driver-name-row">
+                <b id="driverPendingText">بانتظار تعيين <span class="role-badge role-captain">كابتن يمّك</span></b>
+                <span class="driver-rating" id="driverRatingTag" hidden>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9L5.7 21l1.7-7-5.4-4.7 7.1-.6L12 2z"/></svg>
+                  <span id="driverRatingVal">4.8</span>
+                </span>
+              </div>
+              <span id="driverPendingSub">سنُعلمك فور تعيين <span class="role-badge role-captain">كابتن يمّك</span></span>
+
+              <div class="driver-meta" id="driverMeta" hidden>
+                <span class="driver-chip" id="driverCarTag">—</span>
+                <span class="driver-chip driver-chip-color" id="driverColorTag" hidden>
+                  <i class="driver-color-dot" id="driverColorDot"></i>
+                  <span id="driverColorVal">—</span>
+                </span>
+                <span class="driver-chip driver-plate" id="driverPlateTag">—</span>
+              </div>
+            </div>
+
+            <div class="driver-eta" id="driverEta" hidden>
+              <b id="driverEtaVal">5</b>
+              <span>دقيقة</span>
             </div>
           </div>
-          <div class="driver-eta" id="driverEta" hidden>
-            <b id="driverEtaVal">5</b>
-            <span>دقيقة</span>
+
+          <!-- شارة حالة السائق (في الطريق / وصل) — تُبنى من نفس
+               row.status المستخدم أصلاً في driverPendingSub، بدون أي
+               مصدر بيانات جديد. -->
+          <div class="driver-status-banner" id="driverStatusBanner" hidden>
+            <span class="driver-status-banner-dot"></span>
+            <span id="driverStatusBannerText"><span class="role-badge role-captain">كابتن يمّك</span> في الطريق إليك</span>
           </div>
         </div>
 
         <div class="driver-actions" id="driverActions" hidden>
-          <a href="#" class="driver-action-btn call" id="callDriverBtn" aria-label="اتصال بالسائق">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            اتصال
+          <a href="#" class="driver-action-btn call" id="callDriverBtn" aria-label="اتصال بكابتن يمّك">
+            <span class="driver-action-ic">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span>اتصال</span>
           </a>
-          <a href="#" class="driver-action-btn whatsapp" id="whatsappDriverBtn" target="_blank" rel="noopener" aria-label="واتساب السائق">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
-            واتساب
+          <a href="#" class="driver-action-btn whatsapp" id="whatsappDriverBtn" target="_blank" rel="noopener" aria-label="واتساب كابتن يمّك">
+            <span class="driver-action-ic">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
+            </span>
+            <span>واتساب</span>
           </a>
         </div>
 
@@ -742,10 +780,10 @@
 
             <div class="help-item">
               <button type="button" class="help-q" aria-expanded="false">
-                <span>كيف أتواصل مع السائق؟</span>
+                <span>كيف أتواصل مع <span class="role-badge role-captain">كابتن يمّك</span>؟</span>
                 <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <div class="help-a-wrap"><div class="help-a"><p>بعد تعيين السائق يمكنك الاتصال أو التواصل عبر واتساب مباشرة.</p></div></div>
+              <div class="help-a-wrap"><div class="help-a"><p>بعد تعيين <span class="role-badge role-captain">كابتن يمّك</span> يمكنك الاتصال أو التواصل عبر واتساب مباشرة.</p></div></div>
             </div>
 
             <div class="help-item">

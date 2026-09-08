@@ -15,6 +15,32 @@ const SERVICES = {
   starx:     { label: 'نقل نفرات',        base: 4000,  perKm: 550, icon: 'starx' },
 };
 
+// ============================================================
+// مسميات الأدوار الرسمية داخل يمّك — نص فقط، بلا إيموجي/أيقونات
+// بجانب الاسم، يُميَّز كل دور بلونه وخطّه الخاص (Badge) عبر CSS:
+//   - "كابتن يمّك"  → خدمات النقل والرحلات (تكسي/خصوصي/بين المحافظات/نقل نفرات/حمل ونقل الأثاث)
+//   - "مندوب يمّك"  → الدليفري والتوصيل والطرود (دليفري)
+//   - "شريك يمّك"   → المطاعم والأسواق والمتاجر ومقدمو الخدمات
+// هذا استبدال نصي فقط لكلمة "السائق" القديمة أينما ظهرت للعميل —
+// لا يمسّ أي بيانات أو RPC أو منطق حجز/تعيين موجود.
+// ============================================================
+const ROLE_LABELS = {
+  captain: 'كابتن يمّك',
+  agent: 'مندوب يمّك',
+  partner: 'شريك يمّك',
+};
+function roleKeyForService(serviceType) {
+  if (serviceType === 'courier') return 'agent';
+  return 'captain'; // تشمل taxi/private/intercity/cargo/starx، وتُستخدم أيضاً كافتراضي عام
+}
+function roleLabelForService(serviceType) {
+  return ROLE_LABELS[roleKeyForService(serviceType)];
+}
+function roleBadgeHtml(serviceType) {
+  const key = roleKeyForService(serviceType);
+  return `<span class="role-badge role-${key}">${ROLE_LABELS[key]}</span>`;
+}
+
 // Stage — real vehicle photos for the service list/switch, replacing
 // the flat SVG car icons. Each service maps to a local image under
 // assets/vehicles/ (ship these files with the app — no network call,
@@ -127,6 +153,7 @@ const state = {
   map: null,
   pickupMarker: null,
   dropoffMarker: null,
+  driverMarker: null, // assigned driver's live position pin — only set when the status RPC returns real driver_lat/driver_lng
   decorLine: null,
   lastSubmission: null, // { id, request_number, phone, service_type, pickup, dropoff, created_at }
   statusPollTimer: null,
@@ -223,6 +250,17 @@ function initMap() {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
     }).addTo(state.map);
+
+    // Leaflet's own "Leaflet" credit/logo link (added automatically by
+    // the attribution control above) is just library branding — Leaflet
+    // itself is BSD-licensed and requires no attribution at all. It's
+    // dropped here so only the tile provider's REQUIRED notice remains
+    // (OpenStreetMap's copyright link set on the tile layer above, via
+    // the `attribution` option). This does not touch, hide, or shrink
+    // that OpenStreetMap notice, and has nothing to do with Google Maps/
+    // Places — no Google mapping product is used anywhere in this app,
+    // so no Google attribution exists here to remove.
+    if (state.map.attributionControl) state.map.attributionControl.setPrefix(false);
 
     tiles.on('load', () => {
       const skel = document.getElementById('mapSkeleton');
@@ -816,10 +854,11 @@ async function loadServiceDrivers(serviceType) {
       const canRequest = row.status === 'active';
       const hasActions = cleanTel || waTarget || canRequest;
 
+      const roleLabel = roleLabelForService(serviceType);
       const actionsHtml = hasActions ? `
         <div class="driver-actions">
-          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال بالسائق">${CALL_ICON_SVG} اتصال</a>` : ''}
-          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب السائق">${WA_ICON_SVG} واتساب</a>` : ''}
+          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال بـ${roleLabel}">${CALL_ICON_SVG} اتصال</a>` : ''}
+          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب ${roleLabel}">${WA_ICON_SVG} واتساب</a>` : ''}
           ${canRequest ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
         </div>
       ` : '';
@@ -829,6 +868,7 @@ async function loadServiceDrivers(serviceType) {
           <span class="driver-avatar">${DRIVER_AVATAR_SVG}</span>
           <div class="driver-info">
             <b>${escapeHtml(vehicleTypeLabel)}</b>
+            ${roleBadgeHtml(serviceType)}
             <div class="driver-meta"><span class="${info.cls}">${info.dot} ${info.label}</span></div>
           </div>
         </div>
@@ -1350,7 +1390,7 @@ async function handleSubmit(e) {
     if (!state.featuredDriverPhone) {
       console.log('[SUBMIT] no driver selected — stopping before RPC');
       haptic(20);
-      showMsg('يرجى اختيار سائق متاح من القائمة أولاً');
+      showMsg(`يرجى اختيار ${roleLabelForService(state.currentService)} متاح من القائمة أولاً`);
       return;
     }
 
@@ -1535,6 +1575,18 @@ function renderStatusView() {
   document.getElementById('statusServiceLabel').textContent = SERVICES[s.service_type]?.label || s.service_type;
   document.getElementById('statusPickup').textContent = s.pickup || '—';
   document.getElementById('statusDropoff').textContent = s.dropoff || '—';
+
+  // مسمى الدور المعروض قبل تعيين مزوّد الخدمة — نفس منطق applyDriverInfo
+  // أدناه لاحقاً بمجرد وصول بيانات حقيقية، بدون أي بيانات وهمية هنا.
+  const pendingTextEl = document.getElementById('driverPendingText');
+  const pendingSubEl = document.getElementById('driverPendingSub');
+  const callBtnEl = document.getElementById('callDriverBtn');
+  const waBtnEl = document.getElementById('whatsappDriverBtn');
+  if (pendingTextEl) pendingTextEl.innerHTML = `بانتظار تعيين ${roleBadgeHtml(s.service_type)}`;
+  if (pendingSubEl) pendingSubEl.innerHTML = `سنُعلمك فور تعيين ${roleBadgeHtml(s.service_type)}`;
+  if (callBtnEl) callBtnEl.setAttribute('aria-label', `اتصال بـ${roleLabelForService(s.service_type)}`);
+  if (waBtnEl) waBtnEl.setAttribute('aria-label', `واتساب ${roleLabelForService(s.service_type)}`);
+
   renderTimeline('new');
   const businessLink = buildWhatsappLink();
   const waBtnApp = document.getElementById('whatsappBtnApp');
@@ -1564,12 +1616,34 @@ function renderTimeline(status) {
   }).join('');
 }
 
+// Simple, defensive Arabic label map for common car-color values so the
+// color chip reads naturally either way — if the value already comes as
+// Arabic text from the database it's shown as-is (falls through the map
+// untouched); this never invents a color that isn't actually in the row.
+const CAR_COLOR_LABELS_AR = {
+  white: 'أبيض', black: 'أسود', silver: 'فضي', gray: 'رمادي', grey: 'رمادي',
+  red: 'أحمر', blue: 'أزرق', green: 'أخضر', gold: 'ذهبي', beige: 'بيج',
+  brown: 'بني', yellow: 'أصفر', orange: 'برتقالي',
+};
+// Matching dot colors for the small swatch next to the chip — purely a
+// cosmetic hint, falls back to a neutral gray dot for any unmapped value.
+const CAR_COLOR_SWATCH = {
+  'أبيض': '#F4F6F8', 'أسود': '#1A1F26', 'فضي': '#C7CDD6', 'رمادي': '#8A93A3',
+  'أحمر': '#D4453B', 'أزرق': '#2F6FE4', 'أخضر': '#2FAE63', 'ذهبي': '#E5B85C',
+  'بيج': '#D9C8A9', 'بني': '#7A5A3C', 'أصفر': '#E8C93A', 'برتقالي': '#E08A32',
+};
+
 function applyDriverInfo(row) {
   const card = document.getElementById('driverCard');
   const avatar = document.getElementById('driverAvatar');
+  const statusDot = document.getElementById('driverStatusDot');
   const pendingText = document.getElementById('driverPendingText');
   const pendingSub = document.getElementById('driverPendingSub');
+  const ratingTag = document.getElementById('driverRatingTag');
   const meta = document.getElementById('driverMeta');
+  const colorTag = document.getElementById('driverColorTag');
+  const banner = document.getElementById('driverStatusBanner');
+  const bannerText = document.getElementById('driverStatusBannerText');
   const etaWrap = document.getElementById('driverEta');
   const actions = document.getElementById('driverActions');
 
@@ -1579,13 +1653,56 @@ function applyDriverInfo(row) {
     avatar.innerHTML = row.driver_photo_url
       ? `<img src="${escapeHtml(row.driver_photo_url)}" alt="">`
       : `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    // Re-append the online/status dot removed by overwriting innerHTML above.
+    if (statusDot) {
+      avatar.appendChild(statusDot);
+      statusDot.hidden = false;
+      statusDot.classList.toggle('arrived', row.status === 'arrived');
+    }
     pendingText.textContent = row.driver_name;
-    pendingSub.textContent = row.status === 'arrived' ? 'السائق وصل لموقعك' : 'في الطريق إليك';
+    const isArrived = row.status === 'arrived';
+    const assignedServiceType = state.lastSubmission?.service_type;
+    pendingSub.innerHTML = isArrived
+      ? `${roleBadgeHtml(assignedServiceType)} وصل لموقعك`
+      : `${roleBadgeHtml(assignedServiceType)} في الطريق إليك`;
+
+    if (ratingTag) {
+      if (row.driver_rating != null) {
+        document.getElementById('driverRatingVal').textContent = Number(row.driver_rating).toFixed(1);
+        ratingTag.hidden = false;
+      } else {
+        ratingTag.hidden = true;
+      }
+    }
 
     meta.hidden = false;
-    document.getElementById('driverRatingTag').textContent = row.driver_rating != null ? `${Number(row.driver_rating).toFixed(1)} ★` : '— ★';
     document.getElementById('driverCarTag').textContent = row.driver_car_type || '—';
     document.getElementById('driverPlateTag').textContent = row.driver_plate || '—';
+
+    // Car color — only shown when the database actually returns it
+    // (row.driver_car_color); stays hidden otherwise, never a placeholder.
+    if (colorTag) {
+      if (row.driver_car_color) {
+        const raw = String(row.driver_car_color).trim();
+        const label = CAR_COLOR_LABELS_AR[raw.toLowerCase()] || raw;
+        document.getElementById('driverColorVal').textContent = label;
+        const dot = document.getElementById('driverColorDot');
+        if (dot) dot.style.background = CAR_COLOR_SWATCH[label] || '#93A0B4';
+        colorTag.hidden = false;
+      } else {
+        colorTag.hidden = true;
+      }
+    }
+
+    // Status banner (في الطريق / وصل) — same row.status already used
+    // above for driverPendingSub, just surfaced as a clearer banner too.
+    if (banner && bannerText) {
+      bannerText.innerHTML = isArrived
+        ? `${roleBadgeHtml(assignedServiceType)} وصل — بانتظارك`
+        : `${roleBadgeHtml(assignedServiceType)} في الطريق إليك`;
+      banner.classList.toggle('arrived', isArrived);
+      banner.hidden = false;
+    }
 
     if (row.eta_minutes != null && row.status !== 'arrived' && row.status !== 'completed') {
       etaWrap.hidden = false;
@@ -1614,13 +1731,63 @@ function applyDriverInfo(row) {
       callBtn.hidden = true;
       waBtn.hidden = true;
     }
+
+    // Driver's live position on the tracking map — only drawn when the
+    // status RPC actually returns real coordinates for this trip
+    // (row.driver_lat/driver_lng). Nothing is guessed or simulated; if
+    // those fields aren't present the map simply keeps showing the
+    // pickup/dropoff pins exactly as before.
+    updateDriverMapMarker(row);
   } else {
     card.classList.add('driver-pending');
     card.classList.remove('driver-live');
+    if (statusDot) statusDot.hidden = true;
+    if (ratingTag) ratingTag.hidden = true;
+    if (colorTag) colorTag.hidden = true;
+    if (banner) banner.hidden = true;
     meta.hidden = true;
     etaWrap.hidden = true;
     actions.hidden = true;
+    removeDriverMapMarker();
   }
+}
+
+// Small car-shaped marker for the assigned driver's live position on the
+// same Leaflet map already used for pickup/dropoff (#map) — visually
+// consistent with pickupDivIcon()/dropoffDivIcon() above. Only ever
+// called with row.driver_lat/driver_lng that came straight from the
+// status RPC; if either is missing the marker is simply removed/skipped.
+function driverDivIcon() {
+  return L.divIcon({
+    className: 'driver-pin',
+    html: `<span class="driver-pin-pulse"></span><svg viewBox="0 0 34 34" fill="none">
+      <circle cx="17" cy="17" r="15" fill="#0B2036" stroke="#FFFFFF" stroke-width="2.4"/>
+      <path d="M11 19.5h1.1a1.9 1.9 0 0 0 3.6 0h3.4a1.9 1.9 0 0 0 3.6 0H24v-3l-1.6-3.3a1.4 1.4 0 0 0-1.3-.9h-8.2a1.4 1.4 0 0 0-1.3.9L10 16.5v3Z" fill="#E5B85C"/>
+    </svg>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
+function updateDriverMapMarker(row) {
+  if (!state.map || row.driver_lat == null || row.driver_lng == null) {
+    removeDriverMapMarker();
+    return;
+  }
+  const lat = Number(row.driver_lat), lng = Number(row.driver_lng);
+  if (!isFinite(lat) || !isFinite(lng)) { removeDriverMapMarker(); return; }
+
+  if (state.driverMarker) {
+    state.driverMarker.setLatLng([lat, lng]);
+  } else {
+    state.driverMarker = L.marker([lat, lng], { icon: driverDivIcon(), zIndexOffset: 500 }).addTo(state.map);
+  }
+}
+function removeDriverMapMarker() {
+  if (state.driverMarker && state.map) {
+    state.map.removeLayer(state.driverMarker);
+  }
+  state.driverMarker = null;
 }
 
 function startStatusPolling() {

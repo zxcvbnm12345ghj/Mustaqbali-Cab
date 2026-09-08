@@ -1,63 +1,320 @@
-/* Mustaqbali Cab — driver.html styles.
-   Uses the same design tokens as style.css (colors, fonts, radii) so it
-   looks like part of the same product, but has its own tiny layout —
-   it does not load app.css (the full customer-app stylesheet). */
+/* =========================================================
+   Driver page — visual identity pass
+   ---------------------------------------------------------
+   Purpose: make the driver page (driver.html) look like it belongs
+   to the same "يمّك" app as the customer interface, by reusing the
+   exact same design tokens and component patterns already defined
+   in app.css (loaded right before this file — see driver.html) —
+   NOT by inventing a new palette/shape language of its own.
 
-.driver-body{
-  min-height: 100vh;
-  min-height: 100dvh;
-  display:flex; align-items:center; justify-content:center;
-  padding: 20px;
-  background: linear-gradient(180deg, var(--bg-deep-2), var(--bg-deep));
+   What this file does:
+   - Styles the existing driver-* classes/ids only. No id is
+     renamed, no id is added/removed, no element is deleted.
+   - Every color / radius / shadow / spacing value below is a
+     var(--...) already defined in app.css (--teal, --gold,
+     --surface, --bg-deep, --text*, --shadow-deep, --brand-grad,
+     --app-r-*, --sp-*, --elev-*), so if the customer palette ever
+     changes upstream, this page updates automatically with it.
+   - The overall pattern mirrors app.css's own ".welcome-screen"
+     (full-bleed centered splash) + ".welcome-login-form" (glass
+     card) + ".app-btn" (primary pill button) + ".order-card"
+     (chip/row layout) — the closest existing customer-app patterns
+     to a single centered status card, reused rather than copied
+     content-wise.
+
+   What this file does NOT touch:
+   - driver.js is untouched. Every id it reads
+     (driverToggleBtn, driverStatusDot, driverStatusText,
+     driverLastSent, driverTripBox, driverTripEmpty,
+     driverTripDetails, driverTripRequestNumber, driverTripStatus,
+     driverTripCustomer, driverTripServiceType,
+     driverTripPickupLocation, driverOpenMapBtn,
+     driverInvalidDetail, driverMainScreen, driverInvalidScreen)
+     keeps its exact selector, meaning, and behavior.
+   - #tempDiagBox is styled entirely inline via JS (style.cssText)
+     and is not referenced anywhere in this file — left exactly as
+     it is.
+   ========================================================= */
+
+/* ---------------- Full-viewport shell ----------------
+   Same iOS/Android-safe full-height + safe-area handling as the
+   customer app shell (.app-shell / .welcome-screen in app.css),
+   so the page always fills the real usable screen on both
+   platforms with no white gaps, and never scrolls sideways. */
+html, body.driver-body{
+  height: 100%;
+  height: 100svh;
+  height: 100dvh;
+  margin: 0;
+  background: var(--bg-deep);
+  overflow: hidden;
+  overscroll-behavior: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  touch-action: manipulation;
+  font-family: var(--f-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif);
+  color: var(--text);
 }
 
-.driver-screen{ width:100%; display:flex; justify-content:center; }
+/* Each "screen" (#driverInvalidScreen / #driverMainScreen) is a
+   full-bleed, centered splash — same structure as .welcome-screen
+   in app.css: fixed, centered content, safe-area padding, and the
+   same soft blue/green ambient background wash the rest of the
+   app already uses via --bg-deep, plus the same gold/teal glow
+   accents .welcome-screen adds on top of it. */
+.driver-screen{
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  background:
+    radial-gradient(760px 460px at 8% -12%, var(--gold-dim), transparent 58%),
+    radial-gradient(640px 400px at 108% 112%, var(--teal-dim), transparent 55%),
+    var(--bg-deep);
+}
+.driver-screen[hidden]{ display: none; }
 
+/* ---------------- Card ----------------
+   Same "glass card" treatment as .welcome-login-form: translucent
+   white, blurred, asymmetric rounded corners, the app's shared
+   deep shadow token. This is the one visual container every piece
+   of driver UI now lives inside, matching how the customer app
+   always frames content in a card, never loose on the background. */
 .driver-card{
-  width:100%; max-width: 380px;
-  background: var(--surface);
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 26px 22px 24px;
+  border-radius: 26px 26px 12px 26px;
+  background: rgba(255,255,255,0.85);
   border: 1px solid var(--surface-brd);
-  border-radius: var(--radius-lg);
-  padding: 28px 24px;
   box-shadow: var(--shadow-deep);
-  text-align:center;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  text-align: center;
 }
 
+/* ---------------- Brand row ----------------
+   Small rounded gradient badge + wordmark, same gold→teal gradient
+   language as .welcome-logo in app.css, scaled down to sit as a
+   header row inside the card instead of a standalone hero. The
+   driver's own icon (already inline SVG in driver.html) is kept
+   exactly as-is — only the badge it sits in is restyled. */
 .driver-brand{
-  display:flex; align-items:center; justify-content:center; gap:9px;
-  font-family: var(--f-display); font-weight:800; font-size:15px;
-  margin-bottom: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  font-weight: 900;
+  font-size: 15.5px;
+  color: var(--text);
+  letter-spacing: -.1px;
 }
 .driver-brand .brand-mark{
-  width:32px; height:32px; border-radius:10px;
-  background: linear-gradient(135deg, var(--gold), var(--teal));
-  display:flex; align-items:center; justify-content:center;
-  flex-shrink:0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 14px 14px 14px 6px;
+  background: linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%);
+  box-shadow: 0 10px 22px -10px rgba(29,111,209,0.45);
+}
+.driver-brand .brand-mark svg{ width: 18px; height: 18px; }
+
+/* ---------------- Headings / body text ----------------
+   Same scale + colors as .welcome-content h1 / .welcome-sub /
+   .welcome-hint in app.css. */
+.driver-card h1{
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.2px;
+  margin: 4px 0 12px;
+  color: var(--text);
+}
+.driver-muted{
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+  line-height: 1.6;
+}
+.driver-fineprint{
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+  margin: 18px 0 0;
+  padding: 0 4px;
 }
 
-.driver-card h1{ font-size:18px; margin: 0 0 10px; }
-.driver-muted{ color: var(--text-muted); font-size: 13px; line-height:1.7; margin: 0 0 20px; }
-
+/* ---------------- Status row ----------------
+   Styled as a small pill/chip, matching the weight+size of
+   .status-svc-tag / .driver-meta span chips in app.css, with the
+   dot itself colored per driver.js's existing setStatus() states
+   (live / warn / error / paused-default) — purely a color mapping,
+   no class driver.js sets or reads is renamed. */
 .driver-status-row{
-  display:flex; align-items:center; justify-content:center; gap:9px;
-  font-weight:700; font-size: 14.5px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 10px;
+  padding: 9px 16px;
+  border-radius: var(--app-r-pill, 100px);
+  background: var(--surface-hi);
+  border: 1px solid var(--surface-brd);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  max-width: 100%;
+}
+.driver-status-row span#driverStatusText{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .driver-status-dot{
-  width:11px; height:11px; border-radius:50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
   background: var(--text-faint);
-  flex-shrink:0;
-  transition: background .25s;
+  transition: background .25s, box-shadow .25s;
 }
-.driver-status-dot.live{ background: var(--success); box-shadow: 0 0 0 4px rgba(30,142,86,0.16); }
-.driver-status-dot.warn{ background: var(--gold); box-shadow: 0 0 0 4px var(--gold-dim); }
-.driver-status-dot.error{ background: var(--danger); box-shadow: 0 0 0 4px rgba(201,68,53,0.16); }
+.driver-status-dot.live{
+  background: var(--success, #22C55E);
+  box-shadow: 0 0 0 4px var(--green-dim, rgba(34,197,94,0.16));
+}
+.driver-status-dot.warn{
+  background: var(--gold);
+  box-shadow: 0 0 0 4px var(--gold-dim);
+}
+.driver-status-dot.error{
+  background: var(--danger, #E5484D);
+  box-shadow: 0 0 0 4px rgba(229,72,77,0.16);
+}
 
+/* ---------------- Last-sent line ---------------- */
+#driverLastSent{
+  margin-bottom: 20px;
+}
+
+/* ---------------- Current trip box ----------------
+   Same accent-spine + chip layout as .order-card in app.css: a
+   bordered panel with a colored inline-start accent, a rounded
+   request-number chip, and small muted rows underneath. */
+.driver-trip{
+  text-align: right;
+  margin: 4px 0 20px;
+  padding: 16px 16px 14px;
+  border-radius: 18px 18px 18px 6px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-inline-start: 4px solid var(--teal-dim);
+  box-shadow: var(--elev-1);
+}
+.driver-trip[hidden]{ display: none; }
+.driver-trip #driverTripEmpty{
+  text-align: center;
+  margin: 6px 0;
+}
+.driver-trip #driverTripDetails p{
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.driver-trip #driverTripDetails p:first-child{
+  margin-bottom: 10px;
+}
+#driverTripRequestNumber{
+  font-weight: 800;
+  font-size: 14.5px;
+  color: var(--gold-text);
+  background: var(--gold-dim);
+  border: 1px solid rgba(229,184,92,0.3);
+  padding: 5px 12px;
+  border-radius: var(--app-r-pill, 100px);
+  display: inline-block;
+}
+#driverTripStatus{
+  font-weight: 700;
+  color: var(--teal-text);
+}
+
+/* ---------------- Buttons ----------------
+   Same primary-pill treatment as .app-btn in app.css (the exact
+   button class used for every primary action in the customer app:
+   "التالي", "تأكيد الحجز", "اطلب رحلة الآن", etc.) — same gradient,
+   radius, shadow, min-height and tap-feedback, applied here to
+   .driver-btn so both driver buttons read as the same component
+   family without editing driver.html's classes or driver.js. */
 .driver-btn{
-  width:100%; padding: 14px; border-radius: 12px; font-weight:800; font-size:14.5px;
-  background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color:#1A1204;
-  margin: 18px 0 16px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  min-height: 54px;
+  margin-top: 4px;
+  border-radius: var(--app-r-pill, 100px);
+  font-size: 15.5px;
+  font-weight: 800;
+  font-family: inherit;
+  color: #fff;
+  background: var(--brand-grad, linear-gradient(135deg, var(--gold-soft) 0%, var(--teal) 42%, var(--teal) 100%));
+  box-shadow: 0 14px 26px -14px rgba(28,150,110,0.45), 0 10px 22px -16px rgba(29,111,209,0.4);
+  border: none;
+  transition: transform .12s, box-shadow .2s, opacity .2s;
 }
-.driver-btn.paused{ background: var(--surface-hi); color: var(--text); border:1px solid var(--surface-brd); }
+.driver-btn:active{ transform: scale(0.97); }
 
-.driver-fineprint{ font-size: 11px; color: var(--text-faint); line-height:1.7; margin:0; }
+/* "استئناف الإرسال" (paused) state — driver.js only toggles the
+   `.paused` class on/off (classList.add/remove), it never rewrites
+   the button's full className, so this class-based variant is
+   safe to add without touching driver.js. Visually distinguished
+   as a secondary/muted pill (paused = not actively sending),
+   mirroring .app-btn.secondary in app.css, so the button's color
+   itself reinforces the on/off state exactly like the status dot
+   above it. */
+.driver-btn.paused{
+  background: #fff;
+  color: var(--text);
+  border: 1.5px solid var(--surface-brd);
+  box-shadow: none;
+}
+
+/* The in-trip "فتح موقع الزبون على الخريطة" button sits inside the
+   trip card, so it reads as a secondary action under the main
+   toggle button — same shape/family, lighter weight, matching
+   .app-btn.secondary. */
+#driverOpenMapBtn{
+  margin-top: 10px;
+  min-height: 46px;
+  font-size: 13.5px;
+  background: var(--surface-hi);
+  color: var(--teal-text);
+  border: 1px solid var(--surface-brd);
+  box-shadow: none;
+}
+#driverOpenMapBtn[hidden]{ display: none; }
+
+/* ---------------- Invalid-link screen fineprint ---------------- */
+#driverInvalidDetail{
+  margin-top: 10px;
+  color: var(--danger, #E5484D);
+}
+#driverInvalidDetail[hidden]{ display: none; }

@@ -321,6 +321,22 @@ html, body.app-body{
 @keyframes pin-drop{ 0%{ transform: translateY(-24px) scale(0.5); opacity:0; } 60%{ transform: translateY(4px) scale(1.08); opacity:1; } 100%{ transform: translateY(0) scale(1); } }
 @keyframes pin-pulse{ 0%{ transform: translateX(-50%) scale(0.5); opacity:.9; } 100%{ transform: translateX(-50%) scale(2.2); opacity:0; } }
 
+/* Assigned driver's live position marker on the tracking map (only
+   ever rendered when real driver_lat/driver_lng come back from the
+   status RPC — see updateDriverMapMarker() in app.js). Same drop-shadow
+   language as .pickup-pin/.dropoff-pin above for visual consistency. */
+.driver-pin{
+  width:34px; height:34px; position:relative;
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5));
+}
+.driver-pin svg{ width:34px; height:34px; position:relative; z-index:2; }
+.driver-pin-pulse{
+  position:absolute; inset:0; margin:auto; width:34px; height:34px; border-radius:50%;
+  background: radial-gradient(circle, rgba(229,184,92,0.45), transparent 70%);
+  animation: pin-pulse-center 1.8s ease-out infinite; z-index:1;
+}
+@keyframes pin-pulse-center{ 0%{ transform: scale(0.6); opacity:.9; } 100%{ transform: scale(2.1); opacity:0; } }
+
 /* Professional route line: gradient, animated dash flow, soft glow */
 .decor-route{
   stroke: url(#appRouteGrad);
@@ -1211,31 +1227,97 @@ html, body.app-body{
 .driver-card-app{
   display:flex; align-items:center; gap: var(--sp-3);
   background: var(--surface); border: 1px solid var(--surface-brd);
-  border-radius: var(--app-r-md);
+  border-radius: var(--app-r-lg);
   padding: var(--sp-4);
   margin-bottom: var(--sp-3);
-  transition: border-color .3s, background .3s;
+  transition: border-color .3s, background .3s, box-shadow .3s;
 }
-.driver-card-app.driver-live{ border-color: var(--gold); background: var(--gold-dim); box-shadow: var(--elev-1); }
+.driver-card-app.driver-live{
+  border-color: var(--gold);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--gold-dim) 140%);
+  box-shadow: var(--elev-2);
+}
+/* The standalone assigned-driver card (#driverCard, status view) is the
+   only one with a .driver-card-top wrapper + status banner beneath —
+   stack those vertically. Roster rows (#driversListApp) never contain
+   .driver-card-top, so they keep the plain row layout above untouched. */
+#driverCard.driver-card-app{ flex-direction:column; align-items:stretch; gap:0; }
+.driver-card-top{ display:flex; align-items:center; gap: var(--sp-3); }
 .driver-avatar{
-  width:46px; height:46px; border-radius: var(--app-r-xs); flex-shrink:0;
+  position:relative;
+  width:56px; height:56px; border-radius: 16px; flex-shrink:0;
   background: var(--gold-dim); color: var(--gold-text);
   display:flex; align-items:center; justify-content:center;
   overflow: hidden;
   border: 2px solid transparent;
 }
-.driver-card-app.driver-live .driver-avatar{ border-color: var(--gold); background: rgba(255,255,255,0.6); }
+.driver-card-app.driver-live .driver-avatar{
+  border-color: var(--gold);
+  background: rgba(255,255,255,0.6);
+  box-shadow: 0 6px 14px -6px rgba(168,123,46,0.45);
+}
 .driver-avatar img{ width:100%; height:100%; object-fit:cover; }
-.driver-avatar svg{ width:20px; height:20px; }
+.driver-avatar svg{ width:22px; height:22px; }
+/* Small online/status dot fixed to the avatar's corner — teal while the
+   driver is en route, green once row.status === 'arrived'. Purely a
+   visual reflection of the same status value already driving the rest
+   of the card; no new data source. */
+.driver-status-dot{
+  position:absolute; inset-inline-end:-2px; inset-block-end:-2px;
+  width:15px; height:15px; border-radius:50%;
+  background: var(--teal); border:2.5px solid var(--surface);
+  box-shadow: 0 0 0 1px rgba(29,111,209,0.25);
+}
+.driver-status-dot.arrived{ background: var(--green); box-shadow: 0 0 0 1px rgba(34,197,94,0.25); }
+
 .driver-info{ min-width:0; flex:1; }
-.driver-info b{ display:block; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.driver-name-row{ display:flex; align-items:center; gap:8px; }
+.driver-name-row b{ font-size:15px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .driver-info > span{ font-size:12.5px; color: var(--text-faint); }
-.driver-meta{ display:flex; align-items:center; gap: var(--sp-2); margin-top:5px; flex-wrap:wrap; }
-.driver-meta span{ font-size:11px; font-weight:700; color: var(--text-muted); background: var(--surface-hi); padding:3px 9px; border-radius:var(--app-r-pill); }
+
+/* Rating badge, moved inline next to the driver's name (Uber/Careem
+   style) instead of buried in the meta chip row. */
+.driver-rating{
+  display:inline-flex !important; align-items:center; gap:3px; flex-shrink:0;
+  font-size:11.5px; font-weight:800; color: var(--gold-text) !important;
+  background: var(--gold-dim); padding:2.5px 8px 2.5px 7px; border-radius: var(--app-r-pill);
+}
+.driver-rating svg{ color: var(--gold-text); }
+
+.driver-meta{ display:flex; align-items:center; gap: 6px; margin-top:7px; flex-wrap:wrap; }
+.driver-chip{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:11px; font-weight:700; color: var(--text-muted); background: var(--surface-hi);
+  padding:4px 10px; border-radius:var(--app-r-pill); border:1px solid var(--surface-brd);
+}
+.driver-chip.driver-plate{ font-family: var(--f-display); letter-spacing:.3px; color: var(--text); background: var(--surface); }
+.driver-color-dot{
+  display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0;
+  border: 1px solid rgba(16,27,45,0.15); background:#93A0B4;
+}
+/* Roster-list status badges (unrelated to the assigned-driver card
+   above, kept exactly as before). */
 .driver-meta span.badge-live{ background: var(--green-dim); color: var(--green-text); }
 .driver-meta span.badge-busy{ background: var(--gold-dim); color: var(--gold-text); }
 .driver-meta span.badge-onjob{ background: rgba(201,68,53,0.09); color: #C24A3D; }
 .driver-meta span.badge-done{ background: var(--teal-dim, rgba(29,111,209,0.12)); color: var(--teal-text); }
+
+/* Status banner (في الطريق إليك / وصل) — a clear, full-width strip
+   under the top row, the same treatment Uber/Careem use to call out
+   the driver's current state at a glance. */
+.driver-status-banner{
+  display:flex; align-items:center; gap:8px;
+  margin-top: var(--sp-3); padding: 9px 12px;
+  font-size:12.5px; font-weight:700; color: var(--teal-text);
+  background: var(--teal-dim); border-radius: var(--app-r-sm);
+}
+.driver-status-banner-dot{
+  width:7px; height:7px; border-radius:50%; background: var(--teal); flex-shrink:0;
+  box-shadow: 0 0 0 3px rgba(29,111,209,0.18);
+  animation: tla-pulse-soft 1.6s ease-in-out infinite;
+}
+.driver-status-banner.arrived{ color: var(--green-text); background: var(--green-dim); }
+.driver-status-banner.arrived .driver-status-banner-dot{ background: var(--green); box-shadow: 0 0 0 3px rgba(34,197,94,0.18); animation:none; }
 
 /* Roster rows inside the organized drivers panel: flatten the
    standalone-card look above into dividing rows of one continuous
@@ -1289,12 +1371,17 @@ html, body.app-body{
 .orders-empty-ic svg{ width:24px; height:24px; }
 .orders-empty p{ font-size:14px; color: var(--text-muted); margin: 0 0 20px; }
 
-.driver-rating{ color: var(--gold-text) !important; }
 .driver-pending .driver-avatar{ animation: tla-pulse-soft 1.8s ease-in-out infinite; }
 @keyframes tla-pulse-soft{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
-.driver-eta{ text-align:center; flex-shrink:0; padding-inline-start:10px; border-inline-start:1px dashed var(--surface-brd); }
-.driver-eta b{ display:block; font-family: var(--f-display); font-size:22px; color: var(--gold-text); line-height:1; }
-.driver-eta span{ font-size:10px; color: var(--text-faint); font-weight:700; }
+/* ETA — a compact circular badge (Uber/Careem style) instead of a plain
+   dashed-divider column, sitting at the end of the top row. */
+.driver-eta{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  flex-shrink:0; width:54px; height:54px; border-radius:50%;
+  background: var(--gold-dim); border: 1.5px solid rgba(229,184,92,0.4);
+}
+.driver-eta b{ display:block; font-family: var(--f-display); font-size:19px; color: var(--gold-text); line-height:1; }
+.driver-eta span{ font-size:9px; color: var(--gold-text); font-weight:700; opacity:.85; }
 
 .driver-actions{ display:flex; gap:10px; margin-bottom:18px; }
 .driver-action-btn{
@@ -1306,6 +1393,20 @@ html, body.app-body{
 .driver-action-btn.call{ background: var(--teal-dim); color: var(--teal-text); border:1px solid rgba(29,111,209,0.3); }
 .driver-action-btn.whatsapp{ background: rgba(34,182,125,0.16); color:#34D399; border:1px solid rgba(34,182,125,0.32); }
 .driver-action-btn.request{ background: linear-gradient(180deg, var(--teal-soft), var(--teal)); color:#fff; border:1px solid transparent; font-family:inherit; cursor:pointer; }
+
+/* Bigger circular icon "bubble" above the label, specifically for the
+   assigned-driver card's own call/whatsapp buttons (#driverActions) —
+   the roster list's inline pill buttons above are untouched. */
+#driverActions.driver-actions{ gap:12px; }
+#driverActions .driver-action-btn{
+  flex-direction:column; gap:6px; padding: 12px 8px 10px; border-radius: var(--app-r-md);
+  font-size:12px;
+}
+#driverActions .driver-action-ic{
+  width:38px; height:38px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(255,255,255,0.55);
+}
 
 .trip-summary-app{ margin-bottom:18px; }
 .tsa-row{ display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px dashed rgba(11,32,54,0.14); font-size:13px; }
@@ -3060,9 +3161,6 @@ html, body.app-body{ background: var(--bg-deep); }
 .driver-avatar{
   box-shadow: 0 4px 10px -4px rgba(16,27,45,0.25);
 }
-.driver-eta{
-  border-inline-start: 1px dashed rgba(29,111,209,0.25);
-}
 .status-header{
   background: var(--brand-grad-soft);
   border-radius: var(--app-r-md);
@@ -3213,3 +3311,41 @@ html, body.app-body{ background: var(--bg-deep); }
   .welcome-intro-services{ margin-bottom: 16px; }
   .welcome-actions{ gap: 12px; margin-bottom: 20px; }
 }
+
+/* ============================================================
+   مسميات أدوار مزوّدي الخدمة داخل يمّك — نص فقط بدون أي إيموجي أو
+   أيقونة بجانب الاسم، يُميَّز كل دور بلون وخط خاصين به (Badge)
+   منسجمين مع هوية يمّك الحالية:
+     - كابتن يمّك  (النقل والرحلات)                → أزرق يمّك (--teal)
+     - مندوب يمّك  (الدليفري والتوصيل والطرود)       → ذهبي (--gold)
+     - شريك يمّك   (المطاعم/الأسواق/المتاجر ومزوّدو الخدمات) → تراكوتا (--sec-market)
+   إضافة بصرية بحتة عبر class جديد؛ لا تمسّ أي id أو منطق موجود.
+   ============================================================ */
+.role-badge{
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 0.92em;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  padding: 1.5px 10px;
+  border-radius: var(--r-pill, 100px);
+  vertical-align: -1px;
+}
+.role-badge.role-captain{
+  color: var(--teal-text);
+  background: var(--teal-dim);
+}
+.role-badge.role-agent{
+  color: var(--gold-text);
+  background: var(--gold-dim);
+}
+.role-badge.role-partner{
+  color: var(--sec-market-text);
+  background: var(--sec-market-dim);
+}
+
+/* داخل بطاقة مزوّد الخدمة في قائمة الاختيار — تُعرض شارة الدور أسفل
+   نوع المركبة مباشرة، بنفس تنسيق الشارات الأخرى في البطاقة. */
+.driver-info > .role-badge{ margin: 2px 0 4px; }
