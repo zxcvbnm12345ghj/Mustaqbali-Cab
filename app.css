@@ -29,11 +29,39 @@
    radius language used throughout this file.
    --------------------------------------------------------- */
 :root{
-  /* ---- Primary — Yammak Blue ---- */
-  --teal: #1D6FD1;
-  --teal-soft: #5B93E0;
-  --teal-text: #123E73;
-  --teal-dim: rgba(29,111,209,0.13);
+  /* ---- Primary — "يمّك" Super-App identity: confident purple carries
+     the app's chrome (buttons, active states, focus rings, nav, hero
+     bands), matching the reference logo/splash. Every existing rule in
+     this file already reads var(--teal)/--teal-soft/--teal-text/--teal-dim
+     for its primary color, so this single token swap re-skins the whole
+     app at once — no other selector below needed to change to pick up
+     the new identity. The variable name is kept as --teal (not renamed)
+     so nothing else in this file has to change. ---- */
+  --teal: #6C3CE0;
+  --teal-soft: #8B5CF6;
+  --teal-text: #4C1D95;
+  --teal-dim: rgba(108,60,224,0.13);
+
+  /* ---- Secondary — Yammak Blue (still used for the second stop in
+     hero/brand gradients and a few dedicated blue accents, e.g. the
+     "بين المحافظات" tile) ---- */
+  --blue: #2563EB;
+  --blue-soft: #60A5FA;
+  --blue-text: #1E3A8A;
+  --blue-dim: rgba(37,99,235,0.13);
+
+  /* ---- Vivid orange accent — CTAs, "سوق يمّك" highlights, offer
+     ribbons ---- */
+  --orange: #FF7A29;
+  --orange-soft: #FFB07A;
+  --orange-text: #B94E0F;
+  --orange-dim: rgba(255,122,41,0.14);
+
+  /* Full brand gradient — purple → blue → orange, echoing the splash
+     screen's sunset skyline. Used for the "سوق يمّك" hero banner and a
+     couple of other flagship surfaces; every other gradient in this
+     file still composes itself from the tokens above. */
+  --brand-sunset: linear-gradient(120deg, #6C3CE0 0%, #2563EB 55%, #FF7A29 100%);
 
   /* ---- Secondary — light gold accent (used sparingly) ---- */
   --gold: #E5B85C;
@@ -298,6 +326,14 @@ html, body.app-body{
 }
 .map-skeleton.hide{ opacity:0; pointer-events:none; }
 
+/* Leaflet's own leaflet.css puts a white box + gray border behind every
+   divIcon by default (.leaflet-div-icon{background:#fff;border:1px solid
+   #666}) — reset here so our custom pickup/dropoff/driver/my-location
+   icons below render as clean shapes with nothing but their own SVG/
+   CSS, matching a real Uber/Careem-style marker instead of showing a
+   faint default box behind each pin. */
+.leaflet-div-icon{ background: transparent; border: none; }
+
 /* Professional pickup marker: animated drop + soft pulse ring */
 .pickup-pin{
   width: 40px; height: 52px;
@@ -336,6 +372,31 @@ html, body.app-body{
   animation: pin-pulse-center 1.8s ease-out infinite; z-index:1;
 }
 @keyframes pin-pulse-center{ 0%{ transform: scale(0.6); opacity:.9; } 100%{ transform: scale(2.1); opacity:0; } }
+
+/* "You are here" live-location dot (updateMyLocationMarker() in app.js).
+   Sits under the draggable pickup pin — same blue brand color, but a
+   flat filled dot with a slow breathing halo instead of a pin shape, so
+   it always reads as "your real position" and never as a second,
+   competing pickup point. Non-interactive (pointer-events:none) so it
+   can never intercept a map tap meant for pickup/dropoff selection. */
+.my-location-pin{ pointer-events:none; }
+.my-location-dot{
+  position:absolute; inset:0; margin:auto;
+  width:14px; height:14px; border-radius:50%;
+  background: #1D6FD1;
+  border: 2.5px solid #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 0 0 1px rgba(29,111,209,0.25);
+}
+.my-location-pulse{
+  position:absolute; inset:0; margin:auto;
+  width:14px; height:14px; border-radius:50%;
+  background: rgba(29,111,209,0.35);
+  animation: my-location-breathe 2.6s ease-out infinite;
+}
+@keyframes my-location-breathe{
+  0%{ transform: scale(1); opacity:.55; }
+  100%{ transform: scale(2.8); opacity:0; }
+}
 
 /* Professional route line: gradient, animated dash flow, soft glow */
 .decor-route{
@@ -707,7 +768,15 @@ html, body.app-body{
   box-shadow: var(--elev-premium);
   position:relative;
   transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
+  /* Some of these tiles are now real <button> nav elements (see
+     .soon-card-clickable below) — reset button chrome so they look
+     identical to the plain <div> tiles that remain (e.g. "خدمات
+     أخرى"), byte-for-byte the same visual result as before. */
+  font: inherit; width:100%; text-align:center; color:inherit;
+  -webkit-appearance:none; appearance:none; margin:0;
 }
+.soon-card-clickable{ cursor:pointer; }
+.soon-card-clickable:focus-visible{ outline: 2px solid var(--teal); outline-offset: 2px; }
 .soon-card:active{ transform: scale(0.96); box-shadow: var(--elev-premium-active); }
 .soon-ic{
   font-size:21px; line-height:1;
@@ -1271,8 +1340,14 @@ html, body.app-body{
 .driver-status-dot.arrived{ background: var(--green); box-shadow: 0 0 0 1px rgba(34,197,94,0.25); }
 
 .driver-info{ min-width:0; flex:1; }
-.driver-name-row{ display:flex; align-items:center; gap:8px; }
-.driver-name-row b{ font-size:15px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Name + rating row — was a fixed single line that clipped real driver
+   names with an ellipsis (a full first+last Arabic name rarely fits
+   next to the rating pill on a narrow screen). Now wraps instead of
+   cutting: the name can take a second line, and the rating badge
+   drops under it if there isn't room, so the driver's full name is
+   always shown in full ("بوضوح"), never truncated. */
+.driver-name-row{ display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.driver-name-row b{ font-size:15px; font-weight:800; line-height:1.28; overflow-wrap:anywhere; min-width:0; flex:1 1 auto; }
 .driver-info > span{ font-size:12.5px; color: var(--text-faint); }
 
 /* Rating badge, moved inline next to the driver's name (Uber/Careem
@@ -1283,6 +1358,23 @@ html, body.app-body{
   background: var(--gold-dim); padding:2.5px 8px 2.5px 7px; border-radius: var(--app-r-pill);
 }
 .driver-rating svg{ color: var(--gold-text); }
+
+/* Driver's phone number — shown as real, readable text (not just an
+   icon button) and directly tappable to call, per the same row.status
+   data source already used everywhere else on this card. Hidden by
+   applyDriverInfo() whenever row.driver_phone isn't present — never a
+   placeholder number. */
+.driver-phone-row{
+  display:inline-flex; align-items:center; gap:6px;
+  margin-top:6px; padding:5px 12px 5px 10px;
+  font-size:12.5px; font-weight:800; color: var(--teal-text);
+  background: var(--teal-dim); border-radius: var(--app-r-pill);
+  text-decoration:none; width:fit-content; max-width:100%;
+  transition: background .15s, box-shadow .15s;
+}
+.driver-phone-row:active{ background: var(--teal-dim); box-shadow: 0 0 0 3px var(--teal-dim); }
+.driver-phone-row svg{ flex-shrink:0; color: var(--teal-text); }
+.driver-phone-row span{ direction:ltr; unicode-bidi:isolate; letter-spacing:.3px; overflow-wrap:anywhere; }
 
 .driver-meta{ display:flex; align-items:center; gap: 6px; margin-top:7px; flex-wrap:wrap; }
 .driver-chip{
@@ -1433,7 +1525,11 @@ html, body.app-body{
   opacity: 0; pointer-events: none;
   transition: all .3s cubic-bezier(.19,1,.22,1);
 }
-.app-toast.show{ opacity:1; transform: translateX(-50%) translateY(0); z-index: 40; }
+/* FIX: this was z-index:40 — LOWER than .bottom-nav's z-index:50 — so a
+   visible toast near the bottom of the screen could render partly behind
+   the nav bar instead of above it. Restored to match the base rule's
+   z-index:100 above; position/timing/opacity/transform all unchanged. */
+.app-toast.show{ opacity:1; transform: translateX(-50%) translateY(0); z-index: 100; }
 
 /* ---------------- Keyboard-open state (set via JS using visualViewport) ----------------
    The map card takes its own permanent row, so when the on-screen
@@ -1929,7 +2025,9 @@ body.kb-open .sheet{ transition: none; }
   border: 1.5px solid var(--surface-brd);
   background: var(--surface);
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px; /* iOS zoom-safe — was 14px, which triggers Safari's
+    auto-zoom-on-focus on iPhone and leaves the layout zoomed in after
+    the keyboard closes. */
   font-family: inherit;
   outline: none;
   transition: border-color .15s, background .15s, box-shadow .15s;
@@ -3349,3 +3447,571 @@ html, body.app-body{ background: var(--bg-deep); }
 /* داخل بطاقة مزوّد الخدمة في قائمة الاختيار — تُعرض شارة الدور أسفل
    نوع المركبة مباشرة، بنفس تنسيق الشارات الأخرى في البطاقة. */
 .driver-info > .role-badge{ margin: 2px 0 4px; }
+
+/* =========================================================
+   سوق يمّك (Yammak Market) — additive-only marketplace styles.
+   Reuses existing tokens (--teal/--orange/--gold/--green/--surface/
+   --app-r-*) and existing generic classes (.app-btn, .float-field,
+   .section-label, .wizard-progress/.wp-step/.wp-dot/.wp-line,
+   .confirm-summary-card/.csr-row, .app-msg, .consent-check,
+   .qs-skel) — nothing above this point is modified.
+   ========================================================= */
+
+/* ---- Home banner entry point ---- */
+.market-banner{
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%; margin: var(--sp-4) 0;
+  padding: 16px 18px;
+  border: none; border-radius: var(--app-r-lg);
+  background: var(--brand-sunset);
+  box-shadow: 0 18px 34px -18px rgba(108,60,224,0.55);
+  cursor:pointer; text-align: right;
+}
+.market-banner-icon{
+  width:46px; height:46px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.22);
+  color:#fff;
+}
+.market-banner-icon svg{ width:24px; height:24px; }
+.market-banner-text{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.market-banner-text b{ color:#fff; font-size:15.5px; }
+.market-banner-text span{ color: rgba(255,255,255,0.9); font-size:11.5px; }
+.market-banner-chev{ color:#fff; flex-shrink:0; }
+.market-banner-chev svg{ width:18px; height:18px; }
+.market-banner:active{ transform: scale(0.98); }
+
+/* ---- Search bar (market home) ---- */
+.mkt-searchbar{
+  display:flex; align-items:center; gap: var(--sp-2);
+  background:#fff; border:1px solid var(--surface-brd);
+  border-radius: var(--app-r-lg); box-shadow: var(--elev-1);
+  padding: 12px var(--sp-4); margin-bottom: var(--sp-4);
+}
+.mkt-searchbar-ic{ color: var(--teal); flex-shrink:0; display:flex; }
+.mkt-searchbar-ic svg{ width:19px; height:19px; }
+.mkt-searchbar input{
+  flex:1; border:none; outline:none; background:transparent;
+  font: inherit; font-size:16px; color: var(--text); /* iOS zoom-safe */
+}
+.mkt-filter-btn{
+  border:none; background: var(--teal-dim); color: var(--teal);
+  width:34px; height:34px; border-radius: 10px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.mkt-filter-btn svg{ width:17px; height:17px; }
+
+/* ---- Hero CTA card ---- */
+.mkt-hero{
+  display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3);
+  padding: var(--sp-4); margin-bottom: var(--sp-5);
+  border-radius: var(--app-r-lg);
+  background: linear-gradient(120deg, var(--orange) 0%, var(--gold) 100%);
+  box-shadow: 0 18px 30px -18px rgba(255,122,41,0.5);
+  border:none; cursor:pointer; text-align:right; width:100%;
+}
+.mkt-hero-text{ display:flex; flex-direction:column; gap:3px; }
+.mkt-hero-text b{ color:#fff; font-size:14.5px; }
+.mkt-hero-text span{ color: rgba(255,255,255,0.92); font-size:11px; }
+.mkt-hero-cta{
+  display:flex; align-items:center; gap:4px; flex-shrink:0;
+  background: rgba(255,255,255,0.24); color:#fff;
+  padding: 8px 12px; border-radius: 100px; font-size:12px; font-weight:800;
+  white-space:nowrap;
+}
+.mkt-hero-cta svg{ width:14px; height:14px; }
+
+.mkt-section-row{ display:flex; align-items:center; justify-content:space-between; margin: var(--sp-2) 0 var(--sp-3); }
+.mkt-section-row .section-label{ margin:0; }
+.mkt-section-row .section-label-more{
+  background:none; border:none; color: var(--teal); font-size:12px; font-weight:700; cursor:pointer;
+}
+
+/* ---- Category grid (market home) ---- */
+.mkt-cats-grid{
+  display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.mkt-cat-card{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  border:none; background:transparent; cursor:pointer; padding: var(--sp-2) 0;
+}
+.mkt-cat-ic{
+  width:52px; height:52px; border-radius:16px;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+  background: var(--teal-dim);
+  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.4);
+}
+.mkt-cat-label{ font-size:11px; font-weight:700; color: var(--text); text-align:center; }
+.mkt-cat-card:active .mkt-cat-ic{ transform: scale(0.94); }
+
+/* ---- Category chip scroller (category/search view) ---- */
+.mkt-cats-scroll{
+  display:flex; gap: var(--sp-2); overflow-x:auto; padding-bottom: var(--sp-2); margin-bottom: var(--sp-3);
+  scrollbar-width:none;
+}
+.mkt-cats-scroll::-webkit-scrollbar{ display:none; }
+.mkt-chip{
+  flex-shrink:0; white-space:nowrap;
+  border:1px solid var(--surface-brd); background:#fff; color: var(--text);
+  border-radius:100px; padding:8px 14px; font-size:12.5px; font-weight:700;
+  display:flex; align-items:center; gap:5px;
+}
+.mkt-chip.active{ background: var(--teal); border-color: var(--teal); color:#fff; }
+
+/* ---- Listings grid + cards ---- */
+.mkt-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.mkt-grid-full{ margin-bottom: var(--sp-6); }
+.mkt-card{
+  display:flex; flex-direction:column; text-align:right;
+  border:1px solid var(--surface-brd); border-radius: var(--app-r-md);
+  background:#fff; overflow:hidden; box-shadow: var(--elev-1); cursor:pointer;
+}
+.mkt-card:active{ transform: scale(0.98); }
+.mkt-card-img{ position:relative; width:100%; aspect-ratio:1/1; background: var(--surface-hi); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.mkt-card-img img{ width:100%; height:100%; object-fit:cover; }
+.mkt-card-img-ph{ font-size:30px; opacity:0.5; }
+.mkt-card-tag{
+  position:absolute; top:6px; inset-inline-start:6px;
+  background: var(--green); color:#fff; font-size:9.5px; font-weight:800;
+  padding:2px 7px; border-radius:100px;
+}
+.mkt-card-body{ display:flex; flex-direction:column; gap:3px; padding: 9px 10px 11px; }
+.mkt-card-title{ font-size:12.5px; color: var(--text); line-height:1.35; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+.mkt-card-price{ font-size:13.5px; font-weight:800; color: var(--orange-text); }
+.mkt-card-loc{ display:flex; align-items:center; gap:3px; font-size:10px; color: var(--text-faint); }
+
+.mkt-empty{ display:flex; flex-direction:column; align-items:center; gap:8px; padding: var(--sp-6) 0; color: var(--text-faint); text-align:center; }
+.mkt-empty-ic{ font-size:32px; }
+
+.mkt-add-fab{ margin-top: var(--sp-3); }
+
+/* ---- Product detail ---- */
+.mkt-product-gallery{ margin: 0 calc(-1 * var(--sp-4)) var(--sp-4); }
+.mkt-gallery-track{ display:flex; gap:2px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; }
+.mkt-gallery-track::-webkit-scrollbar{ display:none; }
+.mkt-gallery-track img{ width:100%; flex-shrink:0; scroll-snap-align:start; aspect-ratio:1/1; object-fit:cover; }
+.mkt-gallery-ph{
+  width:100%; aspect-ratio:4/3; background: var(--surface-hi);
+  display:flex; align-items:center; justify-content:center; font-size:48px; opacity:0.5;
+}
+.mkt-product-body{ padding-bottom: var(--sp-3); }
+.mkt-product-top{ display:flex; align-items:flex-start; justify-content:space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.mkt-product-top h2{ font-size:17px; margin:0; flex:1; }
+.mkt-product-price{ font-size:16px; font-weight:900; color: var(--orange-text); white-space:nowrap; }
+.mkt-product-badges{ display:flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.mkt-badge{
+  display:inline-flex; align-items:center; padding:5px 12px; border-radius:100px;
+  font-size:11.5px; font-weight:700; background: var(--green-dim); color: var(--green-text);
+}
+.mkt-badge-muted{ background: var(--surface-hi); color: var(--text-faint); }
+.mkt-product-desc{ font-size:13px; line-height:1.7; color: var(--text); white-space:pre-wrap; margin-bottom: var(--sp-4); }
+.mkt-product-location{ display:flex; align-items:center; gap:6px; color: var(--text); font-size:13px; margin-bottom: var(--sp-4); }
+.mkt-product-location svg{ color: var(--teal); flex-shrink:0; }
+.mkt-product-number{ font-size:12px; color: var(--text-faint); font-family: monospace; margin-bottom: var(--sp-2); }
+.mkt-product-actions{ display:flex; gap: var(--sp-2); position:sticky; bottom:0; background: var(--surface); padding-top: var(--sp-2); }
+.mkt-whatsapp-btn{
+  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+  background: linear-gradient(180deg, #34D399, #22B67D); color:#06241A;
+}
+.mkt-whatsapp-btn.is-disabled{ opacity:0.5; pointer-events:none; }
+.mkt-delivery-btn{ flex:1; display:flex; align-items:center; justify-content:center; gap:6px; }
+
+/* ---- My Ads ---- */
+.mkt-myads-tabs{ display:flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.mkt-myads-tab{
+  flex:1; border:1px solid var(--surface-brd); background:#fff; color: var(--text-faint);
+  border-radius:100px; padding:9px 6px; font-size:12.5px; font-weight:700;
+}
+.mkt-myads-tab.active{ background: var(--teal); border-color: var(--teal); color:#fff; }
+.mkt-myads-list{ display:flex; flex-direction:column; gap: var(--sp-3); }
+.mkt-myad-card{
+  display:flex; align-items:flex-start; gap: var(--sp-3);
+  background:#fff; border:1px solid var(--surface-brd); border-radius: var(--app-r-md);
+  padding: var(--sp-3); box-shadow: var(--elev-1);
+}
+.mkt-myad-img{ width:58px; height:58px; border-radius:12px; overflow:hidden; flex-shrink:0; background: var(--surface-hi); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.mkt-myad-img img{ width:100%; height:100%; object-fit:cover; }
+.mkt-myad-body{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; cursor:pointer; }
+.mkt-myad-body b{ font-size:13px; }
+.mkt-myad-price{ font-size:12.5px; font-weight:800; color: var(--orange-text); }
+.mkt-myad-date{ font-size:10px; color: var(--text-faint); font-family: monospace; }
+.mkt-myad-actions{ display:flex; flex-direction:column; gap:5px; flex-shrink:0; }
+.mkt-myad-act{
+  border:1px solid var(--surface-brd); background: var(--surface-hi); color: var(--text);
+  font-size:10.5px; font-weight:700; padding:5px 9px; border-radius:100px; white-space:nowrap;
+}
+.mkt-myad-act-danger{ color: var(--danger); border-color: rgba(201,68,53,0.3); background: rgba(201,68,53,0.08); }
+.mkt-phone-gate{ text-align:center; padding: var(--sp-4) 0; }
+.mkt-phone-gate p{ font-size:13px; color: var(--text-faint); margin-bottom: var(--sp-4); }
+.mkt-phone-gate .float-field{ text-align:right; }
+
+/* ---- Add listing wizard ---- */
+.mkt-photo-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.mkt-photo-add, .mkt-photo-thumb{
+  position:relative; aspect-ratio:1/1; border-radius: var(--app-r-md); overflow:hidden;
+}
+.mkt-photo-add{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  border: 1.5px dashed var(--surface-brd); background: var(--surface-hi); color: var(--teal); cursor:pointer;
+  text-align:center; font-size:10.5px; line-height:1.4;
+}
+.mkt-photo-add svg{ width:20px; height:20px; }
+.mkt-photo-add small{ color: var(--text-faint); font-weight:400; }
+.mkt-photo-thumb img{ width:100%; height:100%; object-fit:cover; }
+.mkt-photo-remove{
+  position:absolute; top:4px; inset-inline-end:4px; width:20px; height:20px; border-radius:50%;
+  border:none; background: rgba(11,30,56,0.65); color:#fff; font-size:14px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
+
+.mkt-select-field select{
+  width:100%; border:1.5px solid var(--surface-brd); border-radius: var(--app-r-md);
+  background:#fff; padding: 20px 14px 8px; font: inherit; font-size:16px; color: var(--text); /* iOS zoom-safe */
+  appearance:none; -webkit-appearance:none;
+}
+.mkt-select-field{ position:relative; }
+.mkt-select-field::after{
+  content:''; position:absolute; inset-inline-start:16px; top:50%; width:9px; height:9px;
+  border-inline-start:2px solid var(--text-faint); border-bottom:2px solid var(--text-faint);
+  transform: translateY(-65%) rotate(-45deg); pointer-events:none;
+}
+.mkt-select-field label{ top:8px; font-size:11px; color: var(--teal); transform:none; }
+
+.mkt-textarea-field textarea{ min-height:90px; }
+.mkt-textarea-field label{ top:8px; font-size:11px; color: var(--teal); transform:none; }
+
+.mkt-condition-toggle{ display:flex; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.mkt-condition-opt{ flex:1; position:relative; }
+.mkt-condition-opt input{ position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.mkt-condition-opt span{
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--surface-brd); border-radius: var(--app-r-md);
+  padding:11px; font-size:13px; font-weight:700; color: var(--text-faint);
+}
+.mkt-condition-opt input:checked + span{ border-color: var(--teal); background: var(--teal-dim); color: var(--teal-text); }
+
+/* Wizard progress dots — scoped to the market-add view, mirroring the
+   booking wizard's own [data-view="booking"]-scoped rules above
+   without touching them. Step visibility itself is handled directly
+   in market.js via the `hidden` attribute (no CSS attribute-selector
+   dependency needed here). */
+.sheet-view[data-view="marketAdd"] .wp-step[data-mkt-wp-step="1"].active .wp-dot,
+.sheet-view[data-view="marketAdd"] .wp-step.active .wp-dot{ background: var(--teal); color:#fff; border-color: var(--teal); }
+.sheet-view[data-view="marketAdd"] .wp-step.done .wp-dot{ background: var(--success); border-color: var(--success); color:#fff; }
+
+/* ---- Done screen ---- */
+.mkt-done{ display:flex; flex-direction:column; align-items:center; text-align:center; gap: var(--sp-3); padding: var(--sp-6) var(--sp-3); }
+.mkt-done-check{
+  width:72px; height:72px; border-radius:50%;
+  background: linear-gradient(135deg, #34D399, #22B67D); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+}
+.mkt-done-check svg{ width:34px; height:34px; }
+.mkt-done h2{ margin:0; font-size:17px; }
+.mkt-done p{ color: var(--text-faint); font-size:13px; margin:0 0 var(--sp-3); }
+.mkt-done .app-btn{ width:100%; max-width:280px; }
+
+/* =========================================================================
+   المطاعم / الأسواق / مكتب المستقبل — real card-based directory + a
+   dedicated details page (places.js). Deliberately reuses the same
+   structural language as the "سوق يمّك" marketplace cards above
+   (.mkt-card's shape/shadow/radius) so the whole app still reads as
+   one consistent product, while giving each of the three categories
+   its own accent pulled from the existing --mk-food / --mk-grocery /
+   --mk-stationery tokens (already used on the home teaser tiles) —
+   never a plain re-tint of an unrelated component.
+   ========================================================================= */
+.plc-tabs{ display:flex; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.plc-tab{
+  flex:1; padding:9px 10px; border-radius:100px; border:1px solid var(--surface-brd);
+  background: var(--surface); color: var(--text-faint); font-size:12.5px; font-weight:700;
+  cursor:pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.plc-tab.active{ background: var(--teal); border-color: var(--teal); color:#fff; }
+
+.plc-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.plc-card{
+  display:flex; flex-direction:column; text-align:right;
+  border:1px solid var(--surface-brd); border-radius: var(--app-r-md);
+  background:#fff; overflow:hidden; box-shadow: var(--elev-1); cursor:pointer;
+  font: inherit; padding:0; width:100%; -webkit-appearance:none; appearance:none;
+}
+.plc-card:active{ transform: scale(0.98); }
+.plc-card-img{ position:relative; width:100%; aspect-ratio:4/3; background: var(--surface-hi); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.plc-card-img img{ width:100%; height:100%; object-fit:cover; }
+.plc-card-img-ph{ font-size:30px; opacity:0.5; }
+.plc-card-body{ display:flex; flex-direction:column; gap:4px; padding: 9px 10px 11px; }
+.plc-card-title{ font-size:12.5px; color: var(--text); line-height:1.35; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+.plc-card-cat{
+  align-self:flex-start; font-size:10px; font-weight:700; padding:2px 9px; border-radius:100px;
+}
+.plc-card-cat-restaurants{ background: var(--mk-food-dim); color: var(--mk-food-text); }
+.plc-card-cat-markets{ background: var(--mk-grocery-dim); color: var(--mk-grocery-text); }
+.plc-card-cat-futureOffice{ background: var(--mk-stationery-dim); color: var(--mk-stationery-text); }
+.plc-card-meta{ font-size:10px; color: var(--text-faint); }
+
+.plc-empty{ display:flex; flex-direction:column; align-items:center; gap:8px; padding: var(--sp-6) 0; color: var(--text-faint); text-align:center; }
+.plc-empty-ic{ font-size:32px; }
+
+.plc-detail-hero{
+  width:100%; aspect-ratio: 16/9; border-radius: var(--app-r-md);
+  background: var(--surface-hi) center/cover no-repeat;
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom: var(--sp-4); overflow:hidden;
+}
+.plc-detail-hero-ph{ font-size:44px; opacity:0.45; }
+.plc-detail-body{ padding-bottom: var(--sp-3); }
+.plc-detail-top{ display:flex; align-items:flex-start; justify-content:space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.plc-detail-top h2{ font-size:17px; margin:0; flex:1; }
+.plc-detail-badge{
+  display:inline-flex; align-items:center; padding:5px 12px; border-radius:100px;
+  font-size:11.5px; font-weight:700; white-space:nowrap;
+}
+.plc-detail-desc{ font-size:13px; line-height:1.7; color: var(--text); white-space:pre-wrap; margin-bottom: var(--sp-4); }
+.plc-detail-info{ display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.plc-detail-info-row{ display:flex; align-items:center; gap:8px; color: var(--text); font-size:13px; }
+.plc-detail-info-row svg{ color: var(--teal); flex-shrink:0; }
+.plc-detail-actions{ display:flex; gap: var(--sp-2); position:sticky; bottom:0; background: var(--surface); padding-top: var(--sp-2); }
+.plc-call-btn{ flex:1; display:flex; align-items:center; justify-content:center; gap:6px; }
+.plc-call-btn.is-disabled{ opacity:0.5; pointer-events:none; }
+.plc-delivery-btn{ flex:1; display:flex; align-items:center; justify-content:center; gap:6px; }
+
+/* =========================================================================
+   ============  REDESIGN PASS 6 — real card-based UI/UX overhaul  =========
+   =========================================================================
+   Requested explicitly as a structural visual pass, not a palette-only
+   swap. Same rule as every pass above: appended at the end so cascade
+   order lets it win over earlier rules of equal/lower specificity —
+   nothing above is edited, removed, or reordered. No id/class/data-
+   attribute app.js or market.js reads or toggles is added, renamed, or
+   removed; no HTML structure changes; no Supabase/RPC/booking/tracking/
+   driver logic touched anywhere. Only how existing elements look.
+
+   What actually changes (not just colour tokens):
+   1) The six service tiles (#quickServices) become real elevated cards
+      in a 3-column grid with circular colour-medallion icons — a
+      genuine layout change (grid-template-columns + card chrome),
+      not a recolour of the previous thin icon-row.
+   2) "بين المحافظات" stays the one full-width featured banner (a
+      deliberate Careem/Uber pattern of highlighting one option) but
+      now carries the real purple → blue → orange brand identity
+      instead of a plain blue tone.
+   3) --brand-grad / --brand-grad-soft / --bg-deep are redefined to the
+      same purple/blue/orange identity — every element already reading
+      these tokens (primary buttons, bottom-nav active tab, account
+      header, step-4 wizard dot, app background) updates at once.
+   4) سوق يمّك's category medallions and listing cards are unified with
+      the same circular icon-medallion + elevated-card language used
+      for the six services above, so the marketplace reads as native
+      to the app rather than a bolted-on section.
+   ========================================================================= */
+
+:root{
+  --brand-grad: linear-gradient(135deg, #6C3CE0 0%, #2563EB 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(108,60,224,0.16) 0%, rgba(37,99,235,0.16) 100%);
+  --bg-deep:
+    radial-gradient(120% 55% at 12% -12%, rgba(108,60,224,0.10) 0%, transparent 55%),
+    radial-gradient(110% 60% at 105% 0%, rgba(255,122,41,0.09) 0%, transparent 55%),
+    #F7F6FB;
+}
+
+.app-btn{
+  box-shadow: 0 14px 26px -14px rgba(108,60,224,0.45), 0 10px 22px -16px rgba(37,99,235,0.35);
+}
+
+/* ---------------------------------------------------------------
+   1) Service grid → real cards. 3 columns × 2 rows for the five
+   regular services; each is now a proper white elevated card with a
+   circular colour medallion, not a bare icon-over-label chip.
+   --------------------------------------------------------------- */
+.quick-services{
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+}
+.qs-row{
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--app-r-md);
+  box-shadow: 0 12px 24px -18px rgba(16,27,45,0.22), 0 1px 0 rgba(16,27,45,0.03);
+  padding: 16px 6px 13px;
+  gap: 9px;
+  text-align: center;
+}
+.qs-row:active{
+  background: var(--surface-hi);
+  box-shadow: 0 6px 14px -12px rgba(16,27,45,0.2);
+  transform: scale(0.96);
+}
+.qs-row-ic{
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  box-shadow: none !important;
+}
+.qs-row-photo{ width: 30px; height: 30px; }
+.qs-row-label{ align-items: center; }
+.qs-row-label b{ font-size: 11.5px; }
+.qs-row-chev{ display:none; }
+
+/* Featured "بين المحافظات" banner — real brand identity gradient,
+   kept full-width and horizontal (higher-specificity attribute
+   selectors above already give it flex-direction:row; only its
+   colours/icon shape are refreshed here). */
+.qs-row[data-service="intercity"]{
+  background:
+    linear-gradient(100deg, rgba(15,10,35,0.80) 0%, rgba(15,10,35,0.22) 60%, rgba(15,10,35,0.04) 100%),
+    linear-gradient(120deg, #6C3CE0 0%, #2563EB 55%, #FF7A29 130%);
+  box-shadow: 0 18px 32px -18px rgba(108,60,224,0.5);
+}
+.qs-row[data-service="intercity"] .qs-row-ic{ border-radius: 50%; }
+
+/* ---------------------------------------------------------------
+   2) سوق يمّك — unify category medallions + listing cards with the
+   same circular-icon-medallion / elevated-card language as above.
+   --------------------------------------------------------------- */
+.mkt-cat-ic{
+  border-radius: 50%;
+  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.35);
+}
+.mkt-card{
+  border-radius: var(--app-r-md);
+  box-shadow: 0 12px 24px -18px rgba(16,27,45,0.2), 0 1px 0 rgba(16,27,45,0.03);
+}
+.mkt-card:active{ box-shadow: 0 6px 14px -12px rgba(16,27,45,0.18); }
+.mkt-myad-card, .mkt-phone-gate{
+  box-shadow: 0 12px 24px -18px rgba(16,27,45,0.18);
+}
+.mkt-hero{
+  background: linear-gradient(120deg, #FF7A29 0%, #E5B85C 100%);
+  box-shadow: 0 18px 32px -18px rgba(255,122,41,0.5);
+}
+.market-banner{ box-shadow: 0 20px 36px -18px rgba(108,60,224,0.55); }
+
+/* =========================================================================
+   ========  REDESIGN PASS 7 — Bottom nav refresh + service focus mode  ====
+   =========================================================================
+   Same rule as every pass above: cascade-order override only — nothing
+   above this line is edited, removed, or reordered; no id/class/data-
+   attribute app.js reads or toggles is renamed or removed; no request/
+   driver/GPS/database/RPC logic, config.js, or any of the six service
+   icons/photos is touched. Two independent pieces:
+   1) Bottom navigation — visual refresh only. Position, z-index, height
+      and safe-area padding (env(safe-area-inset-bottom), already correct
+      above) are NOT touched, so the fixed bar and the .sheet-scroll /
+      .app-shell reserved space that depends on them stay exactly as they
+      were. Only background, shadow, icon shape/size and the active-tab
+      treatment are refined into one consistent look (filled brand-gradient
+      bubble, matching the buttons/step-dots the app already uses
+      elsewhere) instead of the mixed teal-tint / gradient-tint / top-bar
+      combination left over from earlier passes.
+   2) Services (booking step 1) — "selected service" focus mode. Markup
+      for this is in index.html (#svcSwitchWrap / #svcSwitchBackBtn) and
+      wiring is a small additive script there wrapping selectService(),
+      exactly like the existing openBooking() wrap already does for
+      setStep(1). This section only supplies the show/hide rules.
+   ========================================================================= */
+
+/* ---- 1) Bottom navigation ---- */
+.bottom-nav{
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border-top: 1px solid rgba(16,27,45,0.07);
+  box-shadow: 0 -16px 34px -22px rgba(16,27,45,0.32);
+}
+.bnav-item{
+  padding-top: 2px;
+}
+.bnav-icon{
+  width: 46px;
+  height: 30px;
+  border-radius: 14px;
+}
+.bnav-icon svg{
+  width: 20px;
+  height: 20px;
+}
+.bnav-item.active{ color: var(--teal-text); }
+.bnav-item.active .bnav-icon{
+  background: var(--brand-grad);
+  box-shadow: 0 8px 16px -6px rgba(28,150,110,0.4), 0 6px 14px -8px rgba(29,111,209,0.35);
+  transform: translateY(-3px);
+}
+.bnav-item.active .bnav-icon svg{
+  color: #fff;
+  transform: none;
+}
+/* The old thin top-accent bar (earlier pass) is superseded by the
+   filled bubble above — same element, just no longer drawn, so no
+   markup changes anywhere. */
+.bnav-item.active::before{ display: none; }
+/* Tap feedback on the already-active tab: a small settle instead of
+   the plain scale-down every other (inactive) tab still gets from the
+   base rule earlier in this file, which is untouched and still
+   applies as-is to every non-active tab press. */
+.bnav-item.active:active .bnav-icon{
+  transform: translateY(-1px) scale(0.94);
+}
+
+/* ---- 2) Services (booking step 1) — selected-service focus mode ---- */
+.svc-switch-wrap[data-wizard-step="1"]{
+  display: flex;
+  flex-direction: column;
+}
+.svc-switch-back{
+  display: none;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-bottom: var(--sp-3);
+  padding: 7px 14px 7px 10px;
+  border-radius: var(--app-r-pill);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  color: var(--teal-text);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.svc-switch-back svg{ width: 16px; height: 16px; }
+.svc-switch-back:active{ background: var(--teal-dim); }
+.svc-switch-wrap.is-focused .svc-switch-back{ display: flex; }
+
+/* Focused: the chosen pill grows into a single wide "selected service"
+   card, the other five are hidden — same nodes, same data-service
+   attribute, same click handler, just not rendered while focused. */
+.svc-switch-wrap.is-focused .svc-pill:not(.active){
+  display: none;
+}
+.svc-switch-wrap.is-focused .svc-pill.active{
+  flex: 1 1 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.svc-switch-wrap.is-focused .svc-pill.active .svc-pill-photo{
+  width: 44px;
+  height: 44px;
+}
+.svc-switch-wrap.is-focused .svc-pill.active span{
+  font-size: 14.5px;
+}
+
+/* Not focused (full list showing): hide the leftover caption/driver
+   roster from whichever service was last chosen, so the list reads as
+   a clean "pick a service" screen rather than a list with a stray
+   detail block hanging below it. #svcSwitchCaption/#driversListApp
+   already exist; nothing about how they're populated changes. The
+   !important on #driversListApp only counters the more specific
+   step-1 "display:flex" rule earlier in this file (the one keyed off
+   #driversListApp[data-wizard-step="1"]:not([hidden])) for this one
+   case — that earlier rule is otherwise completely unaffected. */
+.svc-switch-wrap:not(.is-focused) ~ #svcSwitchCaption{
+  display: none;
+}
+.svc-switch-wrap:not(.is-focused) ~ #driversListApp{
+  display: none !important;
+}

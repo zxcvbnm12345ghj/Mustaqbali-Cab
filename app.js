@@ -154,6 +154,7 @@ const state = {
   pickupMarker: null,
   dropoffMarker: null,
   driverMarker: null, // assigned driver's live position pin — only set when the status RPC returns real driver_lat/driver_lng
+  myLocationMarker: null, // small "you are here" dot — purely visual, sits under the pickup pin, never draggable/clickable, never used for pricing or submission
   decorLine: null,
   lastSubmission: null, // { id, request_number, phone, service_type, pickup, dropoff, created_at }
   statusPollTimer: null,
@@ -312,6 +313,39 @@ function dropoffDivIcon() {
     iconSize: [40, 52],
     iconAnchor: [20, 50],
   });
+}
+
+// "You are here" indicator — a small, non-interactive blue dot with a
+// soft breathing halo, exactly like the live-location marker in
+// Uber/Careem. Purely visual: it never intercepts clicks, is never
+// draggable, and carries no coordinates used for pricing or submission
+// (those still live only in state.pickupLatLng, set via setPickup()).
+// It sits *underneath* the pickup pin (lower zIndexOffset) since on
+// first load both markers share the same GPS fix — the pickup pin is
+// the interactive "نقطة الانطلاق" the customer can drag anywhere, while
+// this dot keeps showing their real device position the whole time,
+// so the two stay visually distinct the moment the pickup pin moves.
+function myLocationDivIcon() {
+  return L.divIcon({
+    className: 'my-location-pin',
+    html: `<span class="my-location-pulse"></span><span class="my-location-dot"></span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
+
+function updateMyLocationMarker(lat, lng) {
+  if (!state.map) return;
+  if (state.myLocationMarker) {
+    state.myLocationMarker.setLatLng([lat, lng]);
+  } else {
+    state.myLocationMarker = L.marker([lat, lng], {
+      icon: myLocationDivIcon(),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: -1000,
+    }).addTo(state.map);
+  }
 }
 
 function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = true, accuracy = null } = {}) {
@@ -599,6 +633,7 @@ function locateMe(auto = false) {
     // manual control (map tap / marker drag — see setPickup()).
     state.gpsFollowing = true;
     setPickup(pos.coords.latitude, pos.coords.longitude, { reverseGeocode: true, fly: true, accuracy: pos.coords.accuracy });
+    updateMyLocationMarker(pos.coords.latitude, pos.coords.longitude);
     startGpsWatch();
     stopSpin();
   };
@@ -660,6 +695,10 @@ function startGpsWatch() {
   if (!navigator.geolocation || state.gpsWatchId !== null) return;
   state.gpsWatchId = navigator.geolocation.watchPosition(
     (pos) => {
+      // The "you are here" dot always tracks the real device fix, even
+      // after the customer has taken manual control of the pickup pin —
+      // it's informational only and never moves the pickup point itself.
+      updateMyLocationMarker(pos.coords.latitude, pos.coords.longitude);
       if (!state.gpsFollowing) return; // customer already took manual control
       setPickup(pos.coords.latitude, pos.coords.longitude, {
         reverseGeocode: true,
@@ -1061,12 +1100,43 @@ async function loadCustomerAds() {
    about trip_requests/drivers/service_prices/customer_ads is read
    or touched here.
    ============================================================ */
+/* ============================================================
+   Future services teaser badges (المطاعم / الأسواق / مكتب المستقبل)
+   — reads the COUNT of active rows from the admin-managed
+   restaurants/markets/future_office tables (see the "المطاعم
+   والأسواق ومكتب المستقبل" tab in admin.js) and updates each tile's
+   small badge with that real count, or leaves it as the static
+   "قريباً" already in index.html when a category has zero active
+   rows (or the read fails) — never invented data. These three tiles
+   are real navigation buttons wired in places.js (openPlaces()); this
+   function only ever touches the badge <span>, never the tile's
+   click behaviour. "خدمات أخرى" (other_services /
+   #soonCardOtherServices) keeps its original separate, unrelated
+   behaviour below — untouched.
+   ============================================================ */
 async function loadFutureServices() {
   await Promise.all([
-    loadFutureServiceCategory('restaurants', 'soonCardRestaurants', '🍔', 'المطاعم'),
-    loadFutureServiceCategory('markets', 'soonCardMarkets', '🛒', 'الأسواق'),
+    updatePlacesBadge('restaurants', 'soonBadgeRestaurants', 'مطعم'),
+    updatePlacesBadge('markets', 'soonBadgeMarkets', 'سوق'),
+    updatePlacesBadge('future_office', 'soonBadgeFutureOffice', 'فرع'),
     loadFutureServiceCategory('other_services', 'soonCardOtherServices', '🛠️', 'خدمات أخرى'),
   ]);
+}
+
+async function updatePlacesBadge(table, badgeId, unitLabel) {
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  try {
+    const { count, error } = await supabaseClient
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq('active', true);
+    if (error || !count) return; // keep the static "قريباً" badge as-is
+    badge.textContent = `${count} ${unitLabel}${count > 1 ? '+' : ''}`;
+  } catch (err) {
+    console.error(`failed to load ${table} count for teaser badge`, err);
+    // network/RLS hiccup — silently keep showing "قريباً"
+  }
 }
 
 async function loadFutureServiceCategory(table, cardId, icon, label) {
@@ -1646,6 +1716,8 @@ function applyDriverInfo(row) {
   const bannerText = document.getElementById('driverStatusBannerText');
   const etaWrap = document.getElementById('driverEta');
   const actions = document.getElementById('driverActions');
+  const phoneTag = document.getElementById('driverPhoneTag');
+  const phoneVal = document.getElementById('driverPhoneVal');
 
   if (row.driver_name) {
     card.classList.remove('driver-pending');
@@ -1718,6 +1790,14 @@ function applyDriverInfo(row) {
       const cleanTel = row.driver_phone.replace(/[^\d+]/g, '');
       callBtn.href = `tel:${cleanTel}`;
       callBtn.hidden = false;
+      // Visible, tappable phone number — same real row.driver_phone and
+      // the same cleaned tel: target already used for callBtn above;
+      // no new data source, just also shown as readable text.
+      if (phoneTag && phoneVal) {
+        phoneVal.textContent = String(row.driver_phone).trim();
+        phoneTag.href = `tel:${cleanTel}`;
+        phoneTag.hidden = false;
+      }
       const driverLink = buildWhatsappLink(row.driver_phone);
       if (driverLink) {
         waBtn.href = driverLink;
@@ -1730,6 +1810,7 @@ function applyDriverInfo(row) {
     } else {
       callBtn.hidden = true;
       waBtn.hidden = true;
+      if (phoneTag) phoneTag.hidden = true;
     }
 
     // Driver's live position on the tracking map — only drawn when the
@@ -1745,6 +1826,7 @@ function applyDriverInfo(row) {
     if (ratingTag) ratingTag.hidden = true;
     if (colorTag) colorTag.hidden = true;
     if (banner) banner.hidden = true;
+    if (phoneTag) phoneTag.hidden = true;
     meta.hidden = true;
     etaWrap.hidden = true;
     actions.hidden = true;

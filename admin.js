@@ -159,6 +159,7 @@ async function enterDashboard() {
   await loadAds();
   await loadPlaces('restaurants');
   await loadPlaces('markets');
+  await loadPlaces('futureOffice');
   startRequestPolling();
 }
 
@@ -1173,23 +1174,30 @@ async function sendAdPush() {
 }
 
 /* ============================================================
-   Restaurants & Markets ("المطاعم والأسواق" tab) — additive only.
-   Two independent, admin-managed name lists (tables: restaurants /
-   markets), each just a name + active flag. Same add/toggle/delete
-   pattern as the ads table above (loadAds/renderAdsTable/
-   toggleAdActive/deleteAd). Does not touch trip_requests, drivers,
-   pricing, ads, GPS, or the requests table/modal in any way.
-   Active rows here are exactly what loadFutureServices() in app.js
-   reads and shows to customers instead of the static "قريباً" cards
-   — if a list has zero active rows, the customer app keeps showing
-   "قريباً" for that category entirely on its own (no action needed
-   here for that case).
+   Restaurants / Markets / مكتب المستقبل ("المطاعم والأسواق ومكتب
+   المستقبل" tab) — additive only. Three independent, admin-managed
+   lists (tables: restaurants / markets / future_office), each row
+   now carrying real display data (category, description, image_url,
+   phone, address, hours_text) — not just a name/active flag. Same
+   modal-based add/edit pattern as the ads modal above
+   (openAdModal/saveAd), plus toggle/delete like before. Does not
+   touch trip_requests, drivers, pricing, ads, GPS, or the requests
+   table/modal in any way.
+   Active rows here are exactly what places.js (customer app) reads
+   and renders as real cards + a details page instead of the old
+   static "قريباً" placeholder — a list with zero active rows still
+   shows a professional "قريباً" empty state on its own, no action
+   needed here for that case.
+   Requires migration_places_details.sql to have been run once
+   (adds the rich columns to restaurants/markets + creates the new
+   future_office table).
    ============================================================ */
-const placesState = { restaurants: [], markets: [] };
+const placesState = { restaurants: [], markets: [], futureOffice: [], editingKind: null, editingId: null };
 
 const PLACE_TABLES = {
-  restaurants: { table: 'restaurants', bodyId: 'restaurantsBody', emptyId: 'restaurantsEmpty', inputId: 'newRestaurantName', errId: 'restaurantAddError', btnId: 'addRestaurantBtn', label: 'هذا المطعم' },
-  markets:     { table: 'markets',     bodyId: 'marketsBody',     emptyId: 'marketsEmpty',     inputId: 'newMarketName',     errId: 'marketAddError',     btnId: 'addMarketBtn',     label: 'هذا السوق' },
+  restaurants:  { table: 'restaurants',    bodyId: 'restaurantsBody',   emptyId: 'restaurantsEmpty',   addBtnId: 'addRestaurantBtn',   label: 'هذا المطعم', nameLabel: 'اسم المطعم',  namePlaceholder: 'مثال: مطعم بغداد' },
+  markets:      { table: 'markets',        bodyId: 'marketsBody',       emptyId: 'marketsEmpty',       addBtnId: 'addMarketBtn',       label: 'هذا السوق',  nameLabel: 'اسم السوق',   namePlaceholder: 'مثال: سوق الجملة' },
+  futureOffice: { table: 'future_office',  bodyId: 'futureOfficeBody',  emptyId: 'futureOfficeEmpty',  addBtnId: 'addFutureOfficeBtn', label: 'هذا الفرع',  nameLabel: 'اسم الفرع',   namePlaceholder: 'مكتب المستقبل للقرطاسية والطباعة' },
 };
 
 async function loadPlaces(kind) {
@@ -1197,6 +1205,7 @@ async function loadPlaces(kind) {
   const { data, error } = await supabaseClient
     .from(cfg.table)
     .select('*')
+    .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) {
     console.error(error);
@@ -1222,9 +1231,12 @@ function renderPlacesTable(kind) {
 
   body.innerHTML = rows.map(row => `
     <tr data-place-id="${escapeAttr(row.id)}">
+      <td>${row.image_url ? `<img src="${escapeAttr(row.image_url)}" alt="" style="width:40px; height:40px; border-radius:8px; object-fit:cover; display:block;">` : '<span style="opacity:0.4;">—</span>'}</td>
       <td>${escapeHtml(row.name)}</td>
+      <td>${row.category ? escapeHtml(row.category) : '<span style="opacity:0.4;">—</span>'}</td>
       <td><span class="ads-active-badge ${row.active ? '' : 'off'}" data-place-toggle="${escapeAttr(row.id)}" style="cursor:pointer;">${row.active ? 'نشط' : 'موقوف'}</span></td>
       <td class="ads-row-actions">
+        <button type="button" data-place-edit="${escapeAttr(row.id)}">تعديل</button>
         <button type="button" class="danger" data-place-delete="${escapeAttr(row.id)}">حذف</button>
       </td>
     </tr>
@@ -1232,6 +1244,12 @@ function renderPlacesTable(kind) {
 
   body.querySelectorAll('[data-place-toggle]').forEach(el => {
     el.addEventListener('click', () => togglePlaceActive(kind, el.dataset.placeToggle));
+  });
+  body.querySelectorAll('[data-place-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = placesState[kind].find(r => r.id === btn.dataset.placeEdit);
+      if (row) openPlaceModal(kind, row);
+    });
   });
   body.querySelectorAll('[data-place-delete]').forEach(btn => {
     btn.addEventListener('click', () => deletePlace(kind, btn.dataset.placeDelete));
@@ -1260,35 +1278,102 @@ async function deletePlace(kind, id) {
     alert('تعذّر الحذف: ' + error.message);
     return;
   }
+  closePlaceModal();
   await loadPlaces(kind);
 }
 
-async function addPlace(kind) {
+function openPlaceModal(kind, row) {
   const cfg = PLACE_TABLES[kind];
-  const errEl = document.getElementById(cfg.errId);
+  placesState.editingKind = kind;
+  placesState.editingId = row ? row.id : null;
+
+  document.getElementById('placeModalTitle').textContent = row ? `تعديل — ${cfg.label}` : `إضافة — ${cfg.nameLabel}`;
+  document.getElementById('placeNameLabel').textContent = cfg.nameLabel;
+  const nameEl = document.getElementById('placeName');
+  nameEl.placeholder = cfg.namePlaceholder;
+  nameEl.value = row?.name || '';
+  document.getElementById('placeCategory').value = row?.category || '';
+  document.getElementById('placeImageUrl').value = row?.image_url || '';
+  document.getElementById('placePhone').value = row?.phone || '';
+  document.getElementById('placeAddress').value = row?.address || '';
+  document.getElementById('placeHours').value = row?.hours_text || '';
+  document.getElementById('placeDescription').value = row?.description || '';
+  document.getElementById('placeActive').checked = row ? !!row.active : true;
+
+  const deleteBtn = document.getElementById('deletePlaceBtn');
+  if (deleteBtn) deleteBtn.hidden = !row;
+
+  const errEl = document.getElementById('placeModalError');
   if (errEl) { errEl.textContent = ''; errEl.classList.remove('show'); }
 
-  const nameEl = document.getElementById(cfg.inputId);
-  const name = nameEl.value.trim();
+  document.getElementById('placeModalBackdrop').classList.add('show');
+}
+
+function closePlaceModal() {
+  document.getElementById('placeModalBackdrop').classList.remove('show');
+  placesState.editingKind = null;
+  placesState.editingId = null;
+}
+
+function showPlaceModalError(message) {
+  const el = document.getElementById('placeModalError');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.classList.add('show');
+  } else {
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+}
+
+async function savePlace() {
+  showPlaceModalError(null);
+  const kind = placesState.editingKind;
+  if (!kind) return;
+  const cfg = PLACE_TABLES[kind];
+
+  const name = document.getElementById('placeName').value.trim();
+  const category = document.getElementById('placeCategory').value.trim();
+  const image_url = document.getElementById('placeImageUrl').value.trim();
+  const phone = document.getElementById('placePhone').value.trim();
+  const address = document.getElementById('placeAddress').value.trim();
+  const hours_text = document.getElementById('placeHours').value.trim();
+  const description = document.getElementById('placeDescription').value.trim();
+  const active = document.getElementById('placeActive').checked;
+
   if (!name) {
-    if (errEl) { errEl.textContent = 'الاسم مطلوب.'; errEl.classList.add('show'); }
+    showPlaceModalError('الاسم مطلوب.');
     return;
   }
 
-  const btn = document.getElementById(cfg.btnId);
+  const payload = {
+    name,
+    category: category || null,
+    image_url: image_url || null,
+    phone: phone || null,
+    address: address || null,
+    hours_text: hours_text || null,
+    description: description || null,
+    active,
+  };
+
+  const btn = document.getElementById('savePlaceBtn');
   if (btn) btn.disabled = true;
 
-  const { error } = await supabaseClient.from(cfg.table).insert({ name, active: true });
+  const { error } = placesState.editingId
+    ? await supabaseClient.from(cfg.table).update(payload).eq('id', placesState.editingId)
+    : await supabaseClient.from(cfg.table).insert(payload);
 
   if (btn) btn.disabled = false;
 
   if (error) {
     console.error(error);
-    if (errEl) { errEl.textContent = 'تعذّر الإضافة: ' + error.message; errEl.classList.add('show'); }
+    showPlaceModalError('تعذّر الحفظ: ' + error.message + (error.message?.includes('column') ? ' — تأكد من تشغيل migration_places_details.sql على قاعدة البيانات.' : ''));
     return;
   }
 
-  nameEl.value = '';
+  closePlaceModal();
   await loadPlaces(kind);
 }
 
@@ -1317,8 +1402,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('saveAdBtn')?.addEventListener('click', saveAd);
   document.getElementById('deleteAdBtn')?.addEventListener('click', () => deleteAd(adsState.editingId));
   document.getElementById('sendAdPushBtn')?.addEventListener('click', sendAdPush);
-  document.getElementById('addRestaurantBtn')?.addEventListener('click', () => addPlace('restaurants'));
-  document.getElementById('addMarketBtn')?.addEventListener('click', () => addPlace('markets'));
+  document.getElementById('addRestaurantBtn')?.addEventListener('click', () => openPlaceModal('restaurants', null));
+  document.getElementById('addMarketBtn')?.addEventListener('click', () => openPlaceModal('markets', null));
+  document.getElementById('addFutureOfficeBtn')?.addEventListener('click', () => openPlaceModal('futureOffice', null));
+  document.getElementById('placeModalCloseBtn')?.addEventListener('click', closePlaceModal);
+  document.getElementById('placeModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target.id === 'placeModalBackdrop') closePlaceModal();
+  });
+  document.getElementById('savePlaceBtn')?.addEventListener('click', savePlace);
+  document.getElementById('deletePlaceBtn')?.addEventListener('click', () => deletePlace(placesState.editingKind, placesState.editingId));
   document.getElementById('driverStatsDate').addEventListener('change', (e) => {
     if (e.target.value) loadDriverStats(e.target.value);
   });

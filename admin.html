@@ -233,7 +233,7 @@
       <button type="button" class="admin-tab-btn" data-tab="drivers">السائقون</button>
       <button type="button" class="admin-tab-btn" data-tab="requests">الطلبات</button>
       <button type="button" class="admin-tab-btn" data-tab="ads">الإعلانات والإشعارات</button>
-      <button type="button" class="admin-tab-btn" data-tab="places">المطاعم والأسواق</button>
+      <button type="button" class="admin-tab-btn" data-tab="places">المطاعم والأسواق ومكتب المستقبل</button>
       <button type="button" class="admin-tab-btn" data-tab="settings">الإعدادات</button>
     </nav>
 
@@ -347,70 +347,92 @@
     </div>
     <!-- /tabPanel-ads -->
 
-    <!-- المطاعم والأسواق -->
+    <!-- المطاعم والأسواق ومكتب المستقبل -->
     <div class="admin-tab-panel" id="tabPanel-places" data-tab-panel="places">
     <!-- ============================================================
-         إدارة المطاعم والأسواق (Restaurants & Markets) — additive
-         only. Two independent name lists (tables: restaurants /
-         markets), each with add/toggle-active/delete, same pattern
-         as the ads table above. Does not touch driver stats,
-         pricing, ads, GPS, or the requests table/modal in any way.
-         Active rows here are what the customer app shows instead of
-         the "قريباً" cards on its home screen (see loadFutureServices()
-         in app.js) — if a list has zero active rows, the customer
-         app keeps showing "قريباً" for that category on its own.
+         إدارة المطاعم / الأسواق / مكتب المستقبل — additive only.
+         Three independent, admin-managed lists (tables: restaurants /
+         markets / future_office), each row now carrying real display
+         data (تصنيف، وصف، صورة، هاتف، عنوان، ساعات العمل) — not just
+         a name. Same add/edit-via-modal/toggle/delete pattern as the
+         ads table above. Does not touch driver stats, pricing, ads,
+         GPS, or the requests table/modal in any way. Active rows here
+         are exactly what the customer app shows as real cards + a
+         details page instead of the old "قريباً" placeholder (see
+         places.js) — a list with zero active rows still shows
+         "قريباً" for that category on its own, no action needed here.
+         Requires migration_places_details.sql to have been run once
+         (adds the rich columns + the new future_office table).
          ============================================================ -->
     <div class="admin-driver-stats" id="restaurantsSection">
       <div class="admin-ads-head">
         <p class="section-label" style="margin:0;">🍔 المطاعم</p>
-      </div>
-      <p class="admin-driver-stats-hint">الأسماء "نشطة" هنا تظهر تلقائياً للزبائن في الشاشة الرئيسية بدل شارة "قريباً". لا حاجة لإعادة نشر الموقع أو تعديل أي كود — الإضافة/التفعيل/التعطيل/الحذف من هنا تنعكس مباشرة.</p>
-
-      <div class="admin-driver-add" id="restaurantAddForm">
-        <input type="text" id="newRestaurantName" class="admin-date-input" placeholder="اسم المطعم" maxlength="150">
         <button type="button" class="admin-btn" id="addRestaurantBtn" style="width:auto; padding:8px 16px;">+ إضافة مطعم</button>
       </div>
-      <div class="admin-error" id="restaurantAddError" style="margin-bottom:10px;"></div>
+      <p class="admin-driver-stats-hint">كل مطعم "نشط" هنا يظهر للزبائن كبطاقة حقيقية (صورة + تصنيف) في الشاشة الرئيسية، وبصفحة تفاصيل كاملة عند الضغط عليها. لا حاجة لإعادة نشر الموقع — أي إضافة/تعديل/تفعيل/تعطيل/حذف من هنا ينعكس مباشرة.</p>
 
       <div class="admin-ads-wrap">
         <table class="admin-table" id="restaurantsTable">
           <thead>
             <tr>
+              <th>الصورة</th>
               <th>الاسم</th>
+              <th>التصنيف</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
           </thead>
           <tbody id="restaurantsBody"></tbody>
         </table>
-        <div class="admin-empty" id="restaurantsEmpty" style="display:none;">لا توجد مطاعم مضافة بعد. اضغط "إضافة مطعم" لإضافة أول اسم — يبقى قسم المطاعم في تطبيق الزبون يعرض "قريباً" حتى تُضاف أسماء وتُفعّل.</div>
+        <div class="admin-empty" id="restaurantsEmpty" style="display:none;">لا توجد مطاعم مضافة بعد. اضغط "+ إضافة مطعم" لإضافة أول مطعم ببياناته الحقيقية — يبقى قسم المطاعم في تطبيق الزبون يعرض "قريباً" حتى تُضاف مطاعم وتُفعّل.</div>
       </div>
     </div>
 
     <div class="admin-driver-stats" id="marketsSection">
       <div class="admin-ads-head">
         <p class="section-label" style="margin:0;">🛒 الأسواق</p>
-      </div>
-      <p class="admin-driver-stats-hint">نفس المبدأ: الأسماء "نشطة" هنا تظهر تلقائياً للزبائن بدل شارة "قريباً" الخاصة بالأسواق.</p>
-
-      <div class="admin-driver-add" id="marketAddForm">
-        <input type="text" id="newMarketName" class="admin-date-input" placeholder="اسم السوق" maxlength="150">
         <button type="button" class="admin-btn" id="addMarketBtn" style="width:auto; padding:8px 16px;">+ إضافة سوق</button>
       </div>
-      <div class="admin-error" id="marketAddError" style="margin-bottom:10px;"></div>
+      <p class="admin-driver-stats-hint">نفس المبدأ: كل سوق "نشط" هنا يظهر للزبائن كبطاقة حقيقية بدل شارة "قريباً" الخاصة بالأسواق.</p>
 
       <div class="admin-ads-wrap">
         <table class="admin-table" id="marketsTable">
           <thead>
             <tr>
+              <th>الصورة</th>
               <th>الاسم</th>
+              <th>التصنيف</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
           </thead>
           <tbody id="marketsBody"></tbody>
         </table>
-        <div class="admin-empty" id="marketsEmpty" style="display:none;">لا توجد أسواق مضافة بعد. اضغط "إضافة سوق" لإضافة أول اسم — يبقى قسم الأسواق في تطبيق الزبون يعرض "قريباً" حتى تُضاف أسماء وتُفعّل.</div>
+        <div class="admin-empty" id="marketsEmpty" style="display:none;">لا توجد أسواق مضافة بعد. اضغط "+ إضافة سوق" لإضافة أول سوق ببياناته الحقيقية — يبقى قسم الأسواق في تطبيق الزبون يعرض "قريباً" حتى تُضاف أسواق وتُفعّل.</div>
+      </div>
+    </div>
+
+    <div class="admin-driver-stats" id="futureOfficeSection">
+      <div class="admin-ads-head">
+        <p class="section-label" style="margin:0;">🏪 مكتب المستقبل</p>
+        <button type="button" class="admin-btn" id="addFutureOfficeBtn" style="width:auto; padding:8px 16px;">+ إضافة فرع</button>
+      </div>
+      <p class="admin-driver-stats-hint">مكتب المستقبل للقرطاسية والطباعة (وأي فروع أخرى تُضاف لاحقاً). فرع "نشط" هنا يظهر للزبائن ببطاقته الحقيقية وصفحة تفاصيله عند الضغط على بطاقة "مكتب المستقبل" بالشاشة الرئيسية.</p>
+
+      <div class="admin-ads-wrap">
+        <table class="admin-table" id="futureOfficeTable">
+          <thead>
+            <tr>
+              <th>الصورة</th>
+              <th>الاسم</th>
+              <th>التصنيف</th>
+              <th>الحالة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="futureOfficeBody"></tbody>
+        </table>
+        <div class="admin-empty" id="futureOfficeEmpty" style="display:none;">لا يوجد فرع مضاف بعد. اضغط "+ إضافة فرع" وأدخل بيانات مكتب المستقبل الحقيقية (الوصف، الهاتف، العنوان، ساعات العمل، صورة).</div>
       </div>
     </div>
     </div>
@@ -597,6 +619,64 @@
       <button type="button" class="admin-btn danger" id="deleteAdBtn" style="width:auto; padding:10px 18px;" hidden>حذف الإعلان</button>
     </div>
     <div class="admin-error" id="adPushMsg" style="background: rgba(30,142,86,0.1); border-color: rgba(30,142,86,0.25); color: var(--success, #1E8E56);"></div>
+  </div>
+</div>
+
+<!-- PLACE MODAL — إضافة/تعديل مطعم أو سوق أو فرع مكتب المستقبل —
+     additive only, fully separate from every modal above (own
+     ids/state). Shared by all three lists (restaurants/markets/
+     future_office) via placesState.editingKind; the field set is
+     identical for the three tables (see migration_places_details.sql),
+     only the placeholder text/labels are swapped per kind. -->
+<div class="admin-modal-backdrop" id="placeModalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div>
+        <h2 id="placeModalTitle" style="font-size:17px;">إضافة</h2>
+      </div>
+      <button type="button" class="admin-modal-close" id="placeModalCloseBtn">✕</button>
+    </div>
+
+    <div class="admin-field">
+      <label for="placeName" id="placeNameLabel">الاسم</label>
+      <input type="text" id="placeName" maxlength="150">
+    </div>
+    <div class="admin-field">
+      <label for="placeCategory">التصنيف <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placeCategory" placeholder="مثال: مشاوي، بيتزا، سوبرماركت، قرطاسية" maxlength="80">
+    </div>
+    <div class="admin-field">
+      <label for="placeImageUrl">رابط الصورة <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placeImageUrl" placeholder="https://...">
+    </div>
+    <div class="admin-field">
+      <label for="placePhone">رقم الهاتف <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placePhone" placeholder="07xxxxxxxxx" maxlength="20">
+    </div>
+    <div class="admin-field">
+      <label for="placeAddress">العنوان <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placeAddress" placeholder="مثال: بغداد - الكرادة، قرب..." maxlength="200">
+    </div>
+    <div class="admin-field">
+      <label for="placeHours">ساعات العمل <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placeHours" placeholder="مثال: يومياً 9ص - 11م" maxlength="100">
+    </div>
+    <div class="admin-field">
+      <label for="placeDescription">الوصف <span class="opt">(اختياري)</span></label>
+      <textarea id="placeDescription" rows="3" maxlength="1000" placeholder="نبذة تظهر للزبون بصفحة التفاصيل"></textarea>
+    </div>
+
+    <label class="admin-ads-toggle-row" for="placeActive">
+      <input type="checkbox" id="placeActive" checked style="width:16px; height:16px;">
+      نشط (يظهر للزبائن)
+    </label>
+
+    <div class="admin-error" id="placeModalError"></div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="admin-btn" id="savePlaceBtn" style="width:auto; padding:10px 18px;">حفظ</button>
+      <button type="button" class="admin-btn danger" id="deletePlaceBtn" style="width:auto; padding:10px 18px;" hidden>حذف</button>
+    </div>
   </div>
 </div>
 
