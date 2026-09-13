@@ -4015,3 +4015,174 @@ html, body.app-body{ background: var(--bg-deep); }
 .svc-switch-wrap:not(.is-focused) ~ #driversListApp{
   display: none !important;
 }
+
+/* =========================================================================
+   ========  REDESIGN PASS 8 — الهوية اللونية الاحترافية + بطاقات    ========
+   ========  الخدمات الرأسية + إعادة تصميم المطاعم/الأسواق/سوق يمّك  ========
+   =========================================================================
+   نطاق هذا التمرير بصري بحت (ألوان/تخطيط/ظلال) — تمريرة إضافية أخيرة في
+   الملف فقط، بنفس أسلوب كل التمريرات أعلاه: لا تعديل ولا حذف ولا إعادة
+   ترتيب لأي شيء سابق، ولا مساس بأي id/class/data-attribute يقرأه app.js
+   أو market.js أو places.js، ولا بمنطق الطلب/السائق/GPS/Supabase/RPC.
+   الصور الأصلية للخدمات الستة (VEHICLE_PHOTOS) تبقى كما هي تماماً — هذا
+   التمرير لا يستبدل ولا يخفي أي صورة، فقط يعيد تنسيق الإطار حولها.
+
+   1) هوية لونية موحّدة: بنفسجي أساسي (--teal، وهو نفسه --brand الأساسي
+      المستخدم في كل الأزرار/الحالة النشطة) + أخضر (--green / --mk-grocery)
+      + برتقالي (--orange / --mk-food) كلون ثالث للتمييز والتنبيه. تدرّج
+      العلامة (--brand-grad) يتحوّل من بنفسجي↔أزرق إلى بنفسجي↔أخضر ليطابق
+      الهوية المطلوبة بدل الأزرق.
+   2) الخدمات الستة: من شبكة 3 أعمدة مضغوطة (تمريرة سابقة) إلى عمود واحد
+      رأسي، كل خدمة بطاقة كاملة العرض واضحة (صورة + اسم + وصف + سهم)،
+      بنفس صورها ونفس ترتيبها ونفس معالج النقر بلا أي تغيير.
+   3) سوق يمّك + المطاعم/الأسواق/مكتب المستقبل (.mkt-card / .plc-card):
+      بطاقات أوضح وأكثر تنظيماً — صورة أكبر، اسم كامل (لا يُقتطع لسطر
+      واحد فقط)، سعر بارز كشارة ملوّنة، تصنيف بلون من نفس الهوية، وسطر
+      "التفاصيل" ديكوري بحت (CSS فقط، لا يضيف أي عنصر DOM ولا يفترض أي
+      حقل بيانات غير موجود أصلاً في mkt-card-price/plc-card-cat الحاليين).
+   ========================================================================= */
+
+/* ---- 1) الهوية اللونية: بنفسجي / أخضر / برتقالي ---- */
+:root{
+  --brand-grad: linear-gradient(135deg, #6C3CE0 0%, #16A34A 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(108,60,224,0.14) 0%, rgba(22,163,74,0.14) 100%);
+  --brand-sunset: linear-gradient(120deg, #6C3CE0 0%, #16A34A 55%, #FF7A29 100%);
+  --bg-deep:
+    radial-gradient(120% 55% at 12% -12%, rgba(108,60,224,0.10) 0%, transparent 55%),
+    radial-gradient(110% 60% at 105% 0%, rgba(255,122,41,0.08) 0%, transparent 55%),
+    radial-gradient(90% 50% at 50% 115%, rgba(22,163,74,0.07) 0%, transparent 60%),
+    #F7F6FB;
+}
+.app-btn{
+  box-shadow: 0 14px 26px -14px rgba(108,60,224,0.42), 0 10px 22px -16px rgba(22,163,74,0.3);
+}
+.bnav-item.active .bnav-icon{
+  box-shadow: 0 8px 16px -6px rgba(22,163,74,0.38), 0 6px 14px -8px rgba(108,60,224,0.35);
+}
+.market-banner{
+  background: var(--brand-sunset);
+  box-shadow: 0 20px 36px -18px rgba(108,60,224,0.5);
+}
+.mkt-hero{
+  background: linear-gradient(120deg, var(--orange) 0%, #FFB07A 100%);
+  box-shadow: 0 18px 32px -18px rgba(255,122,41,0.5);
+}
+
+/* ---- 2) الخدمات الستة — عمود واحد رأسي، بطاقات كاملة واضحة ---- */
+.quick-services{
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+  gap: var(--sp-3);
+}
+.qs-row{
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: var(--sp-4);
+  text-align: right;
+  padding: 14px var(--sp-4) 14px calc(var(--sp-4) - 2px);
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: 20px 20px 20px 8px;
+  box-shadow: 0 12px 26px -18px rgba(16,27,45,0.22), 0 1px 0 rgba(16,27,45,0.03);
+  min-height: 74px;
+}
+.qs-row:active{
+  background: var(--surface-hi);
+  transform: scale(0.985);
+  box-shadow: 0 6px 14px -12px rgba(16,27,45,0.2);
+}
+.qs-row::before{
+  inset-inline-start: 0; top: 50%; transform: translateY(-50%);
+  width: 4px; height: 36px; border-radius: 0 4px 4px 0;
+}
+.qs-row-ic{ width: 54px; height: 54px; box-shadow: none !important; }
+.qs-row-ic svg{ width: 32px; height: 32px; }
+.qs-row-photo{ width: 44px; height: 44px; }
+.qs-row-label{
+  flex: 1; align-items: stretch; text-align: right; width: auto; gap: 3px;
+}
+.qs-row-label b{ font-size: 14.5px; line-height: normal; }
+.qs-row-label span{
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qs-row-chev{
+  display: flex; flex-shrink: 0; width: 30px; height: 30px;
+}
+
+/* "بين المحافظات" يبقى مميزاً بلون العلامة الكامل (بنفسجي→أخضر→برتقالي)
+   لكنه الآن مجرد سطر آخر داخل نفس العمود الرأسي — بلا شبكة أو موضع خاص. */
+.qs-row[data-service="intercity"]{
+  background:
+    linear-gradient(100deg, rgba(15,10,35,0.72) 0%, rgba(15,10,35,0.28) 55%, rgba(15,10,35,0.08) 100%),
+    var(--brand-sunset);
+  box-shadow: 0 16px 30px -16px rgba(108,60,224,0.5);
+  flex-direction: row;
+  min-height: 74px;
+}
+.qs-row[data-service="intercity"] .qs-row-ic{ border-radius: 50%; }
+.qs-row[data-service="intercity"] .qs-row-label b{ color: #fff; }
+.qs-row[data-service="intercity"] .qs-row-label span{ color: rgba(255,255,255,0.88); }
+.qs-row[data-service="intercity"] .qs-row-chev{ color: #fff; }
+
+/* هيكل التحميل (Skeleton) يطابق ارتفاع البطاقة الجديدة الأطول قليلاً. */
+.qs-skel{ height: 74px; border-radius: 20px 20px 20px 8px; }
+
+/* ---- 3) سوق يمّك + المطاعم/الأسواق/مكتب المستقبل — بطاقات أوضح ---- */
+.mkt-card, .plc-card{
+  border-radius: 18px;
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 14px 26px -18px rgba(16,27,45,0.22), 0 1px 0 rgba(16,27,45,0.03);
+  overflow: hidden;
+}
+.mkt-card:active, .plc-card:active{
+  box-shadow: 0 6px 14px -12px rgba(16,27,45,0.18);
+  transform: scale(0.98);
+}
+.mkt-card-img, .plc-card-img{ aspect-ratio: 4/3; }
+.mkt-card-title, .plc-card-title{
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
+  min-height: 2.5em;
+  font-weight: 700;
+}
+.mkt-card-body, .plc-card-body{
+  padding: 10px 11px 12px;
+  gap: 5px;
+}
+/* السعر — شارة برتقالية بارزة بدل نص عادي (نفس البيانات، نفس العنصر). */
+.mkt-card-price{
+  display: inline-flex; align-self: flex-start;
+  padding: 3px 9px; margin-top: 1px;
+  border-radius: 100px;
+  background: var(--orange-dim);
+  color: var(--orange-text);
+  font-size: 12.5px; font-weight: 900;
+}
+/* التصنيفات (مطاعم/أسواق/مكتب المستقبل) — نفس الهوية اللونية الثلاثية:
+   برتقالي للمطاعم، أخضر للأسواق، بنفسجي لمكتب المستقبل. */
+.plc-card-cat{ font-weight: 800; border-radius: 100px; }
+.plc-card-cat-restaurants{ background: var(--orange-dim); color: var(--orange-text); }
+.plc-card-cat-markets{ background: var(--green-dim); color: var(--green-text); }
+.plc-card-cat-futureOffice{ background: var(--teal-dim); color: var(--teal-text); }
+/* سطر "التفاصيل" — إضافة بصرية بحتة عبر ::after، لا تفترض أي حقل بيانات
+   غير موجود، ولا تضيف أي عنصر إلى الشجرة (DOM) يعتمد عليه app.js/market.js/places.js. */
+.mkt-card-body::after, .plc-card-body::after{
+  content: 'التفاصيل ‹';
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 10.5px; font-weight: 800;
+  color: var(--teal-text);
+}
+.mkt-cat-ic{ box-shadow: 0 10px 20px -14px rgba(108,60,224,0.35); }
+.mkt-card-loc{ color: var(--text-faint); }
+
+/* بطاقات "قريباً" (المطاعم/الأسواق/خدمات أخرى/مكتب المستقبل) بنفس الهوية. */
+#soonCardRestaurants{ background: var(--orange-dim); border-color: rgba(255,122,41,0.22); }
+#soonCardRestaurants .soon-badge{ color: var(--orange-text); }
+#soonCardMarkets{ background: var(--green-dim); border-color: rgba(22,163,74,0.22); }
+#soonCardMarkets .soon-badge{ color: var(--green-text); }
+#soonCardFutureOffice{ background: var(--teal-dim); border-color: rgba(108,60,224,0.22); }
+#soonCardFutureOffice .soon-badge{ color: var(--teal-text); }
