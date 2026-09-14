@@ -150,8 +150,15 @@ function reportOnce() {
     (err) => {
       console.error('geolocation error', err);
       if (err.code === err.PERMISSION_DENIED) {
+        // FIX: stopReporting() used to be called with no arguments here,
+        // and it unconditionally overwrote the status line with the
+        // generic "متوقف مؤقتًا" text — wiping out the permission-denied
+        // message the very same tick it was shown. The driver never saw
+        // *why* nothing was happening; pressing "استئناف الإرسال" looked
+        // like a no-op. Passing `true` tells stopReporting() to leave
+        // the status line alone so this specific error message survives.
         setStatus('error', 'تم رفض إذن الموقع — فعّله من إعدادات المتصفح لمتابعة العمل');
-        stopReporting();
+        stopReporting(true);
       } else {
         setStatus('warn', 'تعذّر تحديد موقعك حاليًا — سيُعاد المحاولة');
       }
@@ -160,22 +167,21 @@ function reportOnce() {
   );
 }
 
-function startReporting() {
-  paused = false;
-  const btn = document.getElementById('driverToggleBtn');
-  if (btn) { btn.textContent = 'إيقاف مؤقت'; btn.classList.remove('paused'); }
-  reportOnce();
-  if (reportTimer) clearInterval(reportTimer);
-  reportTimer = setInterval(reportOnce, REPORT_INTERVAL_MS);
-}
-
-function stopReporting() {
+// `preserveStatus` (optional, default false): when true, skip resetting
+// the status line to the generic "متوقف مؤقتًا" message. Used by the
+// PERMISSION_DENIED handler in reportOnce() above so its explicit error
+// message stays visible instead of being overwritten in the same tick.
+// The manual "إيقاف مؤقت" button click still calls stopReporting() with
+// no argument, so that path is unchanged.
+function stopReporting(preserveStatus) {
   paused = true;
   if (reportTimer) clearInterval(reportTimer);
   reportTimer = null;
   const btn = document.getElementById('driverToggleBtn');
   if (btn) { btn.textContent = 'استئناف الإرسال'; btn.classList.add('paused'); }
-  setStatus(null, 'متوقف مؤقتًا — لن يظهر موقعك للزبائن');
+  if (!preserveStatus) {
+    setStatus(null, 'متوقف مؤقتًا — لن يظهر موقعك للزبائن');
+  }
 }
 
 // ---- Current trip (get_driver_current_trip RPC) ----
@@ -390,6 +396,15 @@ async function initDriverPage() {
   startReporting();
   startTripPolling();
   setupPushNotifications();
+}
+
+function startReporting() {
+  paused = false;
+  const btn = document.getElementById('driverToggleBtn');
+  if (btn) { btn.textContent = 'إيقاف مؤقت'; btn.classList.remove('paused'); }
+  reportOnce();
+  if (reportTimer) clearInterval(reportTimer);
+  reportTimer = setInterval(reportOnce, REPORT_INTERVAL_MS);
 }
 
 document.addEventListener('DOMContentLoaded', initDriverPage);

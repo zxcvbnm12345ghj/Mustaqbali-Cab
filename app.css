@@ -4186,3 +4186,162 @@ html, body.app-body{ background: var(--bg-deep); }
 #soonCardMarkets .soon-badge{ color: var(--green-text); }
 #soonCardFutureOffice{ background: var(--teal-dim); border-color: rgba(108,60,224,0.22); }
 #soonCardFutureOffice .soon-badge{ color: var(--teal-text); }
+
+/* =========================================================================
+   ========  REDESIGN PASS 9 — بطاقات خدمات مستقلة + هوية لونية      ========
+   ========  متنوعة لكل خدمة/قسم + أيقونات SVG بدل الإيموجي          ========
+   =========================================================================
+   نطاق هذا التمرير بصري بحت مثل كل التمريرات أعلاه: لا تعديل على أي
+   id/class/data-attribute يقرأه app.js/market.js/places.js، لا تعديل على
+   openBooking()/selectService() (تأكدت أن openBooking تستدعي أصلاً
+   sheet.setSnap('full') فوراً عند فتح أي خدمة — هذا يحقق طلب "تفتح مباشرة
+   بدون سحب" دون أي تعديل في app.js). صور المركبات الأصلية (VEHICLE_PHOTOS)
+   لم تُمس ولم تُستبدل — فقط الإطار حولها تغيّر.
+
+   1) هوية لونية واضحة ومختلفة لكل خدمة/قسم (بدل تكرار نفس اللون):
+      بنفسجي=يمّك الأساسية (تكسي) • كحلي=خصوصي • برتقالي=التوصيل (كوريير)
+      • رمادي أزرق داكن (Slate)=الشحن/الكارجو • فوشيا=ستار إكس • وردي مميز
+      =بين المحافظات + المطاعم (نفس الهوية لكليهما كما طُلب) • أخضر=الأسواق
+      • سماوي=مكتب المستقبل (الخدمات والمستلزمات) • ذهبي=خدمات أخرى.
+   2) الخدمات الستة: من عمود رأسي واحد (تمريرة سابقة) إلى شبكة عمودين —
+      كل خدمة بطاقة مستقلة كاملة (أيقونة ملوّنة + صورة المركبة + الاسم +
+      الوصف)، فتظهر كل الخدمات دفعة واحدة بأقل تمرير ممكن، بلا قائمة
+      طويلة مزدحمة.
+   3) استبدال إيموجي "قريباً" (🍔🛒🛠️🏪) بأيقونات SVG احترافية بنفس الألوان
+      أعلاه (التبديل نفسه تم في index.html كنص HTML بحت — لا تغيير لأي id).
+   ========================================================================= */
+
+:root{
+  /* الهوية اللونية الست للخدمات — بديل كامل عن التعريف السابق */
+  --svc-taxi: #6C3CE0;        --svc-taxi-soft: #9D7BEA;    --svc-taxi-text: #4A2A9E;    --svc-taxi-dim: rgba(108,60,224,0.14);
+  --svc-private: #1E3A8A;     --svc-private-soft: #5875C4; --svc-private-text: #1E3A8A; --svc-private-dim: rgba(30,58,138,0.14);
+  --svc-courier: #FF7A29;     --svc-courier-soft: #FFAA7A; --svc-courier-text: #B94E0F; --svc-courier-dim: rgba(255,122,41,0.14);
+  --svc-cargo: #475569;       --svc-cargo-soft: #7C8CA3;   --svc-cargo-text: #334155;   --svc-cargo-dim: rgba(71,85,105,0.14);
+  --svc-starx: #C026D3;       --svc-starx-soft: #E17EEA;   --svc-starx-text: #86198F;   --svc-starx-dim: rgba(192,38,211,0.14);
+  --svc-intercity: #E1436B;   --svc-intercity-soft: #EE85A2; --svc-intercity-text: #A11E44; --svc-intercity-dim: rgba(225,67,107,0.14);
+  /* أقسام أخرى: الأسواق (أخضر) / مكتب المستقبل (سماوي) / خدمات أخرى (ذهبي) */
+  --sky: #0EA5E9; --sky-text: #0369A1; --sky-dim: rgba(14,165,233,0.14);
+  --rich-gold: #C8960C; --rich-gold-text: #8A6206; --rich-gold-dim: rgba(200,150,12,0.16);
+}
+
+/* ---- الشبكة: عمودان بدل عمود واحد — كل خدمة بطاقة مستقلة ---- */
+.quick-services{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.qs-row{
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 16px 10px 14px;
+  border-radius: 20px;
+  min-height: 128px;
+}
+.qs-row::before{
+  display: block;
+  inset-inline-start: 0; top: 0; transform: none;
+  width: 100%; height: 4px; border-radius: 20px 20px 0 0;
+}
+.qs-row-ic{
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  box-shadow: none !important;
+}
+.qs-row-photo{ width: 46px; height: 46px; }
+.qs-row-label{ align-items: center; text-align: center; gap: 2px; }
+.qs-row-label b{ font-size: 13.5px; }
+.qs-row-label span{ font-size: 11px; white-space: normal; }
+.qs-row-chev{ display: none; }
+
+/* الألوان الفردية — دائرة الأيقونة بلون خفيف مميز + شريط علوي بلون كامل،
+   لكل خدمة لونها الخاص (لا تكرار). */
+.qs-row[data-service="taxi"]{ background: #fff; }
+.qs-row[data-service="taxi"] .qs-row-ic{ background: var(--svc-taxi-dim); }
+.qs-row[data-service="taxi"]::before{ background: var(--svc-taxi); }
+
+.qs-row[data-service="private"]{ background: #fff; }
+.qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private-dim); }
+.qs-row[data-service="private"]::before{ background: var(--svc-private); }
+
+.qs-row[data-service="courier"]{ background: #fff; }
+.qs-row[data-service="courier"] .qs-row-ic{ background: var(--svc-courier-dim); }
+.qs-row[data-service="courier"]::before{ background: var(--svc-courier); }
+
+.qs-row[data-service="cargo"]{ background: #fff; }
+.qs-row[data-service="cargo"] .qs-row-ic{ background: var(--svc-cargo-dim); }
+.qs-row[data-service="cargo"]::before{ background: var(--svc-cargo); }
+
+.qs-row[data-service="starx"]{ background: #fff; }
+.qs-row[data-service="starx"] .qs-row-ic{ background: var(--svc-starx-dim); }
+.qs-row[data-service="starx"]::before{ background: var(--svc-starx); }
+
+/* بين المحافظات: نفس هوية "المطاعم والرحلات" اللونية (وردي مميز) بدل
+   بانر التدرّج السابق — الآن بطاقة موحّدة الشكل مع بقية الخمس. */
+.qs-row[data-service="intercity"]{
+  grid-column: auto;
+  background: #fff;
+  box-shadow: 0 12px 26px -18px rgba(16,27,45,0.22), 0 1px 0 rgba(16,27,45,0.03);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 16px 10px 14px;
+  min-height: 128px;
+}
+.qs-row[data-service="intercity"] .qs-row-ic{ background: var(--svc-intercity-dim); border-radius: 50%; }
+.qs-row[data-service="intercity"]::before{ background: var(--svc-intercity); }
+.qs-row[data-service="intercity"] .qs-row-label b{ color: var(--text); }
+.qs-row[data-service="intercity"] .qs-row-label span{ color: var(--text-muted); }
+.qs-row[data-service="intercity"] .qs-row-chev{ display: none; }
+
+.qs-skel{ height: 128px; border-radius: 20px; }
+
+/* شاشات ضيقة جداً: عمود واحد بدل عمودين حتى لا يضيق النص. */
+@media (max-width: 330px){
+  .quick-services{ grid-template-columns: 1fr; }
+}
+
+/* ---- أقسام "قريباً" — نفس الهوية اللونية (أيقونات SVG الآن) ---- */
+.soon-ic svg{ width: 24px; height: 24px; }
+#soonCardRestaurants .soon-ic{ background: var(--svc-intercity-dim); color: var(--svc-intercity-text); }
+#soonCardMarkets .soon-ic{ background: var(--green-dim); color: var(--green-text); }
+#soonCardOtherServices .soon-ic{ background: var(--rich-gold-dim); color: var(--rich-gold-text); }
+#soonCardFutureOffice .soon-ic{ background: var(--sky-dim); color: var(--sky-text); }
+
+/* تصنيفات المطاعم/الأسواق/مكتب المستقبل — مطابقة لنفس الهوية أعلاه
+   (تصحيح: المطاعم كانت بنفس لون التوصيل البرتقالي — الآن لونها الخاص). */
+.plc-card-cat-restaurants{ background: var(--svc-intercity-dim); color: var(--svc-intercity-text); }
+.plc-card-cat-markets{ background: var(--green-dim); color: var(--green-text); }
+.plc-card-cat-futureOffice{ background: var(--sky-dim); color: var(--sky-text); }
+
+/* ---- soon-grid: شبكة 4 أعمدة ثابتة بدل تمرير أفقي مخفي جزئياً ----
+   وُجد أثناء الاختبار الفعلي (Playwright، مقاسات iPhone/Android) أن
+   تمريرة سابقة حوّلت هذا الشرط إلى صف قابل للتمرير الأفقي بعرض بطاقة
+   ثابت (92px)، فكانت البطاقة الرابعة (مكتب المستقبل) تخرج جزئياً خارج
+   حدود الشاشة على كل المقاسات المختبرة — يحتاج المستخدم لسحبها لرؤيتها،
+   وهو ما يطلب هذا التمرير تجنبه صراحة. الأربع بطاقات ثابتة العدد، فلا
+   داعي للتمرير الأفقي أصلاً. */
+.soon-grid{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow-x: visible;
+  gap: 8px;
+}
+.soon-card{
+  flex: none;
+  width: auto;
+  min-width: 0;
+  padding: 12px 4px 10px;
+}
+.soon-ic{ width: 44px; height: 44px; }
+.soon-ic svg{ width: 21px; height: 21px; }
+.soon-label{ font-size: 10.5px; white-space: normal; line-height: 1.25; }
+.soon-badge{ font-size: 8px; padding: 2px 7px; }
+@media (max-width: 350px){
+  .soon-label{ font-size: 9.5px; }
+  .soon-ic{ width: 40px; height: 40px; }
+}
