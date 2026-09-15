@@ -748,6 +748,82 @@ function formatDate(iso) {
 }
 
 /* ============================================================
+   Driver-assignment dropdown (fix: link by drivers.phone exactly).
+   get_driver_current_trip() and queue_driver_push_on_assignment()
+   both join trip_requests.driver_phone = drivers.phone by exact
+   string equality (confirmed by reading both definitions directly
+   in the database). The old free-text #driverPhone input let the
+   admin type any string, so a stray space/format difference between
+   what was typed and the driver's real drivers.phone silently broke
+   that match: the trip still showed fine here (no join needed to
+   just display trip_requests), but it never reached the driver's own
+   app or push notification. This replaces that input with a
+   <select> built from loadDriversRoster() — the same data already
+   used by the driver-stats table above — so the saved driver_phone
+   is always byte-identical to drivers.phone.
+
+   Purely additive to the save path: saveDriver() below is completely
+   unchanged, it still just reads #driverPhone / #driverName's
+   .value — a native <select> has the same .value property as an
+   <input>, so nothing downstream needed to change.
+   ============================================================ */
+let assignDriverRoster = [];
+
+// Turns the original free-text <input id="driverPhone"> into a
+// <select id="driverPhone"> once, at startup. Keeping the same id
+// means saveDriver()/openDetail() keep working completely unchanged.
+function convertDriverPhoneFieldToSelect() {
+  const oldInput = document.getElementById('driverPhone');
+  if (!oldInput || oldInput.tagName === 'SELECT') return;
+  const select = document.createElement('select');
+  select.id = 'driverPhone';
+  select.className = oldInput.className;
+  oldInput.parentNode.replaceChild(select, oldInput);
+
+  select.addEventListener('change', () => {
+    const nameEl = document.getElementById('driverName');
+    if (!nameEl) return;
+    const match = assignDriverRoster.find(d => d.phone === select.value);
+    if (match) {
+      nameEl.value = match.name;
+    } else if (!select.value) {
+      nameEl.value = '';
+    }
+    // else: the "unmatched legacy value" option is selected — leave
+    // whatever name is already showing untouched.
+  });
+}
+
+// Rebuilds the <select>'s options from the live drivers roster and
+// selects currentPhone. If currentPhone was saved before this fix and
+// doesn't exactly match any driver, it's kept as its own clearly-
+// labeled option instead of silently reverting to blank — the stored
+// value itself is never touched here, only how it's displayed, until
+// the admin explicitly changes the selection and saves.
+async function populateDriverAssignSelect(currentPhone) {
+  const select = document.getElementById('driverPhone');
+  if (!select) return;
+
+  assignDriverRoster = (await loadDriversRoster()) || [];
+
+  const options = ['<option value="">— بلا سائق —</option>'].concat(
+    assignDriverRoster.map(d =>
+      `<option value="${escapeAttr(d.phone)}">${escapeHtml(d.name)} — ${escapeHtml(d.phone)}${d.active ? '' : ' (غير نشط)'}</option>`
+    )
+  );
+
+  const hasExactMatch = !!currentPhone && assignDriverRoster.some(d => d.phone === currentPhone);
+  if (currentPhone && !hasExactMatch) {
+    options.push(
+      `<option value="${escapeAttr(currentPhone)}">${escapeHtml(currentPhone)} (غير مطابق لأي سائق مسجّل)</option>`
+    );
+  }
+
+  select.innerHTML = options.join('');
+  select.value = currentPhone || '';
+}
+
+/* ============================================================
    Detail modal
    ============================================================ */
 async function openDetail(id) {
@@ -768,7 +844,7 @@ async function openDetail(id) {
   document.getElementById('modalScheduled').textContent = r.scheduled_at ? formatDate(r.scheduled_at) : 'فوري';
   document.getElementById('modalNotes').textContent = r.notes || '—';
   document.getElementById('driverName').value = r.driver_name || '';
-  document.getElementById('driverPhone').value = r.driver_phone || '';
+  await populateDriverAssignSelect(r.driver_phone || '');
   document.getElementById('driverPhoto').value = r.driver_photo_url || '';
   document.getElementById('driverCarType').value = r.driver_car_type || '';
   document.getElementById('driverPlate').value = r.driver_plate || '';
@@ -1417,6 +1493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('driverStatsTodayBtn').addEventListener('click', () => loadDriverStats(todayDateStr()));
   document.getElementById('driverStatsRefreshBtn').addEventListener('click', () => loadDriverStats(driverStatsState.selectedDate));
   populateDriverServiceSelect();
+  convertDriverPhoneFieldToSelect();
   document.getElementById('addDriverBtn').addEventListener('click', addDriver);
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.addEventListener('click', () => updateStatus(b.dataset.status));

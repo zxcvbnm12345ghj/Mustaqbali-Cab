@@ -2721,9 +2721,13 @@ html, body.app-body{ background: var(--bg-deep); }
   box-shadow: 0 18px 34px -20px rgba(47,111,228,0.55);
 }
 .account-card::before{
-  content:'✨';
+  content:'';
   position:absolute; top:18px; inset-inline-start:18px;
-  font-size:16px; opacity:0.9;
+  width:16px; height:16px; opacity:0.9;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m12 2 1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2Z'/><path d='m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m12 2 1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2Z'/><path d='m19 14 .9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z'/></svg>") center / contain no-repeat;
+  color: #fff;
 }
 .account-avatar{
   position: relative;
@@ -2876,12 +2880,12 @@ html, body.app-body{ background: var(--bg-deep); }
 .svc-switch-caption{
   display:block; margin: 2px 2px var(--sp-4); font-size:12px; font-weight:600; color: var(--text-faint);
 }
-.svc-switch-caption[data-caption-for="taxi"]::before{ content: "🚕 الخيار الأفضل لتنقلاتك اليومية"; }
-.svc-switch-caption[data-caption-for="private"]::before{ content: "🚘 رحلة خاصة وراحة أكثر"; }
-.svc-switch-caption[data-caption-for="courier"]::before{ content: "📦 توصيل سريع للطرود"; }
-.svc-switch-caption[data-caption-for="intercity"]::before{ content: "🚌 رحلات بين المحافظات"; }
-.svc-switch-caption[data-caption-for="cargo"]::before{ content: "🚚 نقل الأغراض والحمولات"; }
-.svc-switch-caption[data-caption-for="starx"]::before{ content: "👥 نقل عدة أشخاص دفعة واحدة"; }
+.svc-switch-caption[data-caption-for="taxi"]::before{ content: "الخيار الأفضل لتنقلاتك اليومية"; }
+.svc-switch-caption[data-caption-for="private"]::before{ content: "رحلة خاصة وراحة أكثر"; }
+.svc-switch-caption[data-caption-for="courier"]::before{ content: "توصيل سريع للطرود"; }
+.svc-switch-caption[data-caption-for="intercity"]::before{ content: "رحلات بين المحافظات"; }
+.svc-switch-caption[data-caption-for="cargo"]::before{ content: "نقل الأغراض والحمولات"; }
+.svc-switch-caption[data-caption-for="starx"]::before{ content: "نقل عدة أشخاص دفعة واحدة"; }
 
 /* ---------------------------------------------------------------
    Live tracking (STATUS view) — show the real map behind it, like
@@ -4212,16 +4216,25 @@ html, body.app-body{ background: var(--bg-deep); }
    ========================================================================= */
 
 :root{
-  /* الهوية اللونية الست للخدمات — بديل كامل عن التعريف السابق */
-  --svc-taxi: #6C3CE0;        --svc-taxi-soft: #9D7BEA;    --svc-taxi-text: #4A2A9E;    --svc-taxi-dim: rgba(108,60,224,0.14);
-  --svc-private: #1E3A8A;     --svc-private-soft: #5875C4; --svc-private-text: #1E3A8A; --svc-private-dim: rgba(30,58,138,0.14);
-  --svc-courier: #FF7A29;     --svc-courier-soft: #FFAA7A; --svc-courier-text: #B94E0F; --svc-courier-dim: rgba(255,122,41,0.14);
-  --svc-cargo: #475569;       --svc-cargo-soft: #7C8CA3;   --svc-cargo-text: #334155;   --svc-cargo-dim: rgba(71,85,105,0.14);
-  --svc-starx: #C026D3;       --svc-starx-soft: #E17EEA;   --svc-starx-text: #86198F;   --svc-starx-dim: rgba(192,38,211,0.14);
-  --svc-intercity: #E1436B;   --svc-intercity-soft: #EE85A2; --svc-intercity-text: #A11E44; --svc-intercity-dim: rgba(225,67,107,0.14);
-  /* أقسام أخرى: الأسواق (أخضر) / مكتب المستقبل (سماوي) / خدمات أخرى (ذهبي) */
-  --sky: #0EA5E9; --sky-text: #0369A1; --sky-dim: rgba(14,165,233,0.14);
-  --rich-gold: #C8960C; --rich-gold-text: #8A6206; --rich-gold-dim: rgba(200,150,12,0.16);
+  /* الهوية اللونية الست للخدمات — مبنية الآن حصراً على الألوان
+     الأربعة المطلوبة للهوية (بنفسجي / أخضر / برتقالي / ذهبي)، بدرجة
+     أساسية أو فاتحة (soft) لكل بطاقة حتى تبقى الست بطاقات مميزة
+     بصرياً عن بعضها دون الخروج عن الهوية الأربعة. القيم مسحوبة من
+     متغيرات الهوية المعرّفة أعلاه في الملف (var(--teal)/--green/
+     --orange/--gold وبدائلها) — لا ألوان جديدة أُضيفت، فتبقى متوافقة
+     تلقائياً مع أي تعديل مستقبلي على تلك المتغيرات. */
+  --svc-taxi: var(--teal);            --svc-taxi-soft: var(--teal-soft);      --svc-taxi-text: var(--teal-text);      --svc-taxi-dim: var(--teal-dim);
+  --svc-private: var(--gold);         --svc-private-soft: var(--gold-soft);   --svc-private-text: var(--gold-text);   --svc-private-dim: var(--gold-dim);
+  --svc-courier: var(--orange);       --svc-courier-soft: var(--orange-soft); --svc-courier-text: var(--orange-text); --svc-courier-dim: var(--orange-dim);
+  --svc-cargo: var(--green);          --svc-cargo-soft: var(--green-soft);    --svc-cargo-text: var(--green-text);    --svc-cargo-dim: var(--green-dim);
+  --svc-starx: var(--teal-soft);      --svc-starx-soft: var(--teal);          --svc-starx-text: var(--teal-text);     --svc-starx-dim: rgba(139,92,246,0.14);
+  --svc-intercity: var(--green-soft); --svc-intercity-soft: var(--green);     --svc-intercity-text: var(--green-text); --svc-intercity-dim: rgba(74,222,128,0.14);
+  /* أقسام أخرى (قريباً/مستقبل) — أُعيد ربطها بنفس الهوية الأربعة بدل
+     السماوي المستقل سابقاً، حتى لا يخرج أي عنصر عن بنفسجي/أخضر/
+     برتقالي/ذهبي في كامل الواجهة. الأسماء (--sky, --rich-gold) أُبقيت
+     كما هي فلا حاجة لتعديل أي قاعدة أخرى تستخدمها. */
+  --sky: var(--teal-soft); --sky-text: var(--teal-text); --sky-dim: var(--teal-dim);
+  --rich-gold: var(--gold); --rich-gold-text: var(--gold-text); --rich-gold-dim: var(--gold-dim);
 }
 
 /* ---- الشبكة: عمودان بدل عمود واحد — كل خدمة بطاقة مستقلة ---- */
@@ -4307,14 +4320,14 @@ html, body.app-body{ background: var(--bg-deep); }
 
 /* ---- أقسام "قريباً" — نفس الهوية اللونية (أيقونات SVG الآن) ---- */
 .soon-ic svg{ width: 24px; height: 24px; }
-#soonCardRestaurants .soon-ic{ background: var(--svc-intercity-dim); color: var(--svc-intercity-text); }
+#soonCardRestaurants .soon-ic{ background: var(--orange-dim); color: var(--orange-text); }
 #soonCardMarkets .soon-ic{ background: var(--green-dim); color: var(--green-text); }
 #soonCardOtherServices .soon-ic{ background: var(--rich-gold-dim); color: var(--rich-gold-text); }
 #soonCardFutureOffice .soon-ic{ background: var(--sky-dim); color: var(--sky-text); }
 
 /* تصنيفات المطاعم/الأسواق/مكتب المستقبل — مطابقة لنفس الهوية أعلاه
    (تصحيح: المطاعم كانت بنفس لون التوصيل البرتقالي — الآن لونها الخاص). */
-.plc-card-cat-restaurants{ background: var(--svc-intercity-dim); color: var(--svc-intercity-text); }
+.plc-card-cat-restaurants{ background: var(--orange-dim); color: var(--orange-text); }
 .plc-card-cat-markets{ background: var(--green-dim); color: var(--green-text); }
 .plc-card-cat-futureOffice{ background: var(--sky-dim); color: var(--sky-text); }
 
@@ -4345,3 +4358,745 @@ html, body.app-body{ background: var(--bg-deep); }
   .soon-label{ font-size: 9.5px; }
   .soon-ic{ width: 40px; height: 40px; }
 }
+
+/* =========================================================================
+   ========  REDESIGN PASS 10 — تحسين تجربة الواجهة الرئيسية:        ========
+   ========  كاردات/أيقونات أكثر احترافية + رسالة تعريفية أنيقة       ========
+   =========================================================================
+   بصري بحت مثل كل التمريرات أعلاه: لا تعديل على أي id/class/data-attribute
+   يقرأه app.js، لا تغيير في openBooking()/selectService()، لا تعديل على
+   VEHICLE_PHOTOS ولا على عدد/ترتيب الخدمات. الهدف: بطاقات الخدمات الست
+   تبدو أقرب لتطبيقات النقل الحديثة (هالة لونية حول الأيقونة، شريط علوي
+   بتدرّج بدل لون مسطّح، ظل أعمق وأنعم)، ورسالة "رحلتك تبدأ من هنا" تظهر
+   كبطاقة أنيقة سطرين (عنوان + وصف) بدل سطر واحد قابل للقص، مع الحفاظ
+   الكامل على الألوان الأربعة (بنفسجي/أخضر/برتقالي/ذهبي) ودون أي سحب
+   عمودي إضافي (نفس الارتفاعات المحسوبة مسبقاً في .home-fixed لم تُمس).
+   ========================================================================= */
+
+/* ---- 1) رسالة تعريفية أنيقة (بطاقة سطرين بدل بيل مقصوص) ---- */
+.discover-banner{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  max-width:none;
+  background: linear-gradient(135deg, var(--teal-dim) 0%, var(--gold-dim) 100%);
+  border: 1px solid rgba(108,60,224,0.16);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 10px 22px -16px rgba(108,60,224,0.35);
+}
+.discover-banner-ic{
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; width:34px; height:34px; border-radius:50%;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-soft) 100%);
+  color:#fff;
+  box-shadow: 0 4px 10px -4px rgba(108,60,224,0.55);
+}
+.discover-banner-ic svg{ width:17px; height:17px; }
+.discover-banner-text{
+  display:flex; flex-direction:column; gap:1px; min-width:0;
+}
+.discover-banner span.discover-banner-text{
+  overflow:visible; text-overflow:clip; white-space:normal;
+}
+.discover-banner-text b{
+  font-size:12.5px; font-weight:800; color: var(--teal-text);
+}
+.discover-banner .discover-banner-text span{
+  font-size:10.5px; font-weight:600; color: var(--text-muted);
+  overflow:visible; text-overflow:clip; white-space:normal; line-height:1.3;
+}
+
+/* ---- 2) عنوان القسم "اختر خدمتك" — أوضح وأكثر ثقلاً بصرياً ---- */
+.home-col-services > .section-label{
+  font-size: 12.5px; font-weight:900; color: var(--text);
+  text-transform:none; letter-spacing:0;
+}
+.home-col-services > .section-label::before{
+  width:18px; height:6px; border-radius:4px;
+  background: linear-gradient(90deg, var(--teal) 0%, var(--orange) 55%, var(--gold) 100%);
+}
+
+/* ---- 3) بطاقات الخدمات الست — هالة لونية حول الأيقونة + شريط علوي
+   بتدرّج (صلب → فاتح لنفس اللون) بدل شريط مسطّح، وظل أعمق يعطي إحساس
+   "زر قابل للضغط" واضح مثل تطبيقات النقل المرجعية. لا تغيير في حجم
+   البطاقة الإجمالي أو الشبكة (عمودان) حتى لا يخرج أي شيء عن الارتفاع
+   المحسوب أصلاً لصف الخدمات. ---- */
+.qs-row{
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 14px 28px -20px rgba(11,32,54,0.28), 0 2px 6px -2px rgba(11,32,54,0.06);
+}
+.qs-row::before{
+  height: 5px;
+  border-radius: 20px 20px 0 0;
+  opacity: 0.95;
+}
+.qs-row:active{
+  transform: scale(0.97);
+  box-shadow: 0 6px 14px -10px rgba(11,32,54,0.3);
+}
+.qs-row-ic{
+  width: 56px; height: 56px;
+  box-shadow: 0 0 0 5px var(--surface), 0 0 0 6.5px currentColor !important;
+  color: var(--surface-brd);
+}
+.qs-row-photo{
+  width: 44px; height: 44px;
+  box-shadow: 0 2px 6px rgba(11,32,54,0.24);
+}
+.qs-row-label b{ font-size: 13.5px; font-weight:900; letter-spacing:-.1px; }
+.qs-row-label span{ font-size: 10.5px; font-weight:600; }
+
+/* هالة الأيقونة + الشريط العلوي بلون كل خدمة (var(--svc-*) مُعرّفة أعلاه
+   ضمن الهوية الأربعة فقط — بنفسجي/أخضر/برتقالي/ذهبي). currentColor
+   أعلاه في .qs-row-ic يأخذ قيمته من هذه القواعد. */
+.qs-row[data-service="taxi"] .qs-row-ic{ color: var(--svc-taxi); }
+.qs-row[data-service="taxi"]::before{ background: linear-gradient(90deg, var(--svc-taxi) 0%, var(--svc-taxi-soft) 100%); }
+
+.qs-row[data-service="private"] .qs-row-ic{ color: var(--svc-private); }
+.qs-row[data-service="private"]::before{ background: linear-gradient(90deg, var(--svc-private) 0%, var(--svc-private-soft) 100%); }
+
+.qs-row[data-service="courier"] .qs-row-ic{ color: var(--svc-courier); }
+.qs-row[data-service="courier"]::before{ background: linear-gradient(90deg, var(--svc-courier) 0%, var(--svc-courier-soft) 100%); }
+
+.qs-row[data-service="cargo"] .qs-row-ic{ color: var(--svc-cargo); }
+.qs-row[data-service="cargo"]::before{ background: linear-gradient(90deg, var(--svc-cargo) 0%, var(--svc-cargo-soft) 100%); }
+
+.qs-row[data-service="starx"] .qs-row-ic{ color: var(--svc-starx); }
+.qs-row[data-service="starx"]::before{ background: linear-gradient(90deg, var(--svc-starx) 0%, var(--svc-starx-soft) 100%); }
+
+.qs-row[data-service="intercity"] .qs-row-ic{ color: var(--svc-intercity); }
+.qs-row[data-service="intercity"]::before{ background: linear-gradient(90deg, var(--svc-intercity) 0%, var(--svc-intercity-soft) 100%); }
+
+/* ---- 4) بطاقات "قريباً" (المطاعم/الأسواق/الخ) — نفس لغة الظل/الحواف
+   المحسّنة أعلاه لتبقى الواجهة متناسقة بصرياً بالكامل. ---- */
+.soon-card{
+  border-radius: 16px;
+  box-shadow: 0 10px 20px -16px rgba(11,32,54,0.26);
+}
+
+/* ---- 5) شاشات ضيقة جداً — تصغير هالة الأيقونة قليلاً حتى لا تلتصق
+   ببعضها البطاقتين المتجاورتين في نفس الصف. ---- */
+@media (max-width: 340px){
+  .qs-row-ic{ width: 50px; height: 50px; box-shadow: 0 0 0 4px var(--surface), 0 0 0 5.5px currentColor !important; }
+  .qs-row-photo{ width: 40px; height: 40px; }
+}
+
+/* =========================================================================
+   ========  REDESIGN PASS 11 — المطاعم/الأسواق/سوق يمّك:              ========
+   ========  بطاقات احترافية + أيقونات SVG بدل الإيموجي + رسائل تعريفية ========
+   =========================================================================
+   بصري بحت: لا id/class/data-attribute جديد يفترض بيانات غير موجودة، لا
+   تعديل على market.js/places.js/app.js ولا على أي RPC. استبدال الإيموجي
+   الثابتة في index.html (empty states, plc-tabs, plc-detail placeholder,
+   زر طلب التوصيل) بأيقونات SVG تم في هذا التمرير كنص HTML بحت أيضاً —
+   نفس الـ id ونفس زر/رابط الإجراء الحقيقي كما هو. ---- */
+
+/* ---- 1) رسالة تعريفية قصيرة تحت عنوان الشاشة ---- */
+.sheet-subtitle{
+  font-size: 12.5px; font-weight:600; color: var(--text-muted);
+  margin: -10px 0 var(--sp-4);
+}
+
+/* ---- 2) أيقونات SVG الجديدة بدل الإيموجي — تحتاج مقاس صريح (font-size
+   كان يكبّر الإيموجي النصي، ولا يؤثر على SVG). ---- */
+.mkt-empty-ic, .plc-empty-ic{
+  width:48px; height:48px; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; background: var(--teal-dim); color: var(--teal-text);
+}
+.mkt-empty-ic svg, .plc-empty-ic svg{ width:24px; height:24px; }
+.plc-detail-hero-ph{ display:flex; align-items:center; justify-content:center; color: var(--text-faint); opacity:1; }
+.plc-detail-hero-ph svg{ width:44px; height:44px; }
+
+/* ---- 3) تبويب المطاعم/الأسواق — أيقونة + نص بدل نص فقط، بمظهر بطاقة
+   مرفوعة عند التفعيل (نفس data-plc-kind ونفس معالج النقر). ---- */
+.plc-tab{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  padding: 10px 10px; font-weight:800;
+  box-shadow: 0 2px 6px -4px rgba(11,32,54,0.1);
+}
+.plc-tab-ic{ display:flex; flex-shrink:0; }
+.plc-tab-ic svg{ width:16px; height:16px; }
+.plc-tab.active{
+  background: linear-gradient(120deg, var(--teal) 0%, var(--teal-soft) 100%);
+  border-color: var(--teal);
+  box-shadow: 0 10px 20px -12px rgba(108,60,224,0.5);
+}
+
+/* ---- 4) بطاقات سوق يمّك / المطاعم-الأسواق — نفس لغة الظل والحواف
+   المستخدمة ببطاقات الخدمات الست (تمرير سابق) حتى تبقى الواجهة كلها
+   متناسقة، بدون تغيير حجم/نسبة الصورة أو أي حقل بيانات. ---- */
+.mkt-card, .plc-card{
+  border-radius: 18px;
+  box-shadow: 0 14px 26px -20px rgba(11,32,54,0.3), 0 2px 6px -3px rgba(11,32,54,0.06);
+}
+.mkt-card:active, .plc-card:active{
+  box-shadow: 0 6px 14px -12px rgba(11,32,54,0.22);
+}
+.mkt-cat-ic{
+  border-radius: 18px;
+  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.38), 0 0 0 1px rgba(108,60,224,0.06) inset;
+}
+.mkt-card-price{ color: var(--orange-text); font-weight:900; }
+.mkt-card-tag{ background: linear-gradient(120deg, var(--green) 0%, var(--green-soft) 100%); }
+
+/* ---- 5) تصنيفات بطاقات "المطاعم/الأسواق/مكتب المستقبل" — ضبط نهائي
+   على الهوية الأربعة فقط (بنفسجي/أخضر/برتقالي/ذهبي)، بدل درجات
+   terracotta/slate المستقلة سابقاً. ---- */
+.plc-card-cat-restaurants{ background: var(--orange-dim); color: var(--orange-text); }
+.plc-card-cat-markets{ background: var(--green-dim); color: var(--green-text); }
+.plc-card-cat-futureOffice{ background: var(--teal-dim); color: var(--teal-text); }
+
+/* ---- 6) بطاقة "قريباً" (مطعم/سوق فارغ) — هالة لونية متناسقة مع
+   الأيقونة الجديدة بدل ظل عام. ---- */
+.plc-empty-ic{ background: var(--teal-dim); color: var(--teal-text); }
+
+/* =========================================================================
+   ========  REDESIGN PASS 12 — إزالة آخر الإيموجي المتبقية (SVG بدلاً    ========
+   ========  عنها) + تحسينات احترافية ختامية للمطاعم/الأسواق/سوق يمّك   ========
+   ========  + Bottom Navigation وSafe Area على آيفون وأندرويد           ========
+   =========================================================================
+   بصري بحت — نفس قواعد كل التمريرات أعلاه بالضبط: تمريرة إضافية أخيرة في
+   نهاية الملف فقط، لا تعديل ولا حذف ولا إعادة ترتيب لأي شيء سابق، ولا مساس
+   بأي id/class/data-attribute يقرأه app.js أو market.js أو places.js، ولا
+   بمنطق الطلب/السائق/GPS/Supabase/RPC. لا بيانات وهمية أُضيفت: كل شارة أو
+   نص هنا يعرض فقط حقولاً/عناصر كانت موجودة أصلاً.
+
+   1) آخر الإيموجي المتبقية في index.html (حقول تسجيل الدخول، شاشة
+      "قبل البدء" [التثبيت/الإشعارات]، دليل الأسئلة الشائعة، شاشة "المزيد"،
+      شارة "عضو يمّك"، زرّي الانطلاق/الوجهة على الخريطة) استُبدلت بأيقونات
+      SVG بنفس أسلوب رسم بقية الأيقونات في التطبيق (stroke بلون currentColor
+      يرث لون العنصر الأب تلقائياً). هذا القسم فقط يضبط مقاس هذه الأيقونات
+      الجديدة — لأن قواعد font-size القديمة (لتحجيم نص الإيموجي) لا تؤثر
+      على عنصر <svg>. تمّت تعرية التاغلاين (TAGLINES) النصية في السكربت
+      الإضافي بنهاية index.html من الإيموجي أيضاً لتطابق ::before أعلاه.
+   2) لمسات احترافية ختامية على بطاقات المطاعم/الأسواق (.plc-card) و"سوق
+      يمّك" و"قريباً" — شريط علوي رفيع بلون التصنيف نفسه (نفس منطق
+      .qs-row::before تماماً)، صورة بديلة (placeholder) بتدرّج هوية العلامة
+      بدل رمادي عام، وحالة فارغة أوضح.
+   3) Bottom Navigation: تأكيد مساحة لمس مريحة (٤٤px+ فعلياً عبر ارتفاع
+      الزر الكامل، غير متأثر بحجم "الهالة" الصغيرة حول الأيقونة)، ومنع أي
+      التفاف للتسمية النصية على شاشات أندرويد الضيقة جداً، مع خلفية احتياطية
+      صلبة لحالات ضعف/انعدام دعم backdrop-filter (بعض متصفحات أندرويد
+      القديمة) حتى لا يختفي الشريط بصرياً هناك.
+   ========================================================================= */
+
+/* ---- 1) مقاسات أيقونات SVG الجديدة (بدل الإيموجي) ---- */
+.btn-ic{ display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.btn-ic svg{ width:18px; height:18px; }
+
+.ic-inline{ display:inline-flex; align-items:center; vertical-align:-3px; }
+.ic-inline svg{ width:13px; height:13px; }
+
+.wpg-ic{ display:inline-flex; align-items:center; justify-content:center; }
+.wpg-ic svg{ width:12px; height:12px; }
+.welcome-platform-guide-title{ display:inline-flex; align-items:center; justify-content:center; gap:4px; }
+
+.hib-ic{ display:inline-flex; align-items:center; justify-content:center; }
+.hib-ic svg{ width:14px; height:14px; }
+.help-install-block h4{ display:flex; align-items:center; gap:6px; }
+
+.welcome-field-icon{ color: var(--teal-text); }
+.welcome-field-icon svg{ width:14px; height:14px; }
+
+.welcome-intro-chip-ic{ color: var(--teal-text); }
+.welcome-intro-chip-ic svg{ width:17px; height:17px; }
+
+.welcome-inapp-notice-ic svg{ width:16px; height:16px; }
+.help-install-note-ic svg{ width:16px; height:16px; }
+
+.mt-btn{ display:flex; align-items:center; justify-content:center; gap:6px; }
+
+.more-item-icon{
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width:30px; height:30px; border-radius:50%;
+  background: var(--teal-dim); color: var(--teal-text);
+}
+.more-item-icon svg{ width:16px; height:16px; }
+
+.account-badge{ display:inline-flex; align-items:center; gap:4px; }
+.account-badge svg{ width:12px; height:12px; }
+
+/* ---- 2) بطاقات المطاعم/الأسواق/سوق يمّك — لمسة احترافية ختامية ---- */
+.plc-card, .mkt-card{ position: relative; }
+.plc-card-cat{
+  display:inline-flex; align-items:center; gap:4px;
+  padding: 3px 9px; font-size:10.5px;
+}
+.plc-card-img-ph{
+  color: var(--teal); opacity:0.45;
+}
+.plc-card-img{
+  background: linear-gradient(135deg, var(--teal-dim) 0%, var(--gold-dim) 100%);
+}
+.plc-empty{
+  padding: var(--sp-6) var(--sp-4);
+  text-align:center;
+}
+
+/* ---- 3) Bottom Navigation — لمسة أخيرة لضمان تجربة متّسقة على آيفون
+   وأندرويد: خلفية صلبة احتياطية عند غياب دعم backdrop-filter، ومنع
+   التفاف نص التسمية على أضيق شاشات أندرويد. الارتفاع/الحشوة/
+   safe-area-inset-bottom المحسوبة أعلاه (v7) تبقى كما هي تماماً. ---- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .bottom-nav{ background: #F3F8F7; }
+}
+.bnav-item span:last-child{
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================================
+   ========  REDESIGN PASS 13 — تحسين تجربة المطاعم/الأسواق/خدمات أخرى  ========
+   ========  + مراجعة Bottom Navigation وSafe Area (تفاعل، لا ألوان فقط) ========
+   =========================================================================
+   بصري/تفاعلي بحت — نفس قواعد كل التمريرات: تمريرة إضافية أخيرة في نهاية
+   الملف، لا تعديل/حذف/إعادة ترتيب لأي شيء سابق، لا مساس بأي id/class/
+   data-attribute يقرأه app.js أو market.js أو places.js، ولا بمنطق الطلب/
+   السائق/GPS/Supabase/RPC. لا بيانات وهمية: كل ما هنا تحسين تفاعل/إحساس
+   فقط على عناصر وحقول موجودة أصلاً. الإضافة الوحيدة في index.html المرتبطة
+   بهذا التمرير هي class="soon-card-static" + aria-disabled="true" على
+   بطاقة "خدمات أخرى" غير القابلة للنقر أصلاً (كانت ولا تزال <div> بلا
+   معالج نقر ولا data-service) — توضيح بصري لحالتها الثابتة فقط.
+
+   1) المطاعم/الأسواق/سوق يمّك: صور تظهر بتلاشٍ ناعم بدل الظهور المفاجئ،
+      تأكيد لمسة ضغط واضحة على كل بطاقة/تبويب، وحالة فارغة أكثر اكتمالاً
+      (إطار متقطع + محتوى مركزي) بدل نص عائم بلا حاوية.
+   2) "خدمات أخرى" (البطاقة الوحيدة غير القابلة للنقر في الشبكة): تمييز
+      بصري واضح كبطاقة غير تفاعلية (حدود متقطعة + شفافية أقل) حتى لا يحاول
+      الزبون الضغط عليها متوقعاً تنقلاً، تمييزاً عن البطاقات الثلاث الأخرى
+      المجاورة (مطاعم/أسواق/مكتب المستقبل) التي تفتح شاشة فعلية.
+   3) إزالة تأخير الـ 300ms/تكبير النقر المزدوج على أندرويد (touch-action)
+      عن كل العناصر التفاعلية الجديدة/المُعاد تصميمها، وإضافة حالة
+      focus-visible واضحة للتنقل بلوحة المفاتيح على الشاشات العريضة.
+   4) Bottom Navigation: تمرير سلس عند العودة لأعلى الشاشة عند تبديل
+      التبويبات (بدون قفزة مفاجئة)، مع إبقاء كل قياسات الارتفاع/الحشوة/
+      safe-area-inset-bottom من التمريرات السابقة كما هي تماماً.
+   ========================================================================= */
+
+/* ---- 1) بطاقات المطاعم/الأسواق — إحساس أكثر نعومة عند التحميل ---- */
+.plc-card-img img, .mkt-card-img img{
+  animation: plcImgIn .35s ease both;
+}
+@keyframes plcImgIn{ from{ opacity:0; } to{ opacity:1; } }
+.plc-card, .mkt-card, .plc-tab, .market-banner{ touch-action: manipulation; }
+.plc-tab:focus-visible,
+.plc-card:focus-visible,
+.market-banner:focus-visible,
+.more-item:focus-visible,
+.soon-card-clickable:focus-visible{
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* حالة فارغة أكثر اكتمالاً: حاوية بحدود متقطعة بدل نص عائم فقط. */
+.plc-empty, .mkt-empty{
+  border: 1.5px dashed var(--surface-brd);
+  border-radius: var(--app-r-lg);
+  background: var(--surface);
+}
+
+/* ---- 2) "خدمات أخرى" — توضيح أنها بطاقة غير تفاعلية (ثابتة) ---- */
+.soon-card-static{
+  cursor: default;
+  border-style: dashed;
+  opacity: 0.82;
+}
+.soon-card-static:active{
+  transform: none;
+  box-shadow: var(--elev-premium);
+}
+.soon-card-static .soon-badge{
+  opacity: 0.9;
+}
+
+/* ---- 3) لمسة تفاعل خفيفة على "سوق يمّك" لمؤشرات الفأرة (أجهزة سطح
+   المكتب/الأجهزة اللوحية ذات الماوس فقط — لا تؤثر على اللمس) ---- */
+@media (hover: hover) and (pointer: fine){
+  .market-banner:hover .market-banner-chev{ transform: translateX(-3px); }
+  .market-banner-chev{ transition: transform .18s; }
+  .plc-card:hover, .mkt-card:hover{ box-shadow: 0 18px 30px -18px rgba(16,27,45,0.32); }
+  .soon-card-clickable:hover{ box-shadow: var(--elev-premium-active); }
+}
+
+/* ---- 4) Bottom Navigation / Safe Area — لمسات تفاعل أخيرة (لا تغيير
+   على الارتفاع/الحشوة/safe-area المحسوبة في التمريرات السابقة) ---- */
+.bnav-item{ touch-action: manipulation; }
+.bnav-item:focus-visible{
+  outline: 2px solid var(--teal);
+  outline-offset: -3px;
+  border-radius: 14px;
+}
+/* عند تبديل شاشة سفلية (طلباتي/حسابي/المزيد...) يعود التمرير لأعلاها
+   بسلاسة بدل قفزة مفاجئة — لا يمس setStep()/showView() ولا أي منطق،
+   فقط سلوك التمرير البصري لعنصر #sheetScroll الموجود أصلاً. */
+#sheetScroll{ scroll-behavior: smooth; }
+
+/* =========================================================================
+   المرحلة التالية — Bottom Nav / انتقالات / تمييز الخدمات (CSS فقط)
+   -------------------------------------------------------------------------
+   كل ما يلي بصري بحت، مبني فوق العناصر وclass/id/data-attribute الموجودة
+   أصلاً فقط (bnav-item.active, sheet-view[data-view], wp-line/wp-step،
+   svc-switch-caption[data-caption-for]...). لا تعديل على أي HTML، ولا على
+   app.js/market.js/places.js، ولا على منطق السائق/الرحلة/الخرائط/Supabase.
+   ========================================================================= */
+
+/* ---- 1) Bottom Nav — مؤشر نشِط أكثر حيوية (ظهور بانبثاق + توهج خفيف
+   بلون الهوية الأساسي)، بدل الظهور الفوري الجامد ---- */
+@keyframes bnav-indicator-pop{
+  from{ transform: translateX(-50%) scaleX(0); opacity:0; }
+  to{ transform: translateX(-50%) scaleX(1); opacity:1; }
+}
+.bnav-item.active::before{
+  animation: bnav-indicator-pop .28s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 2px 10px -2px var(--teal);
+}
+.bnav-item{ transition: color .2s ease; }
+.bnav-icon{ position: relative; }
+@keyframes bnav-icon-glow{ from{ opacity:0; transform: scale(.6);} to{ opacity:1; transform: scale(1);} }
+.bnav-item.active .bnav-icon::after{
+  content:'';
+  position:absolute; inset:-3px; border-radius: inherit;
+  background: radial-gradient(circle, var(--teal-dim) 0%, transparent 72%);
+  animation: bnav-icon-glow .32s ease; z-index:-1;
+}
+
+/* ---- 2) انتقالات بين الشاشات — دخول الشاشات الفرعية (كل شيء عدا
+   الرئيسية) بإحساس "دفع للأمام" خفيف بدل ظهور صفحة ويب جامدة. الشاشة
+   الرئيسية تبقى على حركتها الأصلية (sheet-in) لأنها القاعدة الثابتة. ---- */
+@keyframes view-enter-sub{
+  from{ opacity:0; transform: translateY(10px) scale(.985); }
+  to{ opacity:1; transform: translateY(0) scale(1); }
+}
+.sheet-view.active:not([data-view="home"]){
+  animation: view-enter-sub .3s cubic-bezier(.19,1,.22,1);
+}
+@media (prefers-reduced-motion: reduce){
+  .sheet-view.active,
+  .bnav-item.active::before,
+  .bnav-item.active .bnav-icon::after{ animation: none !important; }
+}
+
+/* ---- 3) معالِم تقدّم الحجز (wp-line) تتلوّن مع تقدّم الخطوات — نفس
+   منطق تلوين wp-dot أعلاه، فقط الآن الخط الواصل بين النقاط يعكس أيضاً
+   أي خطوة اكتملت، بدل بقائه رمادياً ثابتاً طوال الحجز. ---- */
+.wp-line{ transition: background-color .3s ease; }
+.sheet-view[data-current-step="2"] .wp-line:nth-of-type(1),
+.sheet-view[data-current-step="3"] .wp-line:nth-of-type(1),
+.sheet-view[data-current-step="3"] .wp-line:nth-of-type(2),
+.sheet-view[data-current-step="4"] .wp-line:nth-of-type(1),
+.sheet-view[data-current-step="4"] .wp-line:nth-of-type(2),
+.sheet-view[data-current-step="4"] .wp-line:nth-of-type(3){
+  background: var(--success);
+}
+
+/* ---- 4) رسائل إرشادية أذكى بصرياً — تعليق الخدمة النشِطة (نفس
+   svcSwitchCaption/TAGLINES الموجودة في app.js) ياخذ لون الخدمة نفسها
+   بدل رمادي عام، فيصير الإرشاد مرتبطاً بصرياً بالخدمة المختارة. ---- */
+.svc-switch-caption[data-caption-for="taxi"]{ color: var(--svc-taxi-text); }
+.svc-switch-caption[data-caption-for="private"]{ color: var(--svc-private-text); }
+.svc-switch-caption[data-caption-for="courier"]{ color: var(--svc-courier-text); }
+.svc-switch-caption[data-caption-for="intercity"]{ color: var(--svc-intercity-text); }
+.svc-switch-caption[data-caption-for="cargo"]{ color: var(--svc-cargo-text); }
+.svc-switch-caption[data-caption-for="starx"]{ color: var(--svc-starx-text); }
+
+/* ---- 5) حماية إضافية من Horizontal Overflow — طبقة أمان فوق ما هو
+   موجود أصلاً (html/body overflow:hidden + width:100%). تمنع أي نص
+   طويل غير قابل للكسر داخل بطاقات المحتوى القابلة للتمرير من دفع
+   العرض أفقياً على أي جهاز، دون التأثير على أي عنصر مُقصَّر أصلاً
+   بـ white-space:nowrap/ellipsis (تبقى سطراً واحداً كما هي). ---- */
+.sheet-scroll{ max-width: 100%; }
+.sheet-scroll *{ min-width: 0; }
+.sheet-scroll p,
+.sheet-scroll span,
+.sheet-scroll b{ overflow-wrap: break-word; }
+
+/* =========================================================================
+   إعادة تصميم الخلفية العامة — توحيد الهوية البنفسجية + إلغاء الأبيض
+   كخلفية كاملة (CSS فقط، بلا تغيير على أي HTML/JS/منطق)
+   -------------------------------------------------------------------------
+   الفحص: الملف يحوي عدة تمريرات تصميم سابقة متراكمة، وكل تمرير أعاد
+   تعريف نفس متغيرات :root (--teal, --surface, --bg-deep...). بما أن
+   آخر تعريف في ترتيب الملف هو الذي يفوز (نفس specificity)، تبيّن أن:
+     - "--teal" كان قد انتهى فعلياً إلى أزرق (#2F6FE4) رغم أن أول تمرير
+       في الملف نص صراحة على هوية بنفسجية — تمرير لاحق كان قد كتبه فوقه.
+     - "--surface" (خلفية .sheet نفسها، وهي المساحة التي تُعرض فيها كل
+       الأقسام تقريباً) كان قد انتهى إلى أبيض ناصع (#FFFFFF)، بينما
+       "--bg-deep" (خلفية .app-shell/#map خلف الخريطة) كانت بالفعل قد
+       تحوّلت في تمرير سابق إلى تدرّج هادئ فاتح — لكنه نادراً ما يظهر لأن
+       .sheet (الأبيض الناصع) يغطي معظم الشاشة في كل الأقسام تقريباً.
+   الحل هنا: توحيد نهائي لهذه المتغيرات في كتلة واحدة أخيرة، بحيث:
+     1) "--teal" يعود بنفسجي الهوية بشكل نهائي وحاسم — وبما أن مئات
+        القواعد في هذا الملف تقرأ var(--teal)/--teal-text/--teal-dim/
+        --teal-soft أصلاً (أزرار، تبويب نشط، حلقات التركيز، نقاط معالم
+        الحجز...)، هذا التصحيح الواحد ينعكس تلقائياً على كل الواجهة
+        دفعة واحدة، فتصير الهوية متناسقة بين كل الشاشات بدل أن تختلف
+        حسب أي تمرير كتب آخراً.
+     2) "--surface/--surface-hi/--surface-brd" تصبح تدرّجاً لافندري هادئ
+        قريباً من الأبيض (وليس أبيض ناصعاً)، فتصير هي "قماشة" .sheet
+        والعناصر الفاتحة الصغيرة (شرائح، حدود، حلقات) بدل الأبيض المسطح.
+     3) العناصر المهمة (البطاقات: qs-row, order-card, account-card,
+        الحقول, الأزرار...) لم تُمس إطلاقاً — كل استخدام لـ"background:#fff"
+        الصريح في الملف يبقى كما هو، فتبقى هذه فعلياً هي "الأبيض داخل
+        البطاقات فقط"، وتبرز بوضوح كعناصر "مرتفعة" فوق القماشة الجديدة.
+     4) "--bg-deep" (خلف الخريطة/الحافة العلوية) يُعاد توحيده بنفس درجة
+        القماشة الجديدة + ثلاث طبقات تدرّج شفافة جداً بالبنفسجي/الأخضر/
+        البرتقالي، فيتطابق مع الهوية بدل تدرّج أزرق/أخضر منفصل.
+     5) لا تغيير على أي هيكل/Safe-Area/overflow-guard — القيم فقط.
+   ========================================================================= */
+:root{
+  /* الهوية الأساسية — بنفسجي نهائي وحاسم (يفوز على كل تعريف سابق) */
+  --teal: #6C3CE0;
+  --teal-soft: #8B5CF6;
+  --teal-text: #4C1D95;
+  --teal-dim: rgba(108,60,224,0.13);
+
+  /* القماشة العامة — لافندري هادئ قريب من الأبيض، وليس أبيض ناصعاً */
+  --surface: #F7F4FC;
+  --surface-hi: #EFE6FB;
+  --surface-brd: #E1D3F4;
+
+  /* خلف الخريطة/الحافة العلوية — نفس قماشة .sheet + وهج بنفسجي/أخضر/
+     برتقالي شفاف جداً، بدل تدرّج أزرق/أخضر منفصل عن الهوية */
+  --bg-deep:
+    radial-gradient(120% 55% at 14% -12%, rgba(108,60,224,0.14) 0%, transparent 55%),
+    radial-gradient(110% 60% at 104% 2%, rgba(255,122,41,0.09) 0%, transparent 55%),
+    radial-gradient(95% 55% at 50% 118%, rgba(34,197,94,0.08) 0%, transparent 60%),
+    #F7F4FC;
+}
+
+/* .sheet — القماشة الرئيسية التي تُعرض فوقها كل الأقسام (الرئيسية،
+   الحجز، الرحلات، السوق من الرابط السريع، المزيد...). تدرّج رأسي هادئ
+   جداً بين نفس درجتي القماشة بدل لون أبيض مسطح واحد، لإحساس طبقات
+   خفيف بدل صفحة بيضاء مسطحة — النص والتباين لا يتأثران (الفرق بصري
+   دقيق جداً بين اللونين، وكلاهما فاتح جداً). */
+.sheet{
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 55%, var(--surface-hi) 100%);
+}
+
+/* Bottom Nav — يطابق نفس قماشة .sheet الجديدة بدل الأبيض شبه الناصع،
+   فلا يبدو شريطاً منفصلاً بلون مختلف عن باقي الواجهة عند التمرير. */
+.bottom-nav{
+  background: rgba(247,244,252,0.97);
+}
+
+/* =========================================================================
+   Full-Screen لكل خدمة — بانر المطاعم/الأسواق + بطاقات عريضة + هوية
+   بصرية مميّزة لكل خدمة داخل شاشة الحجز (CSS/HTML إضافي بحت)
+   -------------------------------------------------------------------------
+   الفحص قبل التعديل: showView() (app.js) يفعّل بالفعل is-fullscreen-view
+   لأي شاشة غير "home" — الخريطة والخدمات الستة تختفي تلقائياً، وشاشة
+   "places" (المطاعم/الأسواق، تبويب data-plc-kind واحد يبدّل النوع) تصبح
+   ملء الشاشة فعلياً. المطلوب هنا تحسين الشكل داخل هذه الشاشات الموجودة
+   أصلاً، وليس اختراع شاشات جديدة:
+     - "places": بانر ثابت جديد (#plcHeroBanner، أضيف في index.html فوق
+       التبويبات، بلا صورة حقيقية بعد — بديل SVG+تدرّج جاهز لاستقبال صورة
+       لاحقاً بدون بيانات وهمية) + إعادة تصميم #plcGrid بالكامل من شبكة
+       عمودين صغيرة إلى قائمة عمود واحد ببطاقات عريضة كبيرة الصورة، عبر
+       تقييد كل قاعدة بـ"#plcGrid" تحديداً — .mkt-card (منتجات سوق يمّك
+       الفردية، شبكة مختلفة تماماً) غير متأثرة إطلاقاً بأي قاعدة هنا.
+     - شاشة الحجز (booking) في "وضع التركيز" (svc-switch-wrap.is-focused،
+       موجود أصلاً): تلوين خفيف جداً لرأس الشاشة بلون الخدمة المختارة
+       بالضبط (نفس --svc-* المستخدمة أصلاً لكل خدمة)، عبر :has() على
+       نفس data-caption-for الذي يضبطه app.js أصلاً عند اختيار الخدمة —
+       بدون أي id/class/سمة جديدة يحتاجها JS، فيشعر الزبون أن كل خدمة
+       (تاكسي/خصوصي/دليفري/بين محافظات/شحن/نقل نفرات) شاشتها المستقلة
+       الخاصة لا نسخة رمادية موحّدة من نفس القالب.
+   ========================================================================= */
+
+/* ---- 1) بانر المطاعم/الأسواق — أكبر من .discover-banner المستخدم في
+   الرئيسية عمداً (بانر رئيسي لشاشة كاملة وليس تلميحاً صغيراً) ---- */
+.plc-hero-banner{
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%;
+  /* FIX (Playwright audit): this project has no global box-sizing:border-box
+     reset, so the browser default (content-box) was adding this element's
+     own horizontal padding ON TOP OF width:100% — rendering it ~32px wider
+     than its RTL container and bleeding that extra width off the LEFT edge
+     (invisible only because .sheet has overflow-x:hidden). Scoped to this
+     selector only — no project-wide box-sizing change. */
+  box-sizing: border-box;
+  background:
+    radial-gradient(120% 140% at 10% 0%, rgba(255,122,41,0.16) 0%, transparent 55%),
+    linear-gradient(120deg, var(--teal) 0%, var(--teal-soft) 100%);
+  border-radius: var(--app-r-xl) var(--app-r-xl) var(--app-r-md) var(--app-r-md);
+  padding: var(--sp-5) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  box-shadow: 0 18px 34px -20px rgba(108,60,224,0.5);
+  position: relative;
+  overflow: hidden;
+}
+.plc-hero-banner-ic{
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width:52px; height:52px; border-radius: 18px 18px 18px 6px;
+  background: rgba(255,255,255,0.2);
+  color:#fff;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.plc-hero-banner-ic svg{ width:26px; height:26px; }
+.plc-hero-banner-text{ display:flex; flex-direction:column; gap:3px; min-width:0; color:#fff; }
+.plc-hero-banner-text b{ font-size:16px; font-weight:900; }
+.plc-hero-banner-text span{ font-size:12px; font-weight:600; opacity:0.92; line-height:1.4; }
+
+/* ---- 2) #plcGrid — عمود واحد ببطاقات عريضة كبيرة بدل شبكة صغيرة.
+   مقيّد بـ"#plcGrid" فقط: .mkt-card (منتجات سوق يمّك) غير متأثر إطلاقاً. ---- */
+#plcGrid{
+  display:flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+#plcGrid .plc-card{
+  width:100%;
+}
+#plcGrid .plc-card-img{
+  aspect-ratio: 16/9;
+  border-radius: var(--app-r-lg) var(--app-r-lg) 0 0;
+}
+#plcGrid .plc-card-img-ph svg{ width:40px; height:40px; }
+#plcGrid .plc-card-body{
+  padding: var(--sp-4);
+  gap: 6px;
+}
+#plcGrid .plc-card-title{
+  font-size: 16px;
+  font-weight: 900;
+  -webkit-line-clamp: 2;
+  line-height:1.3;
+}
+#plcGrid .plc-card-cat{
+  align-self: flex-start;
+  font-size: 11.5px;
+  padding: 4px 11px;
+}
+#plcGrid .plc-card-meta{
+  display:flex; align-items:center; gap:5px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+}
+#plcGrid .plc-card-meta::before{
+  content:'';
+  width:13px; height:13px; flex-shrink:0;
+  background: currentColor;
+  opacity:0.7;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/><circle cx='12' cy='10' r='2' stroke='%23000' stroke-width='1.8'/></svg>") center/contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/><circle cx='12' cy='10' r='2' stroke='%23000' stroke-width='1.8'/></svg>") center/contain no-repeat;
+}
+/* "التفاصيل ‹" الموجودة أصلاً (plc-card-body::after) تصير الآن زر CTA
+   واضح بصرياً بدل نص صغير مجرّد، داخل البطاقة العريضة الجديدة. */
+#plcGrid .plc-card-body::after{
+  display:inline-flex; align-items:center; gap:3px;
+  margin-top: var(--sp-2);
+  padding: 7px 14px;
+  font-size: 12px;
+  border-radius: var(--app-r-pill);
+  background: var(--teal-dim);
+  color: var(--teal-text);
+}
+
+/* ---- 3) هوية بصرية مستقلة لكل خدمة داخل شاشة الحجز (وضع التركيز) —
+   نفس ألوان --svc-* المستخدمة أصلاً لكل خدمة، فقط تلوين خفيف جداً لرأس
+   الشاشة كي "تُحس" كشاشة تلك الخدمة تحديداً لا كقالب رمادي موحّد. ---- */
+@supports selector(:has(*)){
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="taxi"]) .wizard-progress .wp-dot{ border-color: var(--svc-taxi); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="taxi"]){ background: linear-gradient(180deg, var(--svc-taxi-dim) 0%, transparent 220px); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="private"]){ background: linear-gradient(180deg, var(--svc-private-dim) 0%, transparent 220px); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="courier"]){ background: linear-gradient(180deg, var(--svc-courier-dim) 0%, transparent 220px); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="intercity"]){ background: linear-gradient(180deg, var(--svc-intercity-dim) 0%, transparent 220px); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="cargo"]){ background: linear-gradient(180deg, var(--svc-cargo-dim) 0%, transparent 220px); }
+  .sheet-view[data-view="booking"]:has(#svcSwitchCaption[data-caption-for="starx"]){ background: linear-gradient(180deg, var(--svc-starx-dim) 0%, transparent 220px); }
+}
+
+/* =========================================================================
+   صور واقعية احترافية بدل SVG/تدرجات — المطاعم/الأسواق/مكتب المستقبل/
+   خدمات أخرى فقط (CSS فقط، لا تعديل HTML/JS/منطق)
+   -------------------------------------------------------------------------
+   المصدر: صور Pexels مجانية الترخيص (Pexels License — استخدام تجاري حر،
+   بلا نسب مطلوب: pexels.com/license)، كل صورة تعبّر عن القسم نفسه لا عن
+   محل بعينه (طعام متنوع/عربة خضار وفواكه/قرطاسية ودفاتر/أدوات صيانة)،
+   وبلا أي نص أو شعار داخل الصورة نفسها. هذه صور تصميم عامة للأقسام —
+   وليست صور مطاعم/محلات حقيقية بعينها (ذلك يبقى فارغاً كما هو حتى
+   يُضاف لاحقاً عبر البيانات الحقيقية، دون أي اختراع).
+     1) 4 بطاقات "قريباً" في الرئيسية: من أيقونة SVG صغيرة داخل دائرة
+        ملوّنة ← صورة حقيقية مستطيلة أكبر وأوضح، لكل قسم صورته الخاصة.
+     2) بانر شاشة المطاعم/الأسواق (.plc-hero-banner، أُضيف في التمرير
+        السابق): يعرض الآن صورة حقيقية كبيرة بدل التدرّج+الأيقونة، وتتبدّل
+        تلقائياً بين صورة مطاعم/أسواق حسب التبويب النشط فعلاً (نفس
+        .plc-tab.active الذي يضبطه places.js أصلاً، عبر :has() فقط).
+     3) الحالة الفارغة لصورة كل بطاقة داخل #plcGrid (.plc-card-img-ph،
+        تظهر فقط حين لا توجد صورة حقيقية مرفوعة لهذا المطعم/السوق بعينه):
+        صورة تعبّر عن تصنيف تلك البطاقة (نفس .plc-card-cat-* الذي يضبطه
+        places.js أصلاً) بدل الأيقونة الصغيرة المجرّدة، عبر :has() فقط —
+        فور توفر صورة حقيقية لذلك المطعم/السوق بعينه، <img> الحقيقية تحل
+        محلها تلقائياً كما كانت (لا تغيير في تلك الآلية).
+   ========================================================================= */
+@supports selector(:has(*)){
+
+/* ---- 1) بطاقات "قريباً" الأربع في الرئيسية — صورة كبيرة بدل أيقونة ---- */
+#soonCardRestaurants .soon-ic,
+#soonCardMarkets .soon-ic,
+#soonCardOtherServices .soon-ic,
+#soonCardFutureOffice .soon-ic{
+  width:100%; height:60px; border-radius: 14px 14px 7px 7px;
+  background-size:cover; background-position:center;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 8px 16px -10px rgba(11,32,54,.4);
+}
+#soonCardRestaurants .soon-ic svg,
+#soonCardMarkets .soon-ic svg,
+#soonCardOtherServices .soon-ic svg,
+#soonCardFutureOffice .soon-ic svg{ display:none; }
+#soonCardRestaurants .soon-ic{ background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardMarkets .soon-ic{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardOtherServices .soon-ic{ background-image: url("https://images.pexels.com/photos/5691653/pexels-photo-5691653.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardFutureOffice .soon-ic{ background-image: url("https://images.pexels.com/photos/5088025/pexels-photo-5088025.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+
+/* ---- 2) بانر شاشة المطاعم/الأسواق — صورة حقيقية كبيرة بدل التدرّج،
+   تتبدّل حسب التبويب النشط. الأيقونة الصغيرة تبقى كشارة زجاجية فوق
+   الصورة بدل أن تكون هي المحتوى الرئيسي للبانر. ---- */
+.plc-hero-banner{
+  position:relative; overflow:hidden;
+  background: none;
+  background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-size:cover; background-position:center;
+  min-height: 132px;
+  align-items:flex-end;
+}
+.plc-hero-banner::before{
+  content:''; position:absolute; inset:0;
+  background: linear-gradient(180deg, rgba(20,10,40,0.12) 0%, rgba(12,6,26,0.78) 100%);
+}
+.plc-hero-banner-ic{
+  position:absolute; z-index:1;
+  width:38px; height:38px;
+  top: var(--sp-3); inset-inline-start: var(--sp-3);
+}
+.plc-hero-banner-text{ position:relative; z-index:1; }
+.sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
+.sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
+  background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=1200");
+}
+.sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
+  background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=1200");
+}
+
+/* ---- 3) الحالة الفارغة لصورة البطاقة (لا صورة حقيقية بعد لهذا العنصر
+   بعينه) — صورة تصنيف عامة بدل الأيقونة، فور توفر <img> حقيقية تُستبدل
+   تلقائياً بالآلية الموجودة أصلاً في places.js دون أي تغيير هنا. ---- */
+#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph,
+#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph,
+#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{
+  width:100%; height:100%;
+  background-size:cover; background-position:center;
+}
+#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
+#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
+#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
+#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/5088025/pexels-photo-5088025.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+
+} /* /:has() support */

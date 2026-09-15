@@ -1,32 +1,23 @@
 /* =========================================================
-   Driver page — professional dashboard redesign (v2)
+   Driver page — professional dashboard redesign (v3)
    ---------------------------------------------------------
-   IMPORTANT CONTEXT (found by testing, not assumed): app.css has
-   gone through several identity passes, and each one redefines the
-   same :root custom properties again further down the file. Since
-   every one of those blocks is a plain :root selector, in CSS the
-   LAST declaration of a given property wins the cascade — so the
-   *effective*, currently-live values of --bg-deep / --teal / --gold
-   / --surface* today are the ones from app.css's most recent pass
-   (verified with getComputedStyle, not by reading a single block in
-   isolation), which is a BRIGHT / WHITE theme with a purple→blue
-   brand gradient and amber accents — NOT the dark-navy theme the
-   previous version of this file assumed. This file is written
-   against the tokens' real current values so it always matches
-   whatever the customer app looks like today, automatically, without
-   hardcoding a single literal color:
-     --bg-deep    → soft white/lavender ambient wash (not dark)
-     --surface    → #FFFFFF cards
-     --teal       → blue accent (~#2F6FE4)
-     --gold       → amber accent (~#F0B429)
-     --brand-grad → purple → blue
-     --text       → dark navy (for text on the light theme above)
-   If the identity changes again upstream, this file keeps working
-   because everything below reads var(--...) — never a literal color.
+   BRAND SCOPE: يمّك's driver app gets its own purple identity,
+   independent from whatever app.css currently renders for the
+   customer-facing pages. This is done by RE-DECLARING the same
+   custom-property NAMES the component rules below already use
+   (--bg-deep, --surface, --teal, --gold, --brand-grad, --text, …)
+   but scoped to `.driver-body` only. Custom properties cascade
+   to descendants, and since driver.html's <body> carries the
+   `driver-body` class, every element on THIS page picks up the
+   purple values below — while app.css/style.css themselves are
+   never opened or edited, and nothing here can leak onto any
+   other page (this stylesheet is only linked from driver.html).
+   Each token still has a var(--x, fallback) safety net in the
+   component rules further down, same pattern as before.
 
    What this file does NOT touch:
-   - driver.js is 100% untouched. Every id it reads/writes keeps its
-     exact meaning:
+   - driver.js is 100% untouched. Every id it reads/writes keeps
+     its exact meaning:
      driverToggleBtn (textContent + classList add/remove('paused')),
      driverStatusDot (className fully OVERWRITTEN on every status
        change — 'driver-status-dot' [+ 'live'|'warn'|'error'] — so
@@ -38,8 +29,50 @@
      driverOpenMapBtn (hidden + dataset only), driverInvalidDetail,
      driverMainScreen, driverInvalidScreen (hidden + inline style.display).
    - No id was renamed, no id was added/removed, no element driver.js
-     touches was deleted.
+     touches was deleted or given new required markup.
    ========================================================= */
+
+.driver-body{
+  /* ---- Surfaces / ambient wash: soft violet-tinted white ---- */
+  --bg-deep: linear-gradient(180deg, #F5F2FF 0%, #FAF9FF 40%, #FFFFFF 100%);
+  --surface: #FFFFFF;
+  --surface-hi: #F6F3FF;
+  --surface-brd: #E9E3FB;
+
+  /* ---- Text ---- */
+  --text: #241B3B;
+  --text-muted: #6B6280;
+  --text-faint: #9C93B0;
+
+  /* ---- Brand purple (primary) — reused via --teal-* names so every
+     component rule below (written against --teal/--teal-dim/--teal-text)
+     renders in the yammak-purple identity automatically ---- */
+  --teal: #7C3AED;
+  --teal-dim: #EFE7FE;
+  --teal-text: #6D28D9;
+  --brand-grad: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
+
+  /* ---- Secondary accent (amber) — harmonized warm counterpart ---- */
+  --gold: #F5A524;
+  --gold-dim: #FDF1DC;
+  --gold-text: #B7791F;
+
+  /* ---- Status ---- */
+  --success: #16A34A;
+  --danger: #E11D48;
+
+  /* ---- Elevation ---- */
+  --elev-1: 0 1px 2px rgba(36,27,59,0.04), 0 6px 16px -10px rgba(76,29,149,0.12);
+  --elev-2: 0 2px 6px rgba(36,27,59,0.05), 0 18px 34px -18px rgba(76,29,149,0.22);
+  --shadow-deep: 0 24px 48px -24px rgba(76,29,149,0.28);
+
+  /* ---- Shape ---- */
+  --app-r-lg: 22px;
+  --app-r-sm: 12px;
+  --app-r-pill: 100px;
+
+  --f-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Tahoma, Arial, sans-serif;
+}
 
 /* ---------------- Full-viewport shell ---------------- */
 html, body.driver-body{
@@ -54,7 +87,7 @@ html, body.driver-body{
   inset: 0;
   width: 100%;
   touch-action: manipulation;
-  font-family: var(--f-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif);
+  font-family: var(--f-body);
   color: var(--text);
   -webkit-tap-highlight-color: transparent;
 }
@@ -71,8 +104,7 @@ html, body.driver-body{
 }
 .driver-screen[hidden]{ display: none; }
 
-/* ---------------- Invalid-link screen ----------------
-   A single centered message card — nothing to dashboard-ify here. */
+/* ---------------- Invalid-link screen ---------------- */
 .driver-screen-invalid{
   align-items: center;
   justify-content: center;
@@ -86,23 +118,23 @@ html, body.driver-body{
   width: 100%;
   max-width: 400px;
   margin: 0 auto;
-  padding: 30px 26px 28px;
-  border-radius: var(--app-r-lg, 24px) var(--app-r-lg, 24px) var(--app-r-sm, 12px) var(--app-r-lg, 24px);
-  background: var(--surface, #fff);
+  padding: 32px 26px 30px;
+  border-radius: var(--app-r-lg) var(--app-r-lg) var(--app-r-sm) var(--app-r-lg);
+  background: var(--surface);
   border: 1px solid var(--surface-brd);
   box-shadow: var(--shadow-deep);
   text-align: center;
 }
 .driver-invalid-icon{
-  width: 52px;
-  height: 52px;
-  margin: 6px auto 14px;
+  width: 54px;
+  height: 54px;
+  margin: 8px auto 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(229,72,77,0.1);
-  color: var(--danger, #E5484D);
+  background: rgba(225,29,72,0.1);
+  color: var(--danger);
 }
 
 /* ---------------- Brand row (shared) ---------------- */
@@ -112,11 +144,11 @@ html, body.driver-body{
   justify-content: center;
   gap: 10px;
   font-weight: 900;
-  font-size: 15.5px;
+  font-size: 16px;
   color: var(--text);
   letter-spacing: -.1px;
 }
-.driver-screen-invalid .driver-brand{ margin-bottom: 6px; justify-content: center; }
+.driver-screen-invalid .driver-brand{ margin-bottom: 8px; justify-content: center; }
 .driver-brand .brand-mark{
   display: inline-flex;
   align-items: center;
@@ -125,16 +157,16 @@ html, body.driver-body{
   height: 40px;
   flex-shrink: 0;
   border-radius: 14px 14px 14px 6px;
-  background: var(--brand-grad, linear-gradient(135deg, #6C3CE0, #2563EB));
-  box-shadow: 0 10px 20px -10px rgba(37,99,235,0.45);
+  background: var(--brand-grad);
+  box-shadow: 0 10px 20px -10px rgba(79,70,229,0.5);
 }
 .driver-brand .brand-mark svg{ width: 18px; height: 18px; }
 
 .driver-card h1{
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: -.2px;
-  margin: 4px 0 10px;
+  margin: 6px 0 10px;
   color: var(--text);
 }
 .driver-muted{
@@ -145,25 +177,20 @@ html, body.driver-body{
 }
 .driver-fineprint{
   font-size: 11.5px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--text-faint);
-  margin: 18px 0 0;
+  margin: 20px 0 0;
   padding: 0 4px;
   text-align: center;
 }
 #driverInvalidDetail{
-  margin-top: 10px;
-  color: var(--danger, #E5484D);
+  margin-top: 12px;
+  color: var(--danger);
 }
 #driverInvalidDetail[hidden]{ display: none; }
 
 /* =========================================================
-   Main dashboard — a light, airy column of elevated white cards
-   sitting on the app's own soft ambient wash (var(--bg-deep)),
-   the same "cards floating on a pale tinted background" language
-   the rest of the app uses (white .order-card / .qs-row panels
-   on the light surface). No dark banner, no forced light-on-dark
-   text — matches the theme as it actually renders today.
+   Main dashboard
    ========================================================= */
 .driver-screen-main{
   align-items: stretch;
@@ -179,13 +206,13 @@ html, body.driver-body{
   padding:
     max(18px, env(safe-area-inset-top))
     max(18px, env(safe-area-inset-right))
-    max(18px, env(safe-area-inset-bottom))
+    max(28px, env(safe-area-inset-bottom))
     max(18px, env(safe-area-inset-left));
 }
 
 .driver-header{
   flex-shrink: 0;
-  padding: 2px 2px 18px;
+  padding: 4px 2px 20px;
 }
 .driver-header .driver-brand{
   justify-content: flex-start;
@@ -195,7 +222,7 @@ html, body.driver-body{
   font-size: 11px;
   font-weight: 700;
   color: var(--text-faint);
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .driver-sheet{
@@ -207,57 +234,50 @@ html, body.driver-body{
 .driver-section-title{
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 12px;
   font-weight: 800;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 }
 .driver-section-title svg{ flex-shrink: 0; color: var(--teal); }
 
-/* ---------------- Hero card: connection/GPS status + toggle ----------------
-   The single most important panel — status is always the first
-   thing the driver sees. */
+/* ---------------- Hero card: connection/GPS status + toggle ---------------- */
 .driver-hero{
-  padding: 18px 18px 16px;
+  padding: 22px 20px 18px;
   margin-bottom: 16px;
-  border-radius: var(--app-r-lg, 20px) var(--app-r-lg, 20px) var(--app-r-lg, 20px) 6px;
-  background: var(--surface, #fff);
+  border-radius: var(--app-r-lg) var(--app-r-lg) var(--app-r-lg) 6px;
+  background: var(--surface);
   border: 1.5px solid var(--surface-brd);
   box-shadow: var(--elev-2);
   transition: border-color .25s, box-shadow .25s, background .25s;
 }
-/* Color-coded feedback for the whole card based on the dot's own
-   state class — pure CSS (:has), no driver.js change needed since
-   the dot's className is the thing driver.js already sets. Browsers
-   without :has() simply keep the neutral card style above; nothing
-   breaks. */
 .driver-hero:has(.driver-status-dot.live){
-  border-color: rgba(34,197,94,0.35);
-  background: linear-gradient(180deg, rgba(34,197,94,0.07), var(--surface) 60%);
+  border-color: rgba(22,163,74,0.3);
+  background: linear-gradient(180deg, rgba(22,163,74,0.06), var(--surface) 60%);
 }
 .driver-hero:has(.driver-status-dot.warn){
-  border-color: rgba(240,180,41,0.5);
+  border-color: rgba(245,165,36,0.45);
   background: linear-gradient(180deg, var(--gold-dim), var(--surface) 60%);
 }
 .driver-hero:has(.driver-status-dot.error){
-  border-color: rgba(229,72,77,0.35);
-  background: linear-gradient(180deg, rgba(229,72,77,0.07), var(--surface) 60%);
+  border-color: rgba(225,29,72,0.3);
+  background: linear-gradient(180deg, rgba(225,29,72,0.06), var(--surface) 60%);
 }
 
 .driver-status-row{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin: 0 auto 8px;
-  padding: 9px 16px;
-  border-radius: var(--app-r-pill, 100px);
+  gap: 9px;
+  margin: 0 auto 10px;
+  padding: 10px 18px;
+  border-radius: var(--app-r-pill);
   background: var(--surface-hi);
   border: 1px solid var(--surface-brd);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-muted);
   max-width: 100%;
@@ -276,8 +296,8 @@ html, body.driver-body{
   transition: background .25s, box-shadow .25s;
 }
 .driver-status-dot.live{
-  background: var(--success, #22C55E);
-  box-shadow: 0 0 0 4px rgba(34,197,94,0.16);
+  background: var(--success);
+  box-shadow: 0 0 0 4px rgba(22,163,74,0.16);
   animation: driverDotPulse 1.8s ease-out infinite;
 }
 .driver-status-dot.warn{
@@ -285,13 +305,13 @@ html, body.driver-body{
   box-shadow: 0 0 0 4px var(--gold-dim);
 }
 .driver-status-dot.error{
-  background: var(--danger, #E5484D);
-  box-shadow: 0 0 0 4px rgba(229,72,77,0.16);
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(225,29,72,0.16);
 }
 @keyframes driverDotPulse{
-  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.35); }
-  70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
-  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.35); }
+  70%  { box-shadow: 0 0 0 8px rgba(22,163,74,0); }
+  100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
 }
 @media (prefers-reduced-motion: reduce){
   .driver-status-dot.live{ animation: none; }
@@ -299,7 +319,8 @@ html, body.driver-body{
 
 .driver-lastsent{
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------- Buttons ---------------- */
@@ -308,77 +329,75 @@ html, body.driver-body{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   padding: 16px 20px;
-  min-height: 54px;
+  min-height: 56px;
   margin-top: 4px;
-  border-radius: var(--app-r-pill, 100px);
+  border-radius: var(--app-r-pill);
   font-size: 15.5px;
   font-weight: 800;
   font-family: inherit;
   color: #fff;
-  background: var(--brand-grad, linear-gradient(135deg, #6C3CE0 0%, #2563EB 100%));
-  box-shadow: 0 14px 26px -14px rgba(37,99,235,0.4), 0 10px 22px -16px rgba(108,60,224,0.35);
+  background: var(--brand-grad);
+  box-shadow: 0 16px 28px -14px rgba(79,70,229,0.45), 0 10px 22px -16px rgba(124,58,237,0.35);
   border: none;
   transition: transform .12s, box-shadow .2s, opacity .2s, background .2s;
+  cursor: pointer;
 }
 .driver-btn:active{ transform: scale(0.97); }
 
 /* Icon prefix via ::before (generated content persists even though
    driver.js overwrites driverToggleBtn's textContent on every state
-   change — ::before is not part of that text node). */
+   change — ::before is not part of that text node). Redrawn as a
+   clean pause / play glyph instead of a plain square/triangle. */
 #driverToggleBtn::before{
   content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  background: currentColor;
   flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='6' y='4' width='4' height='16' rx='1'/><rect x='14' y='4' width='4' height='16' rx='1'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='6' y='4' width='4' height='16' rx='1'/><rect x='14' y='4' width='4' height='16' rx='1'/></svg>") center / contain no-repeat;
 }
 #driverToggleBtn.paused::before{
-  content: "";
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 6px 0 6px 10px;
-  border-color: transparent transparent transparent currentColor;
-  background: none;
-  border-radius: 0;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 4.4c0-.87.95-1.4 1.7-.95l12 7.6c.7.44.7 1.46 0 1.9l-12 7.6c-.75.45-1.7-.08-1.7-.95V4.4z'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 4.4c0-.87.95-1.4 1.7-.95l12 7.6c.7.44.7 1.46 0 1.9l-12 7.6c-.75.45-1.7-.08-1.7-.95V4.4z'/></svg>") center / contain no-repeat;
 }
 
 /* "استئناف الإرسال" (paused) state — driver.js only toggles the
    `.paused` class, so this class-based variant is safe to add. */
 .driver-btn.paused{
   background: var(--surface-hi);
-  color: var(--text);
+  color: var(--teal-text);
   border: 1.5px solid var(--surface-brd);
   box-shadow: none;
 }
 
 .driver-btn-secondary{
-  margin-top: 12px;
-  min-height: 46px;
+  margin-top: 14px;
+  min-height: 48px;
   font-size: 13.5px;
   background: var(--surface-hi);
   color: var(--teal-text);
   border: 1px solid var(--surface-brd);
   box-shadow: none;
 }
+.driver-btn-secondary svg{ flex-shrink: 0; }
 #driverOpenMapBtn[hidden]{ display: none; }
 
 /* ---------------- Current trip card ---------------- */
 .driver-trip{
   text-align: right;
   margin: 0 0 16px;
-  padding: 16px 16px 14px;
-  border-radius: var(--app-r-lg, 18px) var(--app-r-lg, 18px) var(--app-r-lg, 18px) 6px;
-  background: var(--surface, #fff);
+  padding: 18px 18px 16px;
+  border-radius: var(--app-r-lg) var(--app-r-lg) var(--app-r-lg) 6px;
+  background: var(--surface);
   border: 1px solid var(--surface-brd);
   border-inline-start: 4px solid var(--teal-dim);
   box-shadow: var(--elev-1);
 }
 .driver-trip[hidden]{ display: none; }
-.driver-trip .driver-section-title{ margin-bottom: 10px; }
+.driver-trip .driver-section-title{ margin-bottom: 12px; }
 .driver-trip #driverTripEmpty{
   text-align: center;
   margin: 6px 0 2px;
@@ -389,7 +408,7 @@ html, body.driver-body{
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 #driverTripRequestNumber{
@@ -397,9 +416,9 @@ html, body.driver-body{
   font-size: 14px;
   color: var(--gold-text);
   background: var(--gold-dim);
-  border: 1px solid rgba(240,180,41,0.35);
+  border: 1px solid rgba(245,165,36,0.35);
   padding: 5px 12px;
-  border-radius: var(--app-r-pill, 100px);
+  border-radius: var(--app-r-pill);
   display: inline-block;
 }
 #driverTripStatus{
@@ -408,7 +427,7 @@ html, body.driver-body{
   color: var(--teal-text);
   background: var(--teal-dim);
   padding: 5px 12px;
-  border-radius: var(--app-r-pill, 100px);
+  border-radius: var(--app-r-pill);
   display: inline-block;
 }
 
@@ -419,21 +438,29 @@ html, body.driver-body{
 }
 .driver-trip-list li{
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 13.5px;
   color: var(--text-muted);
   line-height: 1.6;
-  padding: 7px 0;
+  padding: 10px 0;
 }
 .driver-trip-list li + li{
   border-top: 1px dashed var(--surface-brd);
 }
 .driver-trip-ico{
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--teal-dim);
+  color: var(--teal-text);
 }
+.driver-trip-ico svg{ width: 14px; height: 14px; }
 .driver-trip-key{
   flex-shrink: 0;
   color: var(--text-faint);
@@ -444,19 +471,21 @@ html, body.driver-body{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 62%;
+  max-width: 55%;
 }
+
+/* Secondary button's own inline pin icon (static SVG in HTML — driver.js
+   never rewrites this button's innerHTML, only its hidden/dataset). */
+#driverOpenMapBtn svg{ width: 15px; height: 15px; }
 
 /* ---------------- Small screens ---------------- */
 @media (max-width: 360px){
   .driver-app{ padding-inline: 14px; }
-  .driver-hero{ padding: 15px 14px 14px; }
-  .driver-trip-list b{ max-width: 52%; }
+  .driver-hero{ padding: 18px 14px 15px; }
+  .driver-trip-list b{ max-width: 48%; }
 }
 
-/* ---------------- Larger screens (tablets) ----------------
-   Keeps the app looking like a phone-width panel centered in the
-   viewport instead of stretching text/buttons uncomfortably wide. */
+/* ---------------- Larger screens (tablets) ---------------- */
 @media (min-width: 560px){
   .driver-screen-main{ padding: 28px 0; }
   .driver-app{
