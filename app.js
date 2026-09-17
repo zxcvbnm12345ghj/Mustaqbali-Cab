@@ -2750,7 +2750,7 @@ function initHelpAccordion() {
    past requests, by phone, same trust model as get_trip_request_status.
    ============================================================ */
 function setActiveNavTab(view) {
-  const map = { home: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile' };
+  const map = { home: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market' };
   const activeKey = map[view] || null;
   document.querySelectorAll('.bnav-item[data-nav]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.nav === activeKey);

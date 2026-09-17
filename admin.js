@@ -4,8 +4,8 @@
 // grants nothing; the admins table is the real gate. This file only
 // controls what the UI *shows*, never what the database *allows*.
 
-const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
-const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
+const STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', accepted: 'تم القبول', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغاة' };
+const TIMELINE_STEPS = ['new', 'assigned', 'accepted', 'en_route', 'arrived', 'completed'];
 // cargo/starx were missing from this map (pre-existing gap — the six
 // service types have existed in the DB/customer app since v1.1). Only
 // adding the two missing keys here; taxi/private/courier/intercity are

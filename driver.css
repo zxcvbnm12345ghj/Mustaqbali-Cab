@@ -52,10 +52,17 @@
   --teal-text: #6D28D9;
   --brand-grad: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
 
-  /* ---- Secondary accent (amber) — harmonized warm counterpart ---- */
+  /* ---- Secondary accents — gold (badges/ratings) and orange (the
+     "still trying" warn state) are deliberately two distinct hues,
+     not one amber doing double duty, per the brand brief
+     (بنفسجي أساسي + أخضر/برتقالي/ذهبي). ---- */
   --gold: #F5A524;
   --gold-dim: #FDF1DC;
   --gold-text: #B7791F;
+
+  --orange: #F0740F;
+  --orange-dim: #FDEBDC;
+  --orange-text: #C2560A;
 
   /* ---- Status ---- */
   --success: #16A34A;
@@ -72,6 +79,23 @@
   --app-r-pill: 100px;
 
   --f-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Tahoma, Arial, sans-serif;
+}
+
+/* ---------------- Box model safety net ----------------
+   app.css (also linked from driver.html) deliberately does NOT set a
+   project-wide box-sizing:border-box (see its own comment near the one
+   scoped exception it does have). Several rules below combine
+   width:100%/max-width:100% with padding (.driver-btn, .driver-status-
+   row, …); without border-box that padding is ADDED on top of 100%
+   width under the browser's default content-box model, which is a real
+   horizontal-overflow source on narrow phones. Scoped strictly to
+   `.driver-body` and its descendants so nothing leaks onto any other
+   page — driver.css is only ever linked from driver.html anyway. ---- */
+.driver-body,
+.driver-body *,
+.driver-body *::before,
+.driver-body *::after{
+  box-sizing: border-box;
 }
 
 /* ---------------- Full-viewport shell ---------------- */
@@ -212,7 +236,9 @@ html, body.driver-body{
 
 .driver-header{
   flex-shrink: 0;
-  padding: 4px 2px 20px;
+  padding: 4px 2px 18px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--surface-brd);
 }
 .driver-header .driver-brand{
   justify-content: flex-start;
@@ -259,8 +285,8 @@ html, body.driver-body{
   background: linear-gradient(180deg, rgba(22,163,74,0.06), var(--surface) 60%);
 }
 .driver-hero:has(.driver-status-dot.warn){
-  border-color: rgba(245,165,36,0.45);
-  background: linear-gradient(180deg, var(--gold-dim), var(--surface) 60%);
+  border-color: rgba(240,116,15,0.4);
+  background: linear-gradient(180deg, var(--orange-dim), var(--surface) 60%);
 }
 .driver-hero:has(.driver-status-dot.error){
   border-color: rgba(225,29,72,0.3);
@@ -301,8 +327,16 @@ html, body.driver-body{
   animation: driverDotPulse 1.8s ease-out infinite;
 }
 .driver-status-dot.warn{
-  background: var(--gold);
-  box-shadow: 0 0 0 4px var(--gold-dim);
+  background: var(--orange);
+  box-shadow: 0 0 0 4px var(--orange-dim);
+  animation: driverDotBlink 1.4s ease-in-out infinite;
+}
+@keyframes driverDotBlink{
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+@media (prefers-reduced-motion: reduce){
+  .driver-status-dot.warn{ animation: none; }
 }
 .driver-status-dot.error{
   background: var(--danger);
@@ -478,11 +512,80 @@ html, body.driver-body{
    never rewrites this button's innerHTML, only its hidden/dataset). */
 #driverOpenMapBtn svg{ width: 15px; height: 15px; }
 
+/* ---------------- Accept / Reject card ----------------
+   New — shown only while the trip is 'assigned' (toggled by
+   driver.js's renderTripActions(), which only touches this block's
+   own hidden/disabled state, never anything above it). */
+.driver-trip-actions{
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px dashed var(--surface-brd);
+}
+.driver-trip-actions[hidden]{ display: none; }
+
+.driver-trip-actions-row{
+  display: flex;
+  gap: 10px;
+}
+.driver-trip-actions-row .driver-btn{
+  margin-top: 0;
+  min-height: 50px;
+  font-size: 14.5px;
+  flex: 1 1 0;
+  /* Long Arabic labels on a narrow (360px) two-button row must wrap/
+     shrink rather than push the row wider than its card — this is
+     the fix for the 360/390/430 no-horizontal-overflow requirement. */
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.25;
+  padding-inline: 10px;
+}
+
+.driver-btn-accept{
+  background: var(--success);
+  box-shadow: 0 14px 24px -14px rgba(22,163,74,0.45);
+}
+.driver-btn-reject{
+  background: var(--danger);
+  box-shadow: 0 14px 24px -14px rgba(225,29,72,0.4);
+}
+/* Disabled state while a response is in flight, or after a decision
+   has already been recorded — driver.js only ever sets/removes the
+   `disabled` attribute, never inline styles, on these two buttons. */
+.driver-trip-actions-row .driver-btn:disabled{
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+  transform: none;
+}
+
+.driver-trip-actions-msg{
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--teal-text);
+}
+.driver-trip-actions-msg[hidden]{ display: none; }
+.driver-trip-actions-msg.is-error{ color: var(--danger); }
+
+/* Post-reject banner — see driverTripGoneMsg in driver.html/driver.js. */
+.driver-trip-gone-msg{
+  text-align: center;
+  margin: 6px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.driver-trip-gone-msg[hidden]{ display: none; }
+
 /* ---------------- Small screens ---------------- */
 @media (max-width: 360px){
   .driver-app{ padding-inline: 14px; }
   .driver-hero{ padding: 18px 14px 15px; }
   .driver-trip-list b{ max-width: 48%; }
+  .driver-trip-actions-row{ gap: 8px; }
+  .driver-trip-actions-row .driver-btn{ font-size: 13px; padding-inline: 6px; }
 }
 
 /* ---------------- Larger screens (tablets) ---------------- */

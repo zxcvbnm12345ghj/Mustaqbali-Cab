@@ -348,12 +348,19 @@
           </div>
 
           <!-- "سوق يمّك" — real marketplace section entry point (own
-               listings table + RPCs, see migration_market.sql). Purely
-               additive: new element, own id/classes, own click handler
-               in market.js (openMarket()). Does not touch #quickServices,
-               .soon-grid, or any of the six existing ride/courier
-               services above it. -->
-          <button type="button" class="market-banner" id="marketBannerBtn">
+               listings table + RPCs, see migration_market.sql). Kept in
+               the DOM exactly as before (same id/classes, same click
+               handler in market.js — openMarket()) but no longer
+               rendered on the Home screen: Home is now the map + the
+               six service tiles only. #marketBannerBtn stays as a
+               HIDDEN FUNCTIONAL PROXY — the "السوق" bottom-nav tab
+               (#bnavMarket) still triggers it programmatically (see the
+               forwarding script near the end of <body>), so market.js's
+               existing openMarket() handler keeps firing exactly as
+               before; only its own visible placement on Home is
+               removed. See #marketBannerBtn{ display:none; } in
+               app.css for the actual hiding rule. -->
+          <button type="button" class="market-banner" id="marketBannerBtn" hidden aria-hidden="true" tabindex="-1">
             <span class="market-banner-icon">
               <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
             </span>
@@ -365,52 +372,6 @@
               <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
           </button>
-
-          <div class="home-col home-col-more">
-            <div class="section-label-row">
-              <p class="section-label">المطاعم والأسواق</p>
-              <span class="section-label-more">عرض الكل ‹</span>
-            </div>
-            <!-- Future services teaser — starts as display-only "قريباً"
-                 cards (no click handler, no data-service attribute, no
-                 booking logic). loadFutureServices() in app.js reads the
-                 active rows from the restaurants/markets/future_office
-                 tables (managed from the "المطاعم والأسواق ومكتب
-                 المستقبل" admin tab). Restaurants/Markets/مكتب المستقبل
-                 tiles are now real navigation buttons (see places.js,
-                 loaded after market.js) — tapping one always opens a
-                 full card-grid + details screen for that category;
-                 the badge below just previews the real active count,
-                 or "قريباً" with zero real data (never invented).
-                 "خدمات أخرى" (soonCardOtherServices) is untouched —
-                 still the original display-only text-list behaviour
-                 from loadFutureServices() in app.js. -->
-            <div class="soon-grid" aria-hidden="false">
-              <button type="button" class="soon-card soon-card-clickable" id="soonCardRestaurants">
-                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <span class="soon-label">المطاعم</span>
-                <span class="soon-badge" id="soonBadgeRestaurants">قريباً</span>
-              </button>
-              <button type="button" class="soon-card soon-card-clickable" id="soonCardMarkets">
-                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-                <span class="soon-label">الأسواق</span>
-                <span class="soon-badge" id="soonBadgeMarkets">قريباً</span>
-              </button>
-              <div class="soon-card soon-card-static" id="soonCardOtherServices" aria-disabled="true">
-                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <span class="soon-label">خدمات أخرى</span>
-                <span class="soon-badge">قريباً</span>
-              </div>
-              <!-- مكتب المستقبل للقرطاسية والطباعة — own real nav
-                   button now, backed by the dedicated future_office
-                   table (see migration_places_details.sql). -->
-              <button type="button" class="soon-card soon-card-clickable" id="soonCardFutureOffice">
-                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
-                <span class="soon-label">مكتب المستقبل</span>
-                <span class="soon-badge" id="soonBadgeFutureOffice">قريباً</span>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -873,6 +834,45 @@
       <!-- MORE view -->
       <section class="sheet-view" data-view="more">
         <h2 class="sheet-title">المزيد</h2>
+
+        <!-- المطاعم والأسواق — moved here from the Home screen. Home is
+             now the map + the six service tiles only (see the
+             restructure note where #marketBannerBtn used to sit,
+             above). Nothing about this block's ids, classes or click
+             behaviour changed: #soonCardRestaurants, #soonBadgeRestaurants,
+             #soonCardMarkets, #soonBadgeMarkets, #soonCardOtherServices,
+             #soonCardFutureOffice, #soonBadgeFutureOffice are read/written
+             by the exact same loadFutureServices()/places.js code as
+             before — only their parent screen changed, from Home to
+             "المزيد". -->
+        <div class="home-col home-col-more">
+          <div class="section-label-row">
+            <p class="section-label">المطاعم والأسواق</p>
+            <span class="section-label-more">عرض الكل ‹</span>
+          </div>
+          <div class="soon-grid" aria-hidden="false">
+            <button type="button" class="soon-card soon-card-clickable" id="soonCardRestaurants">
+              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="soon-label">المطاعم</span>
+              <span class="soon-badge" id="soonBadgeRestaurants">قريباً</span>
+            </button>
+            <button type="button" class="soon-card soon-card-clickable" id="soonCardMarkets">
+              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+              <span class="soon-label">الأسواق</span>
+              <span class="soon-badge" id="soonBadgeMarkets">قريباً</span>
+            </button>
+            <div class="soon-card soon-card-static" id="soonCardOtherServices" aria-disabled="true">
+              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <span class="soon-label">خدمات أخرى</span>
+              <span class="soon-badge">قريباً</span>
+            </div>
+            <button type="button" class="soon-card soon-card-clickable" id="soonCardFutureOffice">
+              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+              <span class="soon-label">مكتب المستقبل</span>
+              <span class="soon-badge" id="soonBadgeFutureOffice">قريباً</span>
+            </button>
+          </div>
+        </div>
 
         <div class="more-list">
           <button type="button" class="more-item" id="moreInstallBtn" hidden>
@@ -1869,6 +1869,33 @@
       setTimeout(fillMapLocationText, 50);
     }
   });
+})();
+</script>
+
+<!-- "السوق" bottom-nav wiring — #bnavMarket has no click handler of its
+     own anywhere in app.js; the real "open market" logic
+     (openMarket()) is bound to #marketBannerBtn's click event inside
+     market.js (additive file, loaded after app.js, not touched here).
+     Since #marketBannerBtn is now a hidden functional proxy (see
+     index.html above / #marketBannerBtn{display:none} in app.css) and
+     no longer tappable directly, this script only forwards a real tap
+     on #bnavMarket into a programmatic click on #marketBannerBtn —
+     market.js's existing handler still fires exactly as it always
+     has. No new market screen, no new state, no Supabase/RPC call is
+     introduced here; if market.js ever also wires #bnavMarket itself
+     in the future, calling openMarket() a second time is harmless
+     (it only (re)shows the existing market view). -->
+<script>
+(function () {
+  function wireBnavMarketProxy() {
+    var bnavMarket = document.getElementById('bnavMarket');
+    var marketBannerBtn = document.getElementById('marketBannerBtn');
+    if (!bnavMarket || !marketBannerBtn) return;
+    bnavMarket.addEventListener('click', function () {
+      marketBannerBtn.click();
+    });
+  }
+  document.addEventListener('DOMContentLoaded', wireBnavMarketProxy);
 })();
 </script>
 

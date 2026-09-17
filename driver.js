@@ -26,9 +26,13 @@ const TRIP_POLL_INTERVAL_MS = 15000;
 
 const TRIP_STATUS_LABELS = {
   assigned: 'تم التعيين',
+  accepted: 'تم القبول',
   en_route: 'في الطريق',
   arrived: 'وصل',
 };
+
+// "gone" (post-reject) banner auto-hide delay.
+const TRIP_GONE_MSG_MS = 8000;
 
 // Public VAPID key — safe to embed client-side by design (it's how the
 // browser verifies push messages came from OUR server, not a secret).
@@ -45,6 +49,11 @@ let consecutiveFailures = 0;
 // Current-trip state
 let currentTrip = null;
 let tripTimer = null;
+
+// Accept/reject state — isResponding guards against double-clicks /
+// double-submits while the driver_respond_to_trip RPC is in flight.
+let isResponding = false;
+let tripGoneMsgTimer = null;
 
 function getTokenFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -204,11 +213,16 @@ function renderTrip(trip) {
     emptyEl.hidden = false;
     detailsEl.hidden = true;
     if (mapBtn) mapBtn.hidden = true;
+    renderTripActions(null);
     return;
   }
 
   emptyEl.hidden = true;
   detailsEl.hidden = false;
+
+  // A real trip is showing again — the post-reject "gone" banner (if
+  // still up from a moment ago) no longer applies.
+  hideTripGoneMessage();
 
   setText('driverTripRequestNumber', trip.request_number || '');
   setText('driverTripStatus', TRIP_STATUS_LABELS[trip.status] || trip.status || '');
@@ -229,6 +243,130 @@ function renderTrip(trip) {
       delete mapBtn.dataset.lat;
       delete mapBtn.dataset.lng;
     }
+  }
+
+  renderTripActions(trip);
+}
+
+// ---- Accept / Reject (driver_respond_to_trip RPC) ----
+// Purely additive on top of the read-only trip box above: shows the
+// accept/reject card only while status === 'assigned', and reflects
+// 'accepted' (buttons disabled, no further action possible) once the
+// driver has responded. Independent of GPS reporting/pause state,
+// same as the rest of the trip box.
+
+function setRespondMsg(text, isError) {
+  const el = document.getElementById('driverRespondMsg');
+  if (!el) return;
+  if (!text) {
+    el.textContent = '';
+    el.hidden = true;
+    el.classList.remove('is-error');
+    return;
+  }
+  el.textContent = text;
+  el.hidden = false;
+  el.classList.toggle('is-error', !!isError);
+}
+
+function hideTripGoneMessage() {
+  const el = document.getElementById('driverTripGoneMsg');
+  if (tripGoneMsgTimer) { clearTimeout(tripGoneMsgTimer); tripGoneMsgTimer = null; }
+  if (el) el.hidden = true;
+}
+
+function showTripGoneMessage(text) {
+  const el = document.getElementById('driverTripGoneMsg');
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  if (tripGoneMsgTimer) clearTimeout(tripGoneMsgTimer);
+  tripGoneMsgTimer = setTimeout(() => { el.hidden = true; }, TRIP_GONE_MSG_MS);
+}
+
+function renderTripActions(trip) {
+  const box = document.getElementById('driverTripActions');
+  const acceptBtn = document.getElementById('driverAcceptBtn');
+  const rejectBtn = document.getElementById('driverRejectBtn');
+  if (!box || !acceptBtn || !rejectBtn) return;
+
+  if (!trip || (trip.status !== 'assigned' && trip.status !== 'accepted')) {
+    box.hidden = true;
+    return;
+  }
+
+  box.hidden = false;
+
+  if (trip.status === 'accepted') {
+    acceptBtn.disabled = true;
+    rejectBtn.disabled = true;
+    setRespondMsg('تم قبول الطلب ✅', false);
+  } else {
+    // 'assigned' — actionable, unless a request is already in flight.
+    acceptBtn.disabled = isResponding;
+    rejectBtn.disabled = isResponding;
+    if (!isResponding) setRespondMsg(null);
+  }
+}
+
+// get_driver_current_trip's exact column name for the trip's own
+// primary key was not directly confirmed against the live schema
+// (schema.sql was not made available in this task) — `id` is the
+// conventional name and is used first, with a defensive fallback to
+// `request_id` in case the RPC exposes it under that name instead.
+// If a driver ever sees "تعذّر تحديد رقم الطلب", this is the first
+// thing to check against the real RPC definition.
+function getTripRequestId(trip) {
+  if (!trip) return null;
+  return trip.id || trip.request_id || null;
+}
+
+async function respondToTrip(action) {
+  if (isResponding) return; // guards against double-click / double-submit
+  if (!currentTrip) return;
+
+  const requestId = getTripRequestId(currentTrip);
+  if (!requestId) {
+    console.error('driver_respond_to_trip: no id-like field found on currentTrip', currentTrip);
+    setRespondMsg('تعذّر تحديد رقم الطلب — أعد تحميل الصفحة وحاول مجدداً', true);
+    return;
+  }
+
+  isResponding = true;
+  const acceptBtn = document.getElementById('driverAcceptBtn');
+  const rejectBtn = document.getElementById('driverRejectBtn');
+  if (acceptBtn) acceptBtn.disabled = true;
+  if (rejectBtn) rejectBtn.disabled = true;
+  setRespondMsg(action === 'accept' ? 'جارٍ تأكيد القبول…' : 'جارٍ إرسال الرفض…', false);
+
+  try {
+    const { data, error } = await supabaseClient.rpc('driver_respond_to_trip', {
+      p_token: driverToken,
+      p_request_id: requestId,
+      p_action: action,
+    });
+    if (error) throw error;
+
+    const result = Array.isArray(data) ? (data[0] || null) : (data || null);
+    const newStatus = result?.new_status || (action === 'accept' ? 'accepted' : 'new');
+
+    if (action === 'accept') {
+      currentTrip = { ...currentTrip, status: newStatus };
+      renderTrip(currentTrip);
+    } else {
+      currentTrip = null;
+      renderTrip(null);
+      showTripGoneMessage('تم رفض الطلب. ستقوم الإدارة بإعادة تعيينه لاحقاً.');
+    }
+  } catch (err) {
+    console.error('driver_respond_to_trip failed', err);
+    setRespondMsg('تعذّر تنفيذ العملية — تحقق من الاتصال وحاول مجدداً', true);
+    // Re-enable so the driver can retry immediately; the next poll will
+    // also recompute this correctly regardless.
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (rejectBtn) rejectBtn.disabled = false;
+  } finally {
+    isResponding = false;
   }
 }
 
@@ -368,6 +506,15 @@ async function initDriverPage() {
       if (paused) startReporting();
       else stopReporting();
     });
+  }
+
+  const acceptBtn = document.getElementById('driverAcceptBtn');
+  if (acceptBtn) {
+    acceptBtn.addEventListener('click', () => respondToTrip('accept'));
+  }
+  const rejectBtn = document.getElementById('driverRejectBtn');
+  if (rejectBtn) {
+    rejectBtn.addEventListener('click', () => respondToTrip('reject'));
   }
 
   // Opens the customer's pickup location using pickup_lat/pickup_lng

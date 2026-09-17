@@ -5049,10 +5049,10 @@ html, body.app-body{ background: var(--bg-deep); }
 #soonCardMarkets .soon-ic svg,
 #soonCardOtherServices .soon-ic svg,
 #soonCardFutureOffice .soon-ic svg{ display:none; }
-#soonCardRestaurants .soon-ic{ background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardRestaurants .soon-ic{ background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=400"); }
 #soonCardMarkets .soon-ic{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=400"); }
 #soonCardOtherServices .soon-ic{ background-image: url("https://images.pexels.com/photos/5691653/pexels-photo-5691653.jpeg?auto=compress&cs=tinysrgb&w=400"); }
-#soonCardFutureOffice .soon-ic{ background-image: url("https://images.pexels.com/photos/5088025/pexels-photo-5088025.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardFutureOffice .soon-ic{ background-image: url("https://images.pexels.com/photos/4792283/pexels-photo-4792283.jpeg?auto=compress&cs=tinysrgb&w=400"); }
 
 /* ---- 2) بانر شاشة المطاعم/الأسواق — صورة حقيقية كبيرة بدل التدرّج،
    تتبدّل حسب التبويب النشط. الأيقونة الصغيرة تبقى كشارة زجاجية فوق
@@ -5060,7 +5060,7 @@ html, body.app-body{ background: var(--bg-deep); }
 .plc-hero-banner{
   position:relative; overflow:hidden;
   background: none;
-  background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=1200");
   background-size:cover; background-position:center;
   min-height: 132px;
   align-items:flex-end;
@@ -5077,7 +5077,7 @@ html, body.app-body{ background: var(--bg-deep); }
 .plc-hero-banner-text{ position:relative; z-index:1; }
 .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
 .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
-  background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=1200");
 }
 .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
   background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=1200");
@@ -5095,8 +5095,73 @@ html, body.app-body{ background: var(--bg-deep); }
 #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
 #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
 #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
-#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/8753672/pexels-photo-8753672.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=600"); }
 #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=600"); }
-#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/5088025/pexels-photo-5088025.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/4792283/pexels-photo-4792283.jpeg?auto=compress&cs=tinysrgb&w=600"); }
 
 } /* /:has() support */
+
+/* =========================================================================
+   صور احتياطية معتمدة (Pexels License) لكل قسم — لم تُستخدم بعد، محفوظة
+   هنا كتوثيق فقط تمهيداً لميزة معرض/تدوير صور لاحقاً (خارج نطاق هذا
+   التمرير). لا تُنشئ أي قاعدة CSS فعلية ولا تُغيّر أي عنصر في الصفحة.
+     - المطاعم (مستخدمة الآن: 6605903): احتياطي 1639562 (برجر)،
+       315755 (بيتزا)، 5966434 (طبق صحي متنوع)
+     - الأسواق (مستخدمة الآن: 33975355): احتياطي 264537 (خضار وفواكه)،
+       16211537 (رف معلبات)
+     - مكتب المستقبل (مستخدمة الآن: 4792283): احتياطي 7718714 (أدوات
+       مكتبية)، 7054755 (دفاتر ملوّنة)
+     - خدمات أخرى (مستخدمة الآن: 5691653): احتياطي 1029243 (أدوات ورشة)،
+       3616735 (مكنسة كهربائية/تنظيف)
+   ========================================================================= */
+
+/* =========================================================================
+   Home restructure — "الرئيسية = خريطة + الخدمات الستة فقط" (2026-09-16)
+   -------------------------------------------------------------------------
+   Scope of this block only:
+     1) The Home screen no longer general-scrolls. showView()/backToHome()
+        (app.js, untouched) only ever remove .is-fullscreen-view from
+        .app-shell for the "home" view, so
+        `.app-shell:not(.is-fullscreen-view) .sheet-scroll` reliably means
+        "home is the active view". This overrides the older
+        `overflow-y:auto` rule earlier in this file with the same
+        selector/specificity — later in the cascade wins — turning off
+        the general page scroll on Home. Every OTHER screen (booking,
+        orders, profile, more, market, places, status, ...) keeps its own
+        internal scroll exactly as before via the existing
+        `.app-shell.is-fullscreen-view .sheet-scroll{ overflow-y:auto; }`
+        rule above, which this block does not touch — "الـScroll يكون
+        داخل محتوى الشاشة فقط عند الحاجة" for every non-home screen.
+     2) #marketBannerBtn stays in the DOM (market.js's openMarket() click
+        handler still binds to it, so "السوق" keeps working) but is no
+        longer rendered on Home — a hidden functional proxy. The `hidden`
+        attribute in index.html alone is not enough here because
+        `.market-banner{ display:flex; }` (an author rule, same
+        specificity as the browser's own [hidden] rule) would otherwise
+        win over it, so this explicit id-selector rule forces it off.
+        Calling marketBannerBtn.click() from JS still fires its click
+        handler even while display:none — that's exactly how the
+        "السوق" bottom-nav tab reaches it (see the forwarding script near
+        the end of index.html's <body>).
+     3) .promo-card and #adsCarousel (still populated by app.js exactly
+        as before — loadCustomerAds() etc. are untouched) are visual-only
+        hidden on the Home screen so Home really is just the map + the
+        six service tiles, matching .soon-grid/.market-banner already
+        having moved off Home. Scoped strictly to
+        `.sheet-view[data-view="home"] > ...` so neither class is
+        affected anywhere else these elements might ever appear.
+   No backend/Supabase/RPC/GPS/trip logic, no service icon/photo, and no
+   id/class is removed anywhere in this block — CSS visibility/behavior
+   only, same additive pattern already used throughout this file.
+   ========================================================================= */
+.app-shell:not(.is-fullscreen-view) .sheet-scroll{
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+#marketBannerBtn{
+  display: none;
+}
+.sheet-view[data-view="home"] > .promo-card,
+.sheet-view[data-view="home"] > .ads-carousel{
+  display: none;
+}
