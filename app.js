@@ -101,7 +101,7 @@ const ICONS = {
   courier: '<circle cx="5.8" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="5.8" cy="17.4" r="0.8" fill="#C9CFDA"/><circle cx="17.5" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="17.5" cy="17.4" r="0.8" fill="#C9CFDA"/><path d="M5.8 17.4h2.8l1.6-5.4h2.7" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M10.5 12l1.3-3h2.6" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="14" y="9.6" width="5.4" height="5.1" rx="0.9" fill="#D9A441"/><rect x="14" y="9.6" width="5.4" height="1.5" fill="#8A6415"/><circle cx="11.9" cy="7.1" r="1.5" fill="#E7B463"/><path d="M14.7 10.7h3.9" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.45"/>',
   intercity: '<rect x="2.6" y="6" width="18.8" height="9.4" rx="2.2" fill="#1E9E82"/><rect x="4" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="7.6" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="11.2" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="14.8" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="2.6" y="11.6" width="18.8" height="1.4" fill="#146854"/><rect x="2.6" y="15.2" width="18.8" height="2" rx="1" fill="#146854"/><path d="M3.4 6.9h17.2" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="18" r="1.8" fill="#12131A"/><circle cx="6.6" cy="18" r="0.7" fill="#8B93A8"/><circle cx="17.4" cy="18" r="1.8" fill="#12131A"/><circle cx="17.4" cy="18" r="0.7" fill="#8B93A8"/>',
   cargo: '<rect x="2.4" y="9.4" width="10.6" height="6" rx="0.8" fill="#C97A3D"/><rect x="2.4" y="8" width="7.6" height="1.6" fill="#8A4E1E"/><path d="M13 11h3.6a2 2 0 0 1 1.8 1.1l1.4 2.6v1.7h-6.8Z" fill="#8A4E1E"/><rect x="15.2" y="12.4" width="3.4" height="2.2" rx="0.4" fill="#FFE1C2"/><rect x="3.2" y="10.6" width="8.9" height="1" fill="#E0A16A"/><path d="M3.2 10.1h7" stroke="#FFFFFF" stroke-width="0.5" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="6.6" cy="17.6" r="0.75" fill="#C9CFDA"/><circle cx="16.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="16.6" cy="17.6" r="0.75" fill="#C9CFDA"/>',
-  starx: carIcon('#6E5CC4', '#E6E1FA') + '<path d="M11.85 8.7v4.2" stroke="#453579" stroke-width="0.5"/>',
+  starx: carIcon('#45C2D6', '#DFF7F8') + '<path d="M11.85 8.7v4.2" stroke="#0A5A68" stroke-width="0.5"/>',
 };
 
 const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم يمّك — 07718828710
@@ -282,6 +282,26 @@ function initMap() {
 
     setTimeout(() => state.map.invalidateSize(), 250);
     window.addEventListener('resize', () => state.map && state.map.invalidateSize());
+
+    // FIX (حركة/حجم الخريطة): 'resize' على window وحده لا يلتقط تغيّر
+    // حجم بطاقة الخريطة نفسها (#map) عندما يتغيّر حجمها لأسباب لا تُغيّر
+    // حجم النافذة ذاتها — مثل تحديث --app-map-h، أو ظهور/اختفاء لوحة
+    // المفاتيح على الموبايل (body.kb-open)، أو انتقال العرض بين شاشة
+    // ممتلئة وشاشة الرئيسية. ResizeObserver يراقب عنصر #map مباشرة
+    // ويستدعي invalidateSize() في كل مرة يتغيّر حجمه الفعلي، بغض النظر
+    // عن السبب — إضافي بحت فوق الاستماع الحالي على 'resize'، لا يستبدله
+    // ولا يغيّر أي شيء من منطق الخريطة/GPS/الطلبات. يتحقق من دعم
+    // المتصفح لـResizeObserver قبل استخدامه فلا يكسر شيئاً في متصفح
+    // قديم لا يدعمه.
+    if (typeof ResizeObserver !== 'undefined') {
+      const mapEl = document.getElementById('map');
+      if (mapEl) {
+        const mapResizeObserver = new ResizeObserver(() => {
+          if (state.map) state.map.invalidateSize();
+        });
+        mapResizeObserver.observe(mapEl);
+      }
+    }
   } catch (err) {
     console.error('Map failed to load', err);
     document.getElementById('map').style.background =

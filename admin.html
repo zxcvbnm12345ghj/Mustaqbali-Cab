@@ -302,6 +302,33 @@
         <div class="admin-empty" id="driverStatsLoading" style="display:none;">جارٍ الحساب...</div>
       </div>
     </div>
+
+    <!-- ============================================================
+         إنشاء حساب دخول للسائق (هاتف + كلمة مرور) — additive only.
+         Calls the create-driver-account Edge Function; service_role
+         stays server-side there, this file never sees it. The admin's
+         identity is re-verified inside the function via the caller's
+         own JWT + is_admin() (supabaseClient.functions.invoke()
+         attaches that JWT automatically from the current session).
+         Does not touch driver_token, GPS, requests, or any RPC/RLS.
+         ============================================================ -->
+    <div class="admin-driver-stats" id="createAccountSection">
+      <div class="admin-driver-stats-head">
+        <p class="section-label" style="margin:0;">إنشاء حساب دخول للسائق</p>
+      </div>
+      <p class="admin-driver-stats-hint">لسائق نشط ليس له حساب دخول بعد (هاتف + كلمة مرور). رابط driver_token الخاص به يبقى يعمل كما هو بعد إنشاء الحساب.</p>
+
+      <div class="admin-driver-add" id="createAccountForm">
+        <select id="createAccountDriverSelect" class="admin-date-input">
+          <option value="">اختر السائق...</option>
+        </select>
+        <input type="tel" id="createAccountPhone" class="admin-date-input" placeholder="رقم الهاتف (07XXXXXXXXX)" maxlength="20">
+        <input type="password" id="createAccountPassword" class="admin-date-input" placeholder="كلمة المرور (٨ أحرف فأكثر)" autocomplete="new-password">
+        <button type="button" class="admin-btn" id="createDriverAccountBtn" style="width:auto; padding:8px 16px;">إنشاء حساب دخول</button>
+      </div>
+      <div class="admin-error" id="createAccountError" style="margin-bottom:0;"></div>
+      <div class="admin-error" id="createAccountSuccessMsg" style="background: rgba(30,142,86,0.1); border-color: rgba(30,142,86,0.25); color: var(--success, #1E8E56); margin-top:8px;"></div>
+    </div>
     </div>
     <!-- /tabPanel-drivers -->
 

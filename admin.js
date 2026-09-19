@@ -156,6 +156,7 @@ async function enterDashboard() {
   await loadRequests();
   await loadPrices();
   await loadDriverStats();
+  await loadUnlinkedDrivers();
   await loadAds();
   await loadPlaces('restaurants');
   await loadPlaces('markets');
@@ -508,6 +509,156 @@ async function loadDriverStats(dateStr) {
       if (driver) copyDriverLink(driver, btn);
     });
   });
+}
+
+/* ============================================================
+   Driver login accounts (phone + password) — additive only. Calls
+   the create-driver-account Edge Function, which alone holds
+   service_role and re-verifies this admin's identity server-side via
+   their own JWT + is_admin(). supabaseClient.functions.invoke()
+   attaches that JWT automatically from the current session — same
+   supabaseClient instance as every other call in this file, no
+   separate fetch()/URL wiring needed. This file never sees or sends
+   service_role. Does not touch driver_token, driverStatsState/
+   loadDriversRoster above, GPS, requests, or any existing RPC/RLS.
+   ============================================================ */
+const createAccountState = {
+  drivers: [], // active drivers with no linked account yet — { id, name, phone }
+};
+
+// Same normalization as normalizeIraqiPhone() in driver.js and in the
+// Edge Function (duplicated deliberately — three separate runtimes,
+// no shared import). Used here only for an immediate client-side
+// check before calling the function; the function itself re-
+// normalizes and is the real authority.
+function normalizeIraqiPhone(raw) {
+  if (!raw) return null;
+  let digits = raw.trim().replace(/[\s\-()]/g, '');
+  digits = digits.replace(/^00/, '+');
+  if (digits.startsWith('+964')) {
+    digits = digits.slice(4);
+  } else if (digits.startsWith('964')) {
+    digits = digits.slice(3);
+  } else if (digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  if (!/^7\d{9}$/.test(digits)) return null;
+  return '+964' + digits;
+}
+
+async function loadUnlinkedDrivers() {
+  const { data, error } = await supabaseClient
+    .from('drivers')
+    .select('id, name, phone')
+    .eq('active', true)
+    .is('auth_user_id', null)
+    .order('name', { ascending: true });
+
+  createAccountState.drivers = error ? [] : (data || []);
+  if (error) console.error(error);
+  renderCreateAccountDriverSelect();
+}
+
+function renderCreateAccountDriverSelect() {
+  const sel = document.getElementById('createAccountDriverSelect');
+  if (!sel) return;
+  const previousValue = sel.value;
+  sel.innerHTML = '<option value="">اختر السائق...</option>' +
+    createAccountState.drivers.map(d =>
+      `<option value="${escapeAttr(d.id)}">${escapeHtml(d.name)} (${escapeHtml(d.phone)})</option>`
+    ).join('');
+  if (createAccountState.drivers.some(d => String(d.id) === previousValue)) {
+    sel.value = previousValue;
+  }
+}
+
+function handleCreateAccountDriverSelect() {
+  const sel = document.getElementById('createAccountDriverSelect');
+  const phoneEl = document.getElementById('createAccountPhone');
+  if (!sel || !phoneEl) return;
+  const driver = createAccountState.drivers.find(d => String(d.id) === sel.value);
+  phoneEl.value = driver ? driver.phone : '';
+}
+
+function showCreateAccountError(message) {
+  const el = document.getElementById('createAccountError');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.classList.add('show');
+  } else {
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+}
+
+function showCreateAccountSuccess(message) {
+  const el = document.getElementById('createAccountSuccessMsg');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.classList.add('show');
+  } else {
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+}
+
+async function handleCreateDriverAccount() {
+  showCreateAccountError(null);
+  showCreateAccountSuccess(null);
+
+  const sel = document.getElementById('createAccountDriverSelect');
+  const phoneEl = document.getElementById('createAccountPhone');
+  const passEl = document.getElementById('createAccountPassword');
+  const btn = document.getElementById('createDriverAccountBtn');
+
+  const driver_id = sel ? sel.value : '';
+  const rawPhone = phoneEl ? phoneEl.value.trim() : '';
+  const password = passEl ? passEl.value : '';
+
+  if (!driver_id) {
+    showCreateAccountError('اختر السائق أولًا.');
+    return;
+  }
+  const phone = normalizeIraqiPhone(rawPhone);
+  if (!phone) {
+    showCreateAccountError('رقم الهاتف غير صحيح. أدخله بصيغة 07XXXXXXXXX.');
+    return;
+  }
+  if (!password || password.length < 8) {
+    showCreateAccountError('كلمة المرور يجب أن تكون ٨ أحرف على الأقل.');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  const { data, error } = await supabaseClient.functions.invoke('create-driver-account', {
+    body: { driver_id, phone, password },
+  });
+
+  if (btn) btn.disabled = false;
+
+  // functions.invoke() sets `error` on a network failure or a non-2xx
+  // response; the function's own JSON body (its { error: '...' } shape
+  // on 4xx/5xx, or { success, ... } on 200) is still read from `data`
+  // where available — checked defensively so a failure always shows a
+  // real message instead of a blank one.
+  if (error || !data?.success) {
+    console.error('create-driver-account failed', error, data);
+    showCreateAccountError(data?.error || error?.message || 'تعذّر إنشاء الحساب.');
+    return;
+  }
+
+  // Success — the password is never shown again or stored client-side.
+  if (passEl) passEl.value = '';
+  if (phoneEl) phoneEl.value = '';
+  if (sel) sel.value = '';
+  showCreateAccountSuccess(`تم إنشاء حساب الدخول بنجاح${data.phone ? ' (' + data.phone + ')' : ''}.`);
+
+  // Minimal refresh: this driver is linked now, so drop them from the
+  // selectable list. Does not touch driverStatsTable/loadDriverStats.
+  await loadUnlinkedDrivers();
 }
 
 /* ============================================================
@@ -1495,6 +1646,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateDriverServiceSelect();
   convertDriverPhoneFieldToSelect();
   document.getElementById('addDriverBtn').addEventListener('click', addDriver);
+  document.getElementById('createAccountDriverSelect')?.addEventListener('change', handleCreateAccountDriverSelect);
+  document.getElementById('createDriverAccountBtn')?.addEventListener('click', handleCreateDriverAccount);
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.addEventListener('click', () => updateStatus(b.dataset.status));
   });

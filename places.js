@@ -228,10 +228,26 @@ function renderPlaceDetail(kind, row) {
 }
 
 function requestPlaceDelivery(kind, row) {
-  openBooking('courier');
+  // The place IS the pickup here — an explicit, manual choice — so GPS
+  // must not replace it. Same rule app.js already applies when the
+  // customer taps the map or drags the pin: stop live GPS following
+  // (stopGpsWatch), and skip openBooking()'s one-shot auto-locate for
+  // this single call only (flag restored right after, so the normal
+  // booking flow is unchanged).
+  if (typeof stopGpsWatch === 'function') stopGpsWatch();
+  const prevAutoLocate = state.autoLocateAttempted;
+  state.autoLocateAttempted = true;
+  try {
+    openBooking('courier');
+  } finally {
+    state.autoLocateAttempted = prevAutoLocate;
+  }
   setTimeout(() => {
     const pickupEl = document.getElementById('pickup');
-    if (pickupEl && !pickupEl.value) pickupEl.value = row.address || row.name || '';
+    const pickupText = row.address || row.name || '';
+    // Always use the place as pickup, not only when #pickup is empty:
+    // GPS has usually already filled it with the customer's own address.
+    if (pickupEl && pickupText) pickupEl.value = pickupText;
     const notesEl = document.getElementById('notes');
     if (notesEl) {
       const cfg = PLACE_KINDS[kind];

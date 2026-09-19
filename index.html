@@ -13,6 +13,131 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
+<!-- شاشة العرض الافتتاحية (Boot Splash) — تظهر لحظة فتح التطبيق وأثناء
+     تحميل الواجهة، ثم تتلاشى تلقائياً وتكشف شاشة الترحيب الحالية
+     (#welcomeScreen) دون أي تغيير عليها. إضافة بصرية فقط: كل تنسيقاتها
+     هنا (مقيّدة بـ #bootSplash وأصناف bs-*) فلا تلمس app.css ولا أي
+     صنف/معرّف موجود، ولا علاقة لها بالطلبات أو GPS أو Supabase.
+     ألوان الخلفية والحلقة كلها متغيّرات في أول القاعدة لتعديلها بسطر واحد. -->
+<style id="bootSplashStyles">
+/* الهوية: بنفسجي أساسي + تركوازي وذهبي كلمسات خفيفة فقط (الحلقة، الخط
+   الفاصل، علامة الحذف، توهّج تركوازي خافت في الخلفية). كل الألوان والأحجام متغيّرات هنا. */
+#bootSplash{
+  --bs-ink:#1B0B4E; --bs-deep:#2A1470; --bs-mid:#3E22A6; --bs-lit:#5A34D8;
+  --bs-teal:#45C2D6; --bs-gold:#E5B85C;
+  --bs-logo:clamp(80px, min(28vw, 15vh), 116px);   /* حجم بلاطة الشعار */
+  --bs-mark:calc(var(--bs-logo) * 1.52);            /* الشعار + الحلقة حوله */
+  position:fixed; inset:0; z-index:100000;
+  box-sizing:border-box; overflow:hidden;
+  display:flex; flex-direction:column;
+  padding:max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background:
+    radial-gradient(72% 40% at 50% 41%, rgba(139,104,255,.36) 0%, rgba(139,104,255,0) 70%),
+    radial-gradient(62% 38% at 100% 100%, rgba(69,194,214,.15) 0%, rgba(69,194,214,0) 70%),
+    linear-gradient(170deg, var(--bs-ink) 0%, var(--bs-deep) 38%, var(--bs-mid) 72%, var(--bs-lit) 100%);
+  color:#fff; text-align:center; direction:rtl;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+  opacity:1;
+  transition:opacity .5s ease .1s, visibility 0s linear .6s;   /* الخلفية تتلاشى بعد أن يخفّ المحتوى */
+  -webkit-tap-highlight-color:transparent;
+}
+#bootSplash.is-hiding{ opacity:0; visibility:hidden; pointer-events:none; }
+
+/* المحتوى في مجموعة واحدة تتوسط الشاشة (أعلى قليلاً من المنتصف بصرياً) */
+#bootSplash .bs-stage{
+  flex:1; width:100%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding-bottom:min(6vh, 48px);
+  transition:opacity .24s ease, transform .5s cubic-bezier(.4,0,.2,1);
+}
+#bootSplash.is-hiding .bs-stage{ opacity:0; transform:translateY(-8px) scale(.985); }
+
+#bootSplash .bs-mark{
+  position:relative; width:var(--bs-mark); height:var(--bs-mark);
+  display:grid; place-items:center;
+}
+#bootSplash .bs-glow{
+  position:absolute; inset:-24%; border-radius:50%;
+  background:radial-gradient(closest-side, rgba(150,120,255,.55), rgba(150,120,255,0));
+}
+#bootSplash .bs-ring{ position:absolute; inset:0; }
+#bootSplash .bs-ring svg{ display:block; width:100%; height:100%; will-change:transform; }
+#bootSplash .bs-ring-track{ stroke:rgba(255,255,255,.14); stroke-width:1.6; }
+#bootSplash .bs-ring-arc{ stroke:url(#bsRingGrad); stroke-width:2.8; stroke-dasharray:70 232; }
+
+#bootSplash .bs-logo{
+  position:relative; z-index:1;
+  display:grid; place-items:center;
+  width:var(--bs-logo); height:var(--bs-logo); border-radius:28%; overflow:hidden;
+  background:#fff;   /* نفس بلاطة الشعار البيضاء المستخدمة في شاشة الترحيب */
+  box-shadow:0 22px 44px -14px rgba(6,2,28,.75), 0 0 0 1px rgba(255,255,255,.22);
+}
+#bootSplash .bs-logo img{ display:block; width:72%; height:72%; object-fit:contain; }
+
+#bootSplash .bs-name{
+  display:block; margin-top:6px;
+  font-size:clamp(26px, 7.4vw, 32px); font-weight:800; line-height:1.3;
+  text-shadow:0 2px 18px rgba(10,4,40,.35);
+}
+#bootSplash .bs-rule{
+  display:block; width:30px; height:3px; margin:12px auto 14px; border-radius:3px;
+  background:linear-gradient(90deg, var(--bs-teal), var(--bs-gold));
+}
+#bootSplash .bs-tagline{
+  margin:0; padding:0 12px; max-width:340px;
+  font-size:clamp(14.5px, 4.1vw, 17px); line-height:1.85; font-weight:600;
+  color:rgba(255,255,255,.9);
+}
+#bootSplash .bs-tagline span{ display:block; }
+#bootSplash .bs-dots{ font-style:normal; font-weight:700; color:var(--bs-gold); }
+
+/* بدون شعار (ملف الأيقونة غير متاح): تبقى الحلقة + الاسم بحجم أكبر */
+#bootSplash.bs-noimg .bs-logo{ display:none; }
+#bootSplash.bs-noimg .bs-name{ font-size:clamp(38px, 11vw, 48px); margin-top:4px; }
+
+/* الحركة — لا تبدأ إلا عند جاهزية الشعار (.is-ready) فلا يظهر إطار فارغ */
+#bootSplash .bs-glow, #bootSplash .bs-ring, #bootSplash .bs-logo,
+#bootSplash .bs-name, #bootSplash .bs-rule, #bootSplash .bs-tagline{ opacity:0; }
+#bootSplash.is-ready .bs-logo{ animation:bsPop .5s cubic-bezier(.22,.9,.3,1) both; }
+#bootSplash.is-ready .bs-glow{ animation:bsGlowIn .7s ease .1s both, bsBreathe 3.2s ease-in-out .8s infinite; }
+#bootSplash.is-ready .bs-ring{ animation:bsFade .35s ease .22s both; }
+#bootSplash.is-ready .bs-ring svg{ animation:bsSpin 1.5s linear .22s infinite; }
+#bootSplash.is-ready .bs-name{ animation:bsRise .45s ease .12s both; }
+#bootSplash.is-ready .bs-rule{ animation:bsRule .4s cubic-bezier(.22,.9,.3,1) .32s both; }
+#bootSplash.is-ready .bs-tagline{ animation:bsRise .5s ease .4s both; }
+
+@keyframes bsPop{ from{ opacity:0; transform:translateY(6px) scale(.88); } to{ opacity:1; transform:none; } }
+@keyframes bsRise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+@keyframes bsRule{ from{ opacity:0; transform:scaleX(.2); } to{ opacity:1; transform:none; } }
+@keyframes bsFade{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes bsGlowIn{ from{ opacity:0; } to{ opacity:.6; } }
+@keyframes bsBreathe{ 0%,100%{ opacity:.6; } 50%{ opacity:.85; } }
+@keyframes bsSpin{ to{ transform:rotate(360deg); } }
+@keyframes bsPulse{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+
+/* شاشات قصيرة (وضع أفقي) */
+@media (max-height:480px){
+  #bootSplash{ --bs-logo:80px; }
+  #bootSplash .bs-stage{ padding-bottom:0; }
+  #bootSplash .bs-name{ font-size:24px; margin-top:2px; }
+  #bootSplash .bs-rule{ margin:8px auto 10px; }
+  #bootSplash .bs-tagline{ font-size:14px; line-height:1.7; }
+}
+
+/* تقليل الحركة: ظهور/تلاشي فقط، بلا انتقالات مكانية، والحلقة تنبض بدل الدوران */
+@media (prefers-reduced-motion: reduce){
+  #bootSplash{ transition:opacity .3s ease, visibility 0s linear .3s; }   /* بلا تأخير */
+  #bootSplash .bs-stage{ transition:opacity .3s ease; }
+  #bootSplash.is-hiding .bs-stage{ transform:none; }
+  #bootSplash.is-ready .bs-logo, #bootSplash.is-ready .bs-name,
+  #bootSplash.is-ready .bs-rule, #bootSplash.is-ready .bs-tagline{ animation:bsFade .3s ease both; }
+  #bootSplash.is-ready .bs-glow{ animation:bsGlowIn .3s ease both; }
+  #bootSplash.is-ready .bs-ring{ animation:bsFade .3s ease both, bsPulse 1.8s ease-in-out .4s infinite; }
+  #bootSplash.is-ready .bs-ring svg{ animation:none; }
+}
+</style>
+<noscript><style>#bootSplash{ display:none !important; }</style></noscript>
+
 <!-- FIX (white screen on slow/blocked CDN — mainly in-app browsers):
      a <link rel="stylesheet"> to an external host blocks first paint of
      the WHOLE page until that file loads, since the browser can't know
@@ -28,10 +153,121 @@
      one stylesheet applies, not what it contains. -->
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="app.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
+<!-- FIX (Leaflet CSS fallback): كان هناك مصدر CDN واحد فقط (unpkg) —
+     إن تعذّر الوصول إليه (حظر شبكة محلي على unpkg تحديداً، أو تعطّل
+     مؤقت) تبقى تنسيقات الخريطة (طبقات البلاطة/العلامات) مفقودة رغم أن
+     مكتبة Leaflet نفسها (المحمّلة من نفس المصدر في مكان آخر) تعمل.
+     onerror هنا يبدّل href فقط، مرة واحدة، إلى مصدر CDN بديل
+     (jsdelivr) بنفس رقم الإصدار — لا تغيير على أي منطق خريطة/GPS، ولا
+     على طريقة التحميل غير-الحاجب (media=print ثم onload) الحالية. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';">
 <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></noscript>
 </head>
 <body class="app-body">
+
+<!-- شاشة العرض الافتتاحية — انظر التنسيقات في <head> (#bootSplashStyles).
+     موضوعة أول عنصر في <body> لتظهر فوراً قبل تحميل أي سكربت خارجي،
+     وسكربتها أدناه مستقل (لا يستخدم أي دالة/متغيّر من app.js) ويعمل حتى
+     لو تعطّل تحميل Leaflet/Supabase من الـ CDN. -->
+<div id="bootSplash" class="boot-splash" role="status" aria-live="polite" aria-label="جارٍ تحميل يمّك">
+  <div class="bs-stage">
+    <div class="bs-mark">
+      <span class="bs-glow" aria-hidden="true"></span>
+      <span class="bs-ring" aria-hidden="true">
+        <svg viewBox="0 0 100 100" focusable="false">
+          <defs>
+            <linearGradient id="bsRingGrad" gradientUnits="userSpaceOnUse" x1="98" y1="50" x2="55" y2="98">
+              <stop offset="0" stop-color="#45C2D6" stop-opacity="0"/>
+              <stop offset=".5" stop-color="#45C2D6"/>
+              <stop offset="1" stop-color="#E5B85C"/>
+            </linearGradient>
+          </defs>
+          <circle class="bs-ring-track" cx="50" cy="50" r="48" fill="none"/>
+          <circle class="bs-ring-arc" cx="50" cy="50" r="48" fill="none" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="bs-logo"><img src="icon-192.png" alt="" width="192" height="192" decoding="async"></span>
+    </div>
+    <span class="bs-name">يمّك</span>
+    <span class="bs-rule" aria-hidden="true"></span>
+    <p class="bs-tagline"><span>رحلتك تبدأ من هنا<i class="bs-dots">…</i></span> <span>كل احتياجاتك ويّانا</span></p>
+  </div>
+</div>
+<script>
+(function () {
+  var splash = document.getElementById('bootSplash');
+  if (!splash) return;
+  var MIN_MS = 1200;   // أقل مدة ظهور بعد جاهزية الشعار (حركة الدخول ≈0.9ث + وقفة قصيرة)
+  var MAX_MS = 4500;   // صمّام أمان: لا تُبقي الزبون منتظراً أكثر من هذا مهما حدث
+  var EXIT_MS = 600;   // مدة التلاشي الكاملة في CSS (المحتوى .24ث ثم الخلفية .5ث بعد تأخير .1ث)
+  var readyAt = 0, domReady = false, scheduled = false, done = false;
+
+  // لون شريط الحالة (Android/Safari) يطابق أعلى الشاشة ثم يعود لقيمته الأصلية.
+  var meta = document.querySelector('meta[name="theme-color"]');
+  var prevTheme = meta ? meta.getAttribute('content') : null;
+  if (meta) meta.setAttribute('content', '#1B0B4E');
+
+  function remove() { if (splash.parentNode) splash.parentNode.removeChild(splash); }
+
+  // إعادة تشغيل حركة دخول شاشة الترحيب الحالية (welcomeIntroIn المعرّفة أصلاً في
+  // app.css) لحظة بدء التلاشي، لتظهر محتوياتها مع انكشاف الشاشة. لا تغيير على
+  // تصميمها ولا منطقها؛ تُتخطى عند تقليل الحركة أو إن لم تكن ظاهرة.
+  function replayWelcomeEntrance() {
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var scr = document.getElementById('welcomeScreen');
+      var step = document.getElementById('welcomeIntroStep');
+      if (!scr || !step || scr.hidden || step.hidden) return;
+      step.style.animation = 'none';
+      void step.offsetWidth;
+      step.style.animation = '';
+    } catch (e) { /* non-critical */ }
+  }
+
+  function hide() {
+    if (done) return;
+    done = true;
+    if (meta && prevTheme !== null) meta.setAttribute('content', prevTheme);
+    splash.setAttribute('aria-hidden', 'true');
+    splash.classList.add('is-hiding');
+    setTimeout(replayWelcomeEntrance, 100);   // مع بدء تلاشي الخلفية تماماً
+    setTimeout(remove, EXIT_MS + 150);
+  }
+
+  function maybeSchedule() {
+    if (scheduled || done || !domReady || !readyAt) return;
+    scheduled = true;
+    setTimeout(hide, Math.max(0, MIN_MS - (Date.now() - readyAt)));
+  }
+
+  function setReady() {
+    if (readyAt) return;
+    readyAt = Date.now();
+    splash.classList.add('is-ready');
+    maybeSchedule();
+  }
+
+  // الشعار: تبدأ الحركة عند تحميله (أو بعد 0.5ث كحد أقصى)؛ وإن تعذّر ملف
+  // الأيقونة يُخفى الإطار الفارغ ويبقى الاسم مع الحلقة.
+  var img = splash.querySelector('.bs-logo img');
+  function noImg() { splash.classList.add('bs-noimg'); }
+  if (!img) { noImg(); setReady(); }
+  else if (img.complete) { if (!img.naturalWidth) noImg(); setReady(); }
+  else {
+    img.addEventListener('load', setReady);
+    img.addEventListener('error', function () { noImg(); setReady(); });
+    setTimeout(setReady, 500);
+  }
+
+  // تُخفى بعد اكتمال DOMContentLoaded (حين تكون initWelcomeScreen قد أظهرت
+  // شاشة الترحيب تحتها). setTimeout(0) يضمن التنفيذ بعد كل مستمعي الحدث.
+  function onDom() { setTimeout(function () { domReady = true; maybeSchedule(); }, 0); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onDom);
+  else onDom();
+
+  setTimeout(hide, MAX_MS);
+})();
+</script>
 
 <!-- Screen-fit fix (Stage 2 / Step 2) — runs first, before any layout.
      Many hosts (Android, iPhone Safari, and especially the in-app
@@ -441,6 +677,7 @@
           <div class="svc-switch" id="svcSwitch"></div>
         </div>
         <p class="svc-switch-caption" id="svcSwitchCaption" data-caption-for="taxi" data-wizard-step="1" aria-hidden="true"></p>
+        <p class="sec-intro sec-intro-svc" id="courierIntro">أرسل واستلم طلباتك بسهولة وسرعة مع يمّك.</p>
 
         <div class="drivers-list-app" id="driversListApp" data-wizard-step="1" hidden></div>
 
@@ -1348,7 +1585,7 @@
           رجوع
         </button>
         <h2 class="sheet-title" id="plcListTitle">المطاعم</h2>
-        <p class="sheet-subtitle">اختر من أفضل المطاعم والأسواق القريبة منك</p>
+        <p class="sec-intro" id="plcListIntro">اطلب وجبتك من المطاعم المتوفرة وخليها توصلك لحد بابك.</p>
 
         <!-- Banner ديكوري ثابت أعلى شاشة المطاعم/الأسواق — بديل جاهز
              لاستقبال صورة/إعلان حقيقي لاحقاً (لا بيانات مخترعة الآن):
@@ -1403,6 +1640,8 @@
             <h2 id="plcDetailName">—</h2>
             <span class="plc-detail-badge" id="plcDetailCategory" hidden></span>
           </div>
+
+          <p class="sec-intro" id="plcDetailIntro" hidden></p>
 
           <p class="plc-detail-desc" id="plcDetailDesc" hidden></p>
 
@@ -1791,6 +2030,7 @@
       var originalSelectService = window.selectService;
       window.selectService = function (key) {
         originalSelectService(key);
+        var cap = document.getElementById('svcSwitchCaption'); if (cap && key) cap.dataset.captionFor = key; // sync caption also when opened directly (not only via pill click)
         setServiceFocus(true);
       };
     }

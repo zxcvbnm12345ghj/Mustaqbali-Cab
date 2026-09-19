@@ -37,10 +37,10 @@
      app at once — no other selector below needed to change to pick up
      the new identity. The variable name is kept as --teal (not renamed)
      so nothing else in this file has to change. ---- */
-  --teal: #6C3CE0;
-  --teal-soft: #8B5CF6;
-  --teal-text: #4C1D95;
-  --teal-dim: rgba(108,60,224,0.13);
+  --teal: #0D8A9E;
+  --teal-soft: #45C2D6;
+  --teal-text: #0A5A68;
+  --teal-dim: rgba(13,138,158,0.13);
 
   /* ---- Secondary — Yammak Blue (still used for the second stop in
      hero/brand gradients and a few dedicated blue accents, e.g. the
@@ -61,7 +61,7 @@
      screen's sunset skyline. Used for the "سوق يمّك" hero banner and a
      couple of other flagship surfaces; every other gradient in this
      file still composes itself from the tokens above. */
-  --brand-sunset: linear-gradient(120deg, #6C3CE0 0%, #2563EB 55%, #FF7A29 100%);
+  --brand-sunset: linear-gradient(120deg, #0D8A9E 0%, #2563EB 55%, #FF7A29 100%);
 
   /* ---- Secondary — light gold accent (used sparingly) ---- */
   --gold: #E5B85C;
@@ -92,7 +92,7 @@
   --svc-courier: #D9A441;    --svc-courier-soft: #EAC272; --svc-courier-text: #8A6415; --svc-courier-dim: rgba(217,164,65,0.16);
   --svc-intercity: #1E9E82;  --svc-intercity-soft: #57C4AC; --svc-intercity-text: #146854; --svc-intercity-dim: rgba(30,158,130,0.14);
   --svc-cargo: #C97A3D;      --svc-cargo-soft: #E0A16A;   --svc-cargo-text: #8A4E1E;   --svc-cargo-dim: rgba(201,122,61,0.16);
-  --svc-starx: #6E5CC4;      --svc-starx-soft: #9689DB;   --svc-starx-text: #453579;   --svc-starx-dim: rgba(110,92,196,0.14);
+  --svc-starx: #45C2D6;      --svc-starx-soft: #7ED9E4;   --svc-starx-text: #0A5A68;   --svc-starx-dim: rgba(110,92,196,0.14);
 
   /* ---- Section identity — the two independent home sections each
      carry one distinct, professional accent so they read as separate
@@ -170,7 +170,7 @@
   --elev-premium: 0 20px 44px -26px rgba(11,32,54,0.30), 0 3px 8px -3px rgba(11,32,54,0.07);
   --elev-premium-active: 0 10px 22px -16px rgba(11,32,54,0.26), 0 2px 5px -2px rgba(11,32,54,0.06);
 
-  --app-map-h: clamp(260px, 36vh, 340px);
+  --app-map-h: clamp(280px, 42vh, 380px);
 }
 
 /* ============================================================
@@ -688,11 +688,22 @@ html, body.app-body{
    shape, size, border, shadow and spacing stay identical across all
    six — this is a subtle cue, not a redesign of any single card. */
 .qs-row[data-service="taxi"] .qs-row-ic{ background: var(--svc-taxi-dim); box-shadow: inset 0 0 0 1.5px rgba(29,111,209,0.28); }
-.qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private-dim); box-shadow: inset 0 0 0 1.5px rgba(52,64,110,0.3); }
+/* FIX (تصحيح ألوان private/intercity): هذان السطران كانا يستخدمان
+   لون حلقة (box-shadow) ثابتاً (hardcoded) من أول تمرير تصميم في
+   الملف — وقتها كان --svc-private كحلياً و--svc-intercity أخضر مائل
+   للتركواز. تمريرات لاحقة أعادت تعريف --svc-private (أصبح ذهبياً)
+   و--svc-intercity (أصبح أخضر فاتح) عبر متغيرات الجذر، لكن هذا
+   اللون الثابت هنا لم يتحدّث معها، فبقيت الحلقة حول الأيقونة بلون
+   قديم لا يطابق اللون الفعلي الظاهر — وهذا هو سبب ظهور لوني الخدمتين
+   بشكل غير متّسق. استُبدل هنا فقط بلون مشتق من نفس متغيّر اللون
+   الفعلي الحالي لكل خدمة (rgba مطابقة لـ--gold و--green-soft على
+   التوالي)، بدون أي تغيير على الخدمات الأربع الأخرى أو على شكل/حجم
+   الأيقونات. */
+.qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private-dim); box-shadow: inset 0 0 0 1.5px rgba(229,184,92,0.35); }
 .qs-row[data-service="courier"] .qs-row-ic{ background: var(--svc-courier-dim); box-shadow: inset 0 0 0 1.5px rgba(217,164,65,0.34); }
 .qs-row[data-service="cargo"] .qs-row-ic{ background: var(--svc-cargo-dim); box-shadow: inset 0 0 0 1.5px rgba(201,122,61,0.32); }
 .qs-row[data-service="starx"] .qs-row-ic{ background: var(--svc-starx-dim); box-shadow: inset 0 0 0 1.5px rgba(110,92,196,0.32); }
-.qs-row[data-service="intercity"] .qs-row-ic{ background: var(--svc-intercity-dim); box-shadow: inset 0 0 0 1.5px rgba(30,158,130,0.3); }
+.qs-row[data-service="intercity"] .qs-row-ic{ background: var(--svc-intercity-dim); box-shadow: inset 0 0 0 1.5px rgba(74,222,128,0.35); }
 
 /* Accent tick — one distinct, professional color per service, the
    main visible identity cue that lets each of the 6 transport rows
@@ -2185,7 +2196,7 @@ select.welcome-input option{ color: var(--text); background: #fff; }
   --svc-private: #2F6FE4;     --svc-private-soft: #7AA6F2; --svc-private-text: #12408A; --svc-private-dim: rgba(47,111,228,0.14);
   --svc-courier: #FF7A33;     --svc-courier-soft: #FFAA7A; --svc-courier-text: #9A3F0B; --svc-courier-dim: rgba(255,122,51,0.16);
   --svc-cargo: #22C55E;       --svc-cargo-soft: #6EE29A;  --svc-cargo-text: #14803D;  --svc-cargo-dim: rgba(34,197,94,0.16);
-  --svc-starx: #8B5CF6;       --svc-starx-soft: #B9A0FA;  --svc-starx-text: #5133A6;  --svc-starx-dim: rgba(139,92,246,0.16);
+  --svc-starx: #45C2D6;       --svc-starx-soft: #8FE0EA;  --svc-starx-text: #0A5A68;  --svc-starx-dim: rgba(69,194,214,0.16);
   --svc-intercity: #1D6FD1;   --svc-intercity-soft: #5B93E0; --svc-intercity-text: #123E73; --svc-intercity-dim: rgba(29,111,209,0.14);
 
   /* ---- Rounder shape language, closer to the reference's soft cards ---- */
@@ -2198,8 +2209,6 @@ select.welcome-input option{ color: var(--text); background: #fff; }
   --elev-3: 0 24px 50px -22px rgba(16,27,45,0.22);
   --elev-premium: 0 16px 34px -22px rgba(16,27,45,0.18), 0 2px 6px -2px rgba(16,27,45,0.05);
   --elev-premium-active: 0 8px 18px -12px rgba(16,27,45,0.16);
-
-  --app-map-h: clamp(230px, 32vh, 300px);
 }
 
 /* ---------------------------------------------------------------
@@ -2274,11 +2283,13 @@ html, body.app-body{ background: var(--bg-deep); }
    existing #quickServices / .soon-grid / .promo-card blocks are laid
    out on screen.
    --------------------------------------------------------------- */
-.home-columns{
-  flex-direction: column;
-  gap: var(--sp-5);
+@media (max-width: 899.98px){
+  .home-columns{
+    flex-direction: column;
+    gap: var(--sp-5);
+  }
+  .home-col{ width:100%; flex:none; }
 }
-.home-col{ width:100%; flex:none; }
 .home-col-services,
 .home-col-more{
   position: static;
@@ -2320,7 +2331,6 @@ html, body.app-body{ background: var(--bg-deep); }
   background: transparent;
   object-fit: contain;
 }
-.qs-row-label span{ display:none; }
 .qs-row-label b{ font-size: 11.5px; }
 .qs-row[data-service="taxi"] .qs-row-ic{ background: var(--svc-taxi); }
 .qs-row[data-service="private"] .qs-row-ic{ background: var(--svc-private); }
@@ -2391,9 +2401,9 @@ html, body.app-body{ background: var(--bg-deep); }
 /* Promo banner — vivid gift/offer gradient, like the reference's daily
    offers ribbon. Same .promo-card element, populated the same way. */
 .promo-card{
-  background: linear-gradient(120deg, #7C3AED 0%, #C026D3 55%, #F0B429 130%);
+  background: linear-gradient(120deg, #0D8A9E 0%, #16A34A 55%, #F0B429 130%);
   border: none;
-  box-shadow: 0 18px 34px -20px rgba(124,58,237,0.55);
+  box-shadow: 0 18px 34px -20px rgba(13,138,158,0.55);
   margin-top: var(--sp-3);
 }
 .promo-card .ic{
@@ -3468,7 +3478,7 @@ html, body.app-body{ background: var(--bg-deep); }
   padding: 16px 18px;
   border: none; border-radius: var(--app-r-lg);
   background: var(--brand-sunset);
-  box-shadow: 0 18px 34px -18px rgba(108,60,224,0.55);
+  box-shadow: 0 18px 34px -18px rgba(13,138,158,0.55);
   cursor:pointer; text-align: right;
 }
 .market-banner-icon{
@@ -3545,7 +3555,7 @@ html, body.app-body{ background: var(--bg-deep); }
   width:52px; height:52px; border-radius:16px;
   display:flex; align-items:center; justify-content:center; font-size:22px;
   background: var(--teal-dim);
-  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.4);
+  box-shadow: 0 10px 20px -14px rgba(13,138,158,0.4);
 }
 .mkt-cat-label{ font-size:11px; font-weight:700; color: var(--text); text-align:center; }
 .mkt-cat-card:active .mkt-cat-ic{ transform: scale(0.94); }
@@ -3813,16 +3823,16 @@ html, body.app-body{ background: var(--bg-deep); }
    ========================================================================= */
 
 :root{
-  --brand-grad: linear-gradient(135deg, #6C3CE0 0%, #2563EB 100%);
-  --brand-grad-soft: linear-gradient(135deg, rgba(108,60,224,0.16) 0%, rgba(37,99,235,0.16) 100%);
+  --brand-grad: linear-gradient(135deg, #0D8A9E 0%, #2563EB 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(13,138,158,0.16) 0%, rgba(37,99,235,0.16) 100%);
   --bg-deep:
-    radial-gradient(120% 55% at 12% -12%, rgba(108,60,224,0.10) 0%, transparent 55%),
+    radial-gradient(120% 55% at 12% -12%, rgba(13,138,158,0.10) 0%, transparent 55%),
     radial-gradient(110% 60% at 105% 0%, rgba(255,122,41,0.09) 0%, transparent 55%),
     #F7F6FB;
 }
 
 .app-btn{
-  box-shadow: 0 14px 26px -14px rgba(108,60,224,0.45), 0 10px 22px -16px rgba(37,99,235,0.35);
+  box-shadow: 0 14px 26px -14px rgba(13,138,158,0.45), 0 10px 22px -16px rgba(37,99,235,0.35);
 }
 
 /* ---------------------------------------------------------------
@@ -3866,8 +3876,8 @@ html, body.app-body{ background: var(--bg-deep); }
 .qs-row[data-service="intercity"]{
   background:
     linear-gradient(100deg, rgba(15,10,35,0.80) 0%, rgba(15,10,35,0.22) 60%, rgba(15,10,35,0.04) 100%),
-    linear-gradient(120deg, #6C3CE0 0%, #2563EB 55%, #FF7A29 130%);
-  box-shadow: 0 18px 32px -18px rgba(108,60,224,0.5);
+    linear-gradient(120deg, #0D8A9E 0%, #2563EB 55%, #FF7A29 130%);
+  box-shadow: 0 18px 32px -18px rgba(13,138,158,0.5);
 }
 .qs-row[data-service="intercity"] .qs-row-ic{ border-radius: 50%; }
 
@@ -3877,7 +3887,7 @@ html, body.app-body{ background: var(--bg-deep); }
    --------------------------------------------------------------- */
 .mkt-cat-ic{
   border-radius: 50%;
-  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.35);
+  box-shadow: 0 10px 20px -14px rgba(13,138,158,0.35);
 }
 .mkt-card{
   border-radius: var(--app-r-md);
@@ -3891,7 +3901,7 @@ html, body.app-body{ background: var(--bg-deep); }
   background: linear-gradient(120deg, #FF7A29 0%, #E5B85C 100%);
   box-shadow: 0 18px 32px -18px rgba(255,122,41,0.5);
 }
-.market-banner{ box-shadow: 0 20px 36px -18px rgba(108,60,224,0.55); }
+.market-banner{ box-shadow: 0 20px 36px -18px rgba(13,138,158,0.55); }
 
 /* =========================================================================
    ========  REDESIGN PASS 7 — Bottom nav refresh + service focus mode  ====
@@ -4048,24 +4058,24 @@ html, body.app-body{ background: var(--bg-deep); }
 
 /* ---- 1) الهوية اللونية: بنفسجي / أخضر / برتقالي ---- */
 :root{
-  --brand-grad: linear-gradient(135deg, #6C3CE0 0%, #16A34A 100%);
-  --brand-grad-soft: linear-gradient(135deg, rgba(108,60,224,0.14) 0%, rgba(22,163,74,0.14) 100%);
-  --brand-sunset: linear-gradient(120deg, #6C3CE0 0%, #16A34A 55%, #FF7A29 100%);
+  --brand-grad: linear-gradient(135deg, #0D8A9E 0%, #16A34A 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(13,138,158,0.14) 0%, rgba(22,163,74,0.14) 100%);
+  --brand-sunset: linear-gradient(120deg, #0D8A9E 0%, #16A34A 55%, #FF7A29 100%);
   --bg-deep:
-    radial-gradient(120% 55% at 12% -12%, rgba(108,60,224,0.10) 0%, transparent 55%),
+    radial-gradient(120% 55% at 12% -12%, rgba(13,138,158,0.10) 0%, transparent 55%),
     radial-gradient(110% 60% at 105% 0%, rgba(255,122,41,0.08) 0%, transparent 55%),
     radial-gradient(90% 50% at 50% 115%, rgba(22,163,74,0.07) 0%, transparent 60%),
     #F7F6FB;
 }
 .app-btn{
-  box-shadow: 0 14px 26px -14px rgba(108,60,224,0.42), 0 10px 22px -16px rgba(22,163,74,0.3);
+  box-shadow: 0 14px 26px -14px rgba(13,138,158,0.42), 0 10px 22px -16px rgba(22,163,74,0.3);
 }
 .bnav-item.active .bnav-icon{
-  box-shadow: 0 8px 16px -6px rgba(22,163,74,0.38), 0 6px 14px -8px rgba(108,60,224,0.35);
+  box-shadow: 0 8px 16px -6px rgba(22,163,74,0.38), 0 6px 14px -8px rgba(13,138,158,0.35);
 }
 .market-banner{
   background: var(--brand-sunset);
-  box-shadow: 0 20px 36px -18px rgba(108,60,224,0.5);
+  box-shadow: 0 20px 36px -18px rgba(13,138,158,0.5);
 }
 .mkt-hero{
   background: linear-gradient(120deg, var(--orange) 0%, #FFB07A 100%);
@@ -4122,7 +4132,7 @@ html, body.app-body{ background: var(--bg-deep); }
   background:
     linear-gradient(100deg, rgba(15,10,35,0.72) 0%, rgba(15,10,35,0.28) 55%, rgba(15,10,35,0.08) 100%),
     var(--brand-sunset);
-  box-shadow: 0 16px 30px -16px rgba(108,60,224,0.5);
+  box-shadow: 0 16px 30px -16px rgba(13,138,158,0.5);
   flex-direction: row;
   min-height: 74px;
 }
@@ -4180,7 +4190,7 @@ html, body.app-body{ background: var(--bg-deep); }
   font-size: 10.5px; font-weight: 800;
   color: var(--teal-text);
 }
-.mkt-cat-ic{ box-shadow: 0 10px 20px -14px rgba(108,60,224,0.35); }
+.mkt-cat-ic{ box-shadow: 0 10px 20px -14px rgba(13,138,158,0.35); }
 .mkt-card-loc{ color: var(--text-faint); }
 
 /* بطاقات "قريباً" (المطاعم/الأسواق/خدمات أخرى/مكتب المستقبل) بنفس الهوية. */
@@ -4188,7 +4198,7 @@ html, body.app-body{ background: var(--bg-deep); }
 #soonCardRestaurants .soon-badge{ color: var(--orange-text); }
 #soonCardMarkets{ background: var(--green-dim); border-color: rgba(22,163,74,0.22); }
 #soonCardMarkets .soon-badge{ color: var(--green-text); }
-#soonCardFutureOffice{ background: var(--teal-dim); border-color: rgba(108,60,224,0.22); }
+#soonCardFutureOffice{ background: var(--teal-dim); border-color: rgba(13,138,158,0.22); }
 #soonCardFutureOffice .soon-badge{ color: var(--teal-text); }
 
 /* =========================================================================
@@ -4227,7 +4237,7 @@ html, body.app-body{ background: var(--bg-deep); }
   --svc-private: var(--gold);         --svc-private-soft: var(--gold-soft);   --svc-private-text: var(--gold-text);   --svc-private-dim: var(--gold-dim);
   --svc-courier: var(--orange);       --svc-courier-soft: var(--orange-soft); --svc-courier-text: var(--orange-text); --svc-courier-dim: var(--orange-dim);
   --svc-cargo: var(--green);          --svc-cargo-soft: var(--green-soft);    --svc-cargo-text: var(--green-text);    --svc-cargo-dim: var(--green-dim);
-  --svc-starx: var(--teal-soft);      --svc-starx-soft: var(--teal);          --svc-starx-text: var(--teal-text);     --svc-starx-dim: rgba(139,92,246,0.14);
+  --svc-starx: var(--teal-soft);      --svc-starx-soft: var(--teal);          --svc-starx-text: var(--teal-text);     --svc-starx-dim: rgba(69,194,214,0.14);
   --svc-intercity: var(--green-soft); --svc-intercity-soft: var(--green);     --svc-intercity-text: var(--green-text); --svc-intercity-dim: rgba(74,222,128,0.14);
   /* أقسام أخرى (قريباً/مستقبل) — أُعيد ربطها بنفس الهوية الأربعة بدل
      السماوي المستقل سابقاً، حتى لا يخرج أي عنصر عن بنفسجي/أخضر/
@@ -4381,18 +4391,18 @@ html, body.app-body{ background: var(--bg-deep); }
   width:100%;
   max-width:none;
   background: linear-gradient(135deg, var(--teal-dim) 0%, var(--gold-dim) 100%);
-  border: 1px solid rgba(108,60,224,0.16);
+  border: 1px solid rgba(13,138,158,0.16);
   border-radius: 16px;
   padding: 10px 12px;
   margin-bottom: 10px;
-  box-shadow: 0 10px 22px -16px rgba(108,60,224,0.35);
+  box-shadow: 0 10px 22px -16px rgba(13,138,158,0.35);
 }
 .discover-banner-ic{
   display:flex; align-items:center; justify-content:center;
   flex-shrink:0; width:34px; height:34px; border-radius:50%;
   background: linear-gradient(135deg, var(--teal) 0%, var(--teal-soft) 100%);
   color:#fff;
-  box-shadow: 0 4px 10px -4px rgba(108,60,224,0.55);
+  box-shadow: 0 4px 10px -4px rgba(13,138,158,0.55);
 }
 .discover-banner-ic svg{ width:17px; height:17px; }
 .discover-banner-text{
@@ -4524,7 +4534,7 @@ html, body.app-body{ background: var(--bg-deep); }
 .plc-tab.active{
   background: linear-gradient(120deg, var(--teal) 0%, var(--teal-soft) 100%);
   border-color: var(--teal);
-  box-shadow: 0 10px 20px -12px rgba(108,60,224,0.5);
+  box-shadow: 0 10px 20px -12px rgba(13,138,158,0.5);
 }
 
 /* ---- 4) بطاقات سوق يمّك / المطاعم-الأسواق — نفس لغة الظل والحواف
@@ -4539,7 +4549,7 @@ html, body.app-body{ background: var(--bg-deep); }
 }
 .mkt-cat-ic{
   border-radius: 18px;
-  box-shadow: 0 10px 20px -14px rgba(108,60,224,0.38), 0 0 0 1px rgba(108,60,224,0.06) inset;
+  box-shadow: 0 10px 20px -14px rgba(13,138,158,0.38), 0 0 0 1px rgba(13,138,158,0.06) inset;
 }
 .mkt-card-price{ color: var(--orange-text); font-weight:900; }
 .mkt-card-tag{ background: linear-gradient(120deg, var(--green) 0%, var(--green-soft) 100%); }
@@ -4850,25 +4860,39 @@ html, body.app-body{ background: var(--bg-deep); }
         البرتقالي، فيتطابق مع الهوية بدل تدرّج أزرق/أخضر منفصل.
      5) لا تغيير على أي هيكل/Safe-Area/overflow-guard — القيم فقط.
    ========================================================================= */
+/* =========================================================================
+   تصحيح الهوية اللونية (تمرير لاحق) — إلغاء البنفسجي كلون أساسي للواجهة.
+   البنفسجي كان يُستخدم هنا بسبب طبقات تصميم سابقة متراكمة (--teal كان قد
+   انتهى إلى بنفسجي حاسم). هذه الكتلة، بصفتها آخر تعريف لنفس المتغيرات في
+   ترتيب الملف، تفوز على كل ما سبقها (نفس آلية cascade الموثقة أعلاه) وتعيد
+   تعريف الهوية إلى: تركوازي/أزرق بحري كلون أساسي (--teal)، مع الحفاظ على
+   الأخضر والبرتقالي والذهبي الخفيف كما هما لبقية الخدمات/التنبيهات. أي
+   بنفسجي متبقٍّ في أي كتلة :root أقدم أعلاه أصبح غير مرئي فعلياً (dead) —
+   ولم يُحذف حفاظاً على نفس أسلوب الطبقات التاريخية المتبع في هذا الملف —
+   وتم أيضاً تحديث كل قيم rgba()/hex الثابتة التي كانت تكرر نفس درجة
+   البنفسجي مباشرة (ظلال/توهجات لا تمر عبر متغيرات) في كل الملف، لتطابق
+   الهوية الجديدة بلا أي أثر بنفسجي متبقٍّ على الشاشة.
+   ========================================================================= */
 :root{
-  /* الهوية الأساسية — بنفسجي نهائي وحاسم (يفوز على كل تعريف سابق) */
-  --teal: #6C3CE0;
-  --teal-soft: #8B5CF6;
-  --teal-text: #4C1D95;
-  --teal-dim: rgba(108,60,224,0.13);
+  /* الهوية الأساسية — تركوازي/أزرق بحري نهائي وحاسم (يفوز على كل تعريف سابق) */
+  --teal: #0D8A9E;
+  --teal-soft: #45C2D6;
+  --teal-text: #0A5A68;
+  --teal-dim: rgba(13,138,158,0.13);
 
-  /* القماشة العامة — لافندري هادئ قريب من الأبيض، وليس أبيض ناصعاً */
-  --surface: #F7F4FC;
-  --surface-hi: #EFE6FB;
-  --surface-brd: #E1D3F4;
+  /* القماشة العامة — تركوازي هادئ فاتح، بارز وواضح، وليس أبيض ناصعاً
+     ولا لافندري بنفسجياً */
+  --surface: #E4F5F4;
+  --surface-hi: #D3EEEC;
+  --surface-brd: #BFE0DD;
 
-  /* خلف الخريطة/الحافة العلوية — نفس قماشة .sheet + وهج بنفسجي/أخضر/
-     برتقالي شفاف جداً، بدل تدرّج أزرق/أخضر منفصل عن الهوية */
+  /* خلف الخريطة/الحافة العلوية — نفس قماشة .sheet + وهج تركوازي/أخضر/
+     برتقالي شفاف جداً، متطابق مع الهوية الجديدة بدل أي إيحاء بنفسجي */
   --bg-deep:
-    radial-gradient(120% 55% at 14% -12%, rgba(108,60,224,0.14) 0%, transparent 55%),
+    radial-gradient(120% 55% at 14% -12%, rgba(13,138,158,0.14) 0%, transparent 55%),
     radial-gradient(110% 60% at 104% 2%, rgba(255,122,41,0.09) 0%, transparent 55%),
     radial-gradient(95% 55% at 50% 118%, rgba(34,197,94,0.08) 0%, transparent 60%),
-    #F7F4FC;
+    #E4F5F4;
 }
 
 /* .sheet — القماشة الرئيسية التي تُعرض فوقها كل الأقسام (الرئيسية،
@@ -4883,7 +4907,7 @@ html, body.app-body{ background: var(--bg-deep); }
 /* Bottom Nav — يطابق نفس قماشة .sheet الجديدة بدل الأبيض شبه الناصع،
    فلا يبدو شريطاً منفصلاً بلون مختلف عن باقي الواجهة عند التمرير. */
 .bottom-nav{
-  background: rgba(247,244,252,0.97);
+  background: rgba(228,245,244,0.97);
 }
 
 /* =========================================================================
@@ -4928,7 +4952,7 @@ html, body.app-body{ background: var(--bg-deep); }
   border-radius: var(--app-r-xl) var(--app-r-xl) var(--app-r-md) var(--app-r-md);
   padding: var(--sp-5) var(--sp-4);
   margin-bottom: var(--sp-4);
-  box-shadow: 0 18px 34px -20px rgba(108,60,224,0.5);
+  box-shadow: 0 18px 34px -20px rgba(13,138,158,0.5);
   position: relative;
   overflow: hidden;
 }
@@ -5012,27 +5036,40 @@ html, body.app-body{ background: var(--bg-deep); }
 }
 
 /* =========================================================================
-   صور واقعية احترافية بدل SVG/تدرجات — المطاعم/الأسواق/مكتب المستقبل/
+   صور fallback محلية بدل SVG/تدرجات — المطاعم/الأسواق/مكتب المستقبل/
    خدمات أخرى فقط (CSS فقط، لا تعديل HTML/JS/منطق)
    -------------------------------------------------------------------------
-   المصدر: صور Pexels مجانية الترخيص (Pexels License — استخدام تجاري حر،
-   بلا نسب مطلوب: pexels.com/license)، كل صورة تعبّر عن القسم نفسه لا عن
-   محل بعينه (طعام متنوع/عربة خضار وفواكه/قرطاسية ودفاتر/أدوات صيانة)،
-   وبلا أي نص أو شعار داخل الصورة نفسها. هذه صور تصميم عامة للأقسام —
-   وليست صور مطاعم/محلات حقيقية بعينها (ذلك يبقى فارغاً كما هو حتى
-   يُضاف لاحقاً عبر البيانات الحقيقية، دون أي اختراع).
+   المصدر: صور محلية مرفوعة من المشروع نفسه (لا روابط خارجية إطلاقاً)،
+   موضوعة بجوار مجلد assets/vehicles/ الحالي الذي يستخدمه app.js:
+     assets/places/restaurants.jpg      — تصنيف "المطاعم"
+     assets/places/markets.jpg          — تصنيف "الأسواق"
+     assets/places/future-office.jpg    — تصنيف "مكتب المستقبل"
+     assets/places/other-services.jpg   — تصنيف "خدمات أخرى" (بطاقة الرئيسية فقط)
+   هذه صور تصنيف عامة فقط (fallback على مستوى القسم) — لا ترتبط بأي
+   مطعم/سوق/مكتب بعينه، ولا تُقرأ إطلاقاً من image_url في Supabase. أي
+   مطعم/سوق/فرع حقيقي يبقى فارغاً كما هو حتى تُرفع صورته الخاصة عبر
+   image_url من لوحة الإدارة — لا بيانات وهمية هنا.
      1) 4 بطاقات "قريباً" في الرئيسية: من أيقونة SVG صغيرة داخل دائرة
-        ملوّنة ← صورة حقيقية مستطيلة أكبر وأوضح، لكل قسم صورته الخاصة.
-     2) بانر شاشة المطاعم/الأسواق (.plc-hero-banner، أُضيف في التمرير
-        السابق): يعرض الآن صورة حقيقية كبيرة بدل التدرّج+الأيقونة، وتتبدّل
-        تلقائياً بين صورة مطاعم/أسواق حسب التبويب النشط فعلاً (نفس
-        .plc-tab.active الذي يضبطه places.js أصلاً، عبر :has() فقط).
+        ملوّنة ← صورة تصنيف محلية أكبر وأوضح، لكل قسم صورته الخاصة.
+     2) بانر شاشة المطاعم/الأسواق (.plc-hero-banner): صورة تصنيف محلية
+        كبيرة بدل التدرّج+الأيقونة، تتبدّل تلقائياً حسب التبويب النشط
+        فعلاً (نفس .plc-tab.active الذي يضبطه places.js أصلاً، عبر
+        :has() فقط).
      3) الحالة الفارغة لصورة كل بطاقة داخل #plcGrid (.plc-card-img-ph،
         تظهر فقط حين لا توجد صورة حقيقية مرفوعة لهذا المطعم/السوق بعينه):
-        صورة تعبّر عن تصنيف تلك البطاقة (نفس .plc-card-cat-* الذي يضبطه
-        places.js أصلاً) بدل الأيقونة الصغيرة المجرّدة، عبر :has() فقط —
-        فور توفر صورة حقيقية لذلك المطعم/السوق بعينه، <img> الحقيقية تحل
-        محلها تلقائياً كما كانت (لا تغيير في تلك الآلية).
+        صورة تصنيف محلية بدل الأيقونة الصغيرة المجرّدة (الإيموجي النصي
+        الذي يضعه places.js يُخفى هنا بصرياً — عبر font-size:0 على نفس
+        العنصر، إذ إنه نص مباشر داخل الـ span وليس <svg> يمكن استهدافه)،
+        عبر :has() فقط — فور توفر صورة حقيقية لذلك المطعم/السوق بعينه،
+        <img> الحقيقية تحل محلها تلقائياً كما كانت (لا تغيير في تلك الآلية).
+     4) صفحة تفاصيل مطعم/سوق واحد (.plc-detail-hero، تظهر فقط حين لا
+        توجد صورة حقيقية لهذا العنصر بعينه أي حين #plcDetailHeroPh غير
+        مخفي): نفس صورة تصنيف المطاعم/الأسواق حسب آخر تبويب نشط فعلياً،
+        بنفس أسلوب :has() المستخدم للبانر أعلاه. لا حقل في DOM يحدّد
+        تصنيف مكتب المستقبل عند فتحه مباشرة (فرع واحد نشط)، فتُستخدم له
+        صورة "مكتب المستقبل" كافتراضي عام حين لا يتطابق أي تبويب — وهذا
+        حد معروف لكونه اعتماداً على حالة تبويبات القائمة فقط دون تعديل
+        places.js/index.html لإضافة سمة تصنيف صريحة لصفحة التفاصيل.
    ========================================================================= */
 @supports selector(:has(*)){
 
@@ -5049,18 +5086,18 @@ html, body.app-body{ background: var(--bg-deep); }
 #soonCardMarkets .soon-ic svg,
 #soonCardOtherServices .soon-ic svg,
 #soonCardFutureOffice .soon-ic svg{ display:none; }
-#soonCardRestaurants .soon-ic{ background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=400"); }
-#soonCardMarkets .soon-ic{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=400"); }
-#soonCardOtherServices .soon-ic{ background-image: url("https://images.pexels.com/photos/5691653/pexels-photo-5691653.jpeg?auto=compress&cs=tinysrgb&w=400"); }
-#soonCardFutureOffice .soon-ic{ background-image: url("https://images.pexels.com/photos/4792283/pexels-photo-4792283.jpeg?auto=compress&cs=tinysrgb&w=400"); }
+#soonCardRestaurants .soon-ic{ background-image: url("assets/places/restaurants.jpg"); }
+#soonCardMarkets .soon-ic{ background-image: url("assets/places/markets.jpg"); }
+#soonCardOtherServices .soon-ic{ background-image: url("assets/places/other-services.jpg"); }
+#soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg"); }
 
-/* ---- 2) بانر شاشة المطاعم/الأسواق — صورة حقيقية كبيرة بدل التدرّج،
+/* ---- 2) بانر شاشة المطاعم/الأسواق — صورة تصنيف محلية كبيرة بدل التدرّج،
    تتبدّل حسب التبويب النشط. الأيقونة الصغيرة تبقى كشارة زجاجية فوق
    الصورة بدل أن تكون هي المحتوى الرئيسي للبانر. ---- */
 .plc-hero-banner{
   position:relative; overflow:hidden;
   background: none;
-  background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-image: url("assets/places/restaurants.jpg");
   background-size:cover; background-position:center;
   min-height: 132px;
   align-items:flex-end;
@@ -5077,43 +5114,49 @@ html, body.app-body{ background: var(--bg-deep); }
 .plc-hero-banner-text{ position:relative; z-index:1; }
 .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
 .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
-  background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-image: url("assets/places/restaurants.jpg");
 }
 .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
-  background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=1200");
+  background-image: url("assets/places/markets.jpg");
 }
 
 /* ---- 3) الحالة الفارغة لصورة البطاقة (لا صورة حقيقية بعد لهذا العنصر
-   بعينه) — صورة تصنيف عامة بدل الأيقونة، فور توفر <img> حقيقية تُستبدل
-   تلقائياً بالآلية الموجودة أصلاً في places.js دون أي تغيير هنا. ---- */
+   بعينه) — صورة تصنيف محلية بدل الأيقونة، فور توفر <img> حقيقية تُستبدل
+   تلقائياً بالآلية الموجودة أصلاً في places.js دون أي تغيير هنا. النص/
+   الإيموجي الذي يضعه places.js داخل هذا الـ span يُخفى بصرياً (font-size:0)
+   طالما صورة التصنيف ظاهرة خلفه. ---- */
 #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph,
 #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph,
 #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{
   width:100%; height:100%;
   background-size:cover; background-position:center;
+  font-size:0; line-height:0; opacity:1;
 }
 #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
 #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
 #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
-#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/6605903/pexels-photo-6605903.jpeg?auto=compress&cs=tinysrgb&w=600"); }
-#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/33975355/pexels-photo-33975355.jpeg?auto=compress&cs=tinysrgb&w=600"); }
-#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("https://images.pexels.com/photos/4792283/pexels-photo-4792283.jpeg?auto=compress&cs=tinysrgb&w=600"); }
+#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("assets/places/restaurants.jpg"); }
+#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg"); }
+#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg"); }
+
+/* ---- 4) صفحة تفاصيل عنصر واحد — نفس منطق البانر (تبويب نشط فعلياً)،
+   ولا تظهر إلا حين لا توجد صورة حقيقية لهذا العنصر بعينه
+   (#plcDetailHeroPh غير مخفي). الأيقونة الصغيرة (svg حقيقية هنا) تُخفى
+   حين تظهر صورة التصنيف خلفها. مكتب المستقبل (فرع واحد يُفتح مباشرة بلا
+   تبويب) يستخدم صورته كافتراضي عام — انظر ملاحظة الحد أعلاه. ---- */
+.plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+  background-image: url("assets/places/future-office.jpg"); /* افتراضي: لا تبويب نشط (فرع مكتب المستقبل يُفتح مباشرة) */
+  background-size:cover; background-position:center;
+}
+.plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
+#sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+  background-image: url("assets/places/restaurants.jpg");
+}
+#sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+  background-image: url("assets/places/markets.jpg");
+}
 
 } /* /:has() support */
-
-/* =========================================================================
-   صور احتياطية معتمدة (Pexels License) لكل قسم — لم تُستخدم بعد، محفوظة
-   هنا كتوثيق فقط تمهيداً لميزة معرض/تدوير صور لاحقاً (خارج نطاق هذا
-   التمرير). لا تُنشئ أي قاعدة CSS فعلية ولا تُغيّر أي عنصر في الصفحة.
-     - المطاعم (مستخدمة الآن: 6605903): احتياطي 1639562 (برجر)،
-       315755 (بيتزا)، 5966434 (طبق صحي متنوع)
-     - الأسواق (مستخدمة الآن: 33975355): احتياطي 264537 (خضار وفواكه)،
-       16211537 (رف معلبات)
-     - مكتب المستقبل (مستخدمة الآن: 4792283): احتياطي 7718714 (أدوات
-       مكتبية)، 7054755 (دفاتر ملوّنة)
-     - خدمات أخرى (مستخدمة الآن: 5691653): احتياطي 1029243 (أدوات ورشة)،
-       3616735 (مكنسة كهربائية/تنظيف)
-   ========================================================================= */
 
 /* =========================================================================
    Home restructure — "الرئيسية = خريطة + الخدمات الستة فقط" (2026-09-16)
@@ -5165,3 +5208,29 @@ html, body.app-body{ background: var(--bg-deep); }
 .sheet-view[data-view="home"] > .ads-carousel{
   display: none;
 }
+
+/* ---- رسالة تعريفية قصيرة تحت عنوان القسم (المطاعم / الأسواق / مكتب المستقبل) ----
+   شريط لوني رفيع + خلفية teal خفيفة، بنفس رموز التصميم المستخدمة أصلاً
+   (--teal / --teal-dim / --teal-text). CSS فقط: النص يُضبط من places.js. */
+.sec-intro{
+  display:flex; align-items:center; gap: var(--sp-2);
+  margin: -8px 0 var(--sp-4);
+  padding: 9px var(--sp-3);
+  border-radius: var(--app-r-md);
+  background: var(--teal-dim);
+  color: var(--teal-text);
+  font-size: 12.5px; font-weight: 700; line-height: 1.5;
+}
+.sec-intro::before{
+  content:''; flex-shrink:0; align-self:stretch;
+  width:3px; border-radius:3px; background: var(--teal);
+}
+.sec-intro[hidden]{ display:none; }
+.plc-detail-body .sec-intro{ margin: 0 0 var(--sp-4); }
+
+/* ---- رسالة دليفري التعريفية — نفس .sec-intro، تظهر فقط في شاشة الحجز
+   (الخطوة 1، وضع التركيز) حين تكون خدمة "دليفري" هي النشطة. الإشارة
+   المستخدمة هي .svc-pill.active[data-service="courier"] التي يضبطها
+   selectService() أصلاً — CSS فقط، بلا JS ولا تغيير في الوصف الحالي. ---- */
+.sec-intro-svc{ display:none; margin: -6px 0 var(--sp-4); }
+.sheet-view[data-view="booking"][data-current-step="1"]:has(.svc-pill.active[data-service="courier"]) .svc-switch-wrap.is-focused ~ .sec-intro-svc{ display:flex; }

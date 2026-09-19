@@ -10,6 +10,49 @@
 </head>
 <body class="driver-body">
 
+  <!-- Real login (Supabase Auth) — additive, parallel to the existing
+       ?driver_token= link system below (never replaces it). Shown only
+       when the page is opened with neither a valid session nor a token
+       in the URL/localStorage; a token link keeps working exactly as
+       before and never routes through this screen. Same id/behavior
+       pattern as the other two screens: driver.js only toggles
+       [hidden] + inline style.display via setScreenVisible(). -->
+  <div class="driver-screen driver-screen-login" id="driverLoginScreen" hidden>
+    <div class="driver-card">
+      <div class="driver-brand">
+        <span class="brand-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 11l1.4-4.3A2 2 0 0 1 8.3 5.3h7.4a2 2 0 0 1 1.9 1.4L19 11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="11" width="18" height="6" rx="2" stroke="#fff" stroke-width="1.6"/></svg></span>
+        <span>يمّك</span>
+      </div>
+      <h1>تسجيل دخول السائق</h1>
+      <p class="driver-muted">أدخل بيانات حسابك للوصول إلى طلباتك وتنبيهاتك.</p>
+
+      <form id="driverLoginForm" class="driver-login-form" novalidate>
+        <div class="driver-form-group">
+          <label for="driverLoginEmail">رقم الهاتف</label>
+          <!-- id kept as driverLoginEmail (legacy name) intentionally —
+               driver.js reads this same id; only its type/label/format
+               changed from email to phone (phone+password login task).
+               dir="ltr" so the digits/+964 read left-to-right inside
+               the RTL page, matching how phone numbers are normally
+               typed/displayed. -->
+          <input type="tel" id="driverLoginEmail" class="driver-input" autocomplete="tel" inputmode="tel" dir="ltr" placeholder="07XXXXXXXXX" required>
+        </div>
+        <div class="driver-form-group">
+          <label for="driverLoginPassword">كلمة المرور</label>
+          <input type="password" id="driverLoginPassword" class="driver-input" autocomplete="current-password" required>
+        </div>
+        <!-- Populated by handleDriverLogin() in driver.js on a failed
+             sign-in or an account with no active driver linked to it. -->
+        <p class="driver-login-error" id="driverLoginError" hidden></p>
+        <button type="submit" class="driver-btn" id="driverLoginBtn">تسجيل الدخول</button>
+      </form>
+
+      <p class="driver-fineprint">
+        إن وصلك رابط خاص من الإدارة، افتحه مباشرة — لا حاجة لتسجيل الدخول هنا.
+      </p>
+    </div>
+  </div>
+
   <!-- Invalid/missing token — shown instead of everything else below.
        Same id/behavior as before: driver.js only toggles [hidden] +
        inline style.display on this element via setScreenVisible(). -->
@@ -42,8 +85,12 @@
       <header class="driver-header">
         <div class="driver-brand">
           <span class="brand-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 11l1.4-4.3A2 2 0 0 1 8.3 5.3h7.4a2 2 0 0 1 1.9 1.4L19 11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="11" width="18" height="6" rx="2" stroke="#fff" stroke-width="1.6"/></svg></span>
-          <span>يمّك <small class="driver-header-sub">— لوحة السائق</small></span>
+          <span>يمّك <small class="driver-header-sub">— لوحة السائق<span id="driverHeaderName"></span></small></span>
         </div>
+        <!-- Only relevant in real-login mode — a token-based driver has
+             no session to log out of, so driver.js keeps this [hidden]
+             for that path (see startDriverApp()). -->
+        <button type="button" class="driver-logout-btn" id="driverLogoutBtn" hidden>خروج</button>
       </header>
 
       <div class="driver-sheet">
@@ -103,6 +150,18 @@
                 <button type="button" class="driver-btn driver-btn-reject" id="driverRejectBtn">رفض الطلب</button>
               </div>
               <p class="driver-trip-actions-msg" id="driverRespondMsg" hidden></p>
+            </div>
+
+            <!-- Trip-status progression card (accepted -> en_route -> arrived
+                 -> completed) — shown instead of driverTripActions once the
+                 driver has accepted, via renderTripActions(). One button,
+                 whose label matches the single valid next step for the
+                 trip's current status. New for the trip-status-cycle fix. -->
+            <div class="driver-trip-actions" id="driverTripProgress" hidden>
+              <div class="driver-trip-actions-row">
+                <button type="button" class="driver-btn" id="driverProgressBtn"></button>
+              </div>
+              <p class="driver-trip-actions-msg" id="driverProgressMsg" hidden></p>
             </div>
 
             <button type="button" class="driver-btn driver-btn-secondary" id="driverOpenMapBtn" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21.2s6.6-5.8 6.6-11a6.6 6.6 0 1 0-13.2 0c0 5.2 6.6 11 6.6 11Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10.1" r="2.3" stroke="currentColor" stroke-width="1.7"/></svg> فتح موقع الزبون على الخريطة</button>
