@@ -835,8 +835,20 @@ const REQUEST_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="
 // 🟢 متاح (status === 'active' — selectable) or 🔴 مشغول (anything
 // else — busy or offline both read as simply "not available right
 // now"; the customer never sees a third "بانتظار الدور" queue state).
+//
+// FIX (سائقون/خدمات تظهر "مشغول" خطأً): الشرط القديم كان
+// `String(status||'').toLowerCase() === 'active'` — أي قيمة status لا
+// تساوي 'active' حرفياً، بما فيها الفارغة/null (سائق لم تُحدَّث حالته
+// بعد)، كانت تُصنَّف "مشغول" تلقائياً. هذا يعاكس ما وثّقه هذا الملف
+// نفسه سابقاً ("تعود افتراضياً إلى متاح عند غياب القيمة"). التعديل
+// الوحيد هنا: القيمة الفارغة/null تبقى "متاح" كما كان يُفترض أصلاً؛
+// "active" تبقى "متاح"؛ أي قيمة أخرى غير فارغة (وهي فعلياً ما ترجعه
+// get_service_driver_roster لسائق مشغول/غير متاح) تبقى "مشغول" كما
+// كانت. لا تغيير على الـ RPC ولا على canRequest (شرط زر "طلب" أدناه)،
+// ولا على أي منطق تعيين سائق.
 function rosterStatusInfo(status) {
-  const isAvailable = String(status || '').toLowerCase() === 'active';
+  const normalized = String(status || '').trim().toLowerCase();
+  const isAvailable = normalized === '' || normalized === 'active';
   return isAvailable
     ? { dot: '🟢', label: 'متاح', cls: 'badge-live' }
     : { dot: '🔴', label: 'مشغول', cls: 'badge-onjob' };
@@ -2770,7 +2782,7 @@ function initHelpAccordion() {
    past requests, by phone, same trust model as get_trip_request_status.
    ============================================================ */
 function setActiveNavTab(view) {
-  const map = { home: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market' };
+  const map = { home: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
   const activeKey = map[view] || null;
   document.querySelectorAll('.bnav-item[data-nav]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.nav === activeKey);
@@ -3221,7 +3233,7 @@ document.addEventListener('DOMContentLoaded', () => {
   sheet.setSnap('half', false);
   initViewportHandling();
 
-  document.getElementById('whereToBtn').addEventListener('click', () => openBooking());
+  document.getElementById('whereToBtn')?.addEventListener('click', () => openBooking());
   document.querySelectorAll('[data-back="home"]').forEach(b => b.addEventListener('click', () => { backToHome(); }));
   document.getElementById('requestForm').addEventListener('submit', handleSubmit);
   // Keep #bookSubmitBtn's disabled state in sync with the required
@@ -3295,3 +3307,499 @@ document.addEventListener('DOMContentLoaded', () => {
 
   locateMe(true);
 });
+
+/* =========================================================================
+   مساعد يمّك — مدخل ذكي مختصر (Home) — إضافة معزولة بالكامل
+   -------------------------------------------------------------------------
+   قسم مستقل تماماً، مغلّف بدالة IIFE خاصة به، لا يعرّف أي متغير عام
+   جديد خارج prefix "ya", ولا يعيد تعريف أي دالة/متغير موجود
+   (SERVICES, ICONS, state, openBooking, showView, toast, haptic,
+   escapeHtmlText تُستخدم فقط كما هي — قراءة/استدعاء، بلا تعديل).
+
+   ما يفعله:
+     1) يطابق نص (مكتوب أو محوَّل من الصوت) مع أحد المسارات الموجودة
+        أصلاً عبر قاموس كلمات مفتاحية محلي بالكامل — بدون أي شبكة أو
+        Backend أو AI خارجي.
+     2) يعرض بطاقة "فهمت طلبك" للمراجعة.
+     3) الانتقال الفعلي لأي Flow لا يحدث إلا من ضغط صريح على زر
+        "تأكيد ومتابعة" — لا إرسال تلقائي من نص أو صوت في أي مسار.
+     4) الانتقال نفسه يتم فقط عبر استدعاء الدوال/الأزرار العامة
+        الموجودة أصلاً:
+          - openBooking(key) لخدمات النقل/الدليفري/الحمل الستة
+          - نقرة برمجية على #soonCardRestaurants/#soonCardMarkets/
+            #soonCardFutureOffice (نفس أزرار شاشة "المزيد" الحقيقية،
+            بنفس نمط التوجيه الإضافي المستخدم أصلاً في نهاية
+            index.html لـ #bnavMarket) — فتُشغَّل معالجات places.js/
+            market.js الحقيقية دون إعادة تعريفها هنا.
+     5) لا يقرأ GPS ولا ينشئ أي مراقبة موقع جديدة — فقط يقرأ (قراءة
+        فقط) القيمة الحالية لحقلي #pickup/#dropoff للعرض في بطاقة
+        المراجعة، دون أي كتابة على state.pickupLatLng/dropoffLatLng.
+   ========================================================================= */
+(function () {
+
+  // -------------------------------------------------------------
+  // تطبيع نص عربي بسيط (بدون مكتبات خارجية) لتحسين دقة المطابقة
+  // المحلية: توحيد الألف/الهمزات، الياء/الألف المقصورة، التاء
+  // المربوطة، وإزالة التشكيل — كل هذا محلي بحت، لا شبكة.
+  // -------------------------------------------------------------
+  function yaNormalize(s) {
+    return String(s || '')
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, '') // تشكيل + تطويل
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .replace(/ة/g, 'ه')
+      .replace(/ؤ/g, 'و')
+      .replace(/ئ/g, 'ي')
+      .trim()
+      .toLowerCase();
+  }
+
+  // قاموس الكلمات المفتاحية لكل مسار — v1 محلي بالكامل، قابل للتوسعة
+  // لاحقاً بدون تغيير أي منطق. كل كلمة هنا مطبَّعة مسبقاً بنفس قواعد
+  // yaNormalize أعلاه.
+  // الكلمات تُكتب هنا بإملائها العربي الطبيعي (بلا حاجة لمطابقة قواعد
+  // yaNormalize يدوياً) — كل كلمة تُمرَّر عبر yaNormalize() نفسها عند
+  // البناء أدناه، فتبقى مطابقة لأي نص مُدخَل (مكتوب أو محوَّل من صوت)
+  // يُطبَّع بنفس الدالة، بلا أي احتمال تعارض إملائي بين القاموس والنص.
+  var YA_KEYWORDS_RAW = {
+    taxi: ['تكسي', 'تاكسي', 'سيارة', 'وصلني', 'امشي', 'مشوار', 'ارحل'],
+    private: ['خصوصي', 'سيارة خاصة', 'سيارة مريحة', 'فخمة'],
+    starx: ['نقل نفرات', 'نفرات', 'مجموعة اشخاص', 'فان نفرات', 'كام شخص'],
+    intercity: ['بين المحافظات', 'سفر لمحافظة', 'مسافة طويلة', 'خارج المدينة'],
+    cargo: ['حمل', 'نقل اثاث', 'اثاث', 'بضاعة', 'شحن اغراض', 'بيك اب'],
+    courier: ['دليفري', 'توصيل طرد', 'طرد', 'ارسال غرض', 'استلام غرض'],
+    restaurants: ['مطعم', 'مطاعم', 'اكل', 'وجبة', 'جوعان', 'جوع', 'طعام', 'برجر', 'بيتزا', 'دجاج', 'كباب', 'فطور', 'غداء', 'عشاء'],
+    markets: ['سوق', 'اسواق', 'تسوق', 'بقالة', 'ماركت', 'مواد غذائية', 'خضرة', 'فواكه'],
+    futureOffice: ['قرطاسية', 'طباعة', 'اطبع', 'طبعلي', 'مكتب', 'ورق', 'تصوير مستندات'],
+    other: ['خدمة اخرى', 'خدمات اخرى', 'شي ثاني', 'غير هذا']
+  };
+  var YA_KEYWORDS = {};
+  Object.keys(YA_KEYWORDS_RAW).forEach(function (key) {
+    YA_KEYWORDS[key] = YA_KEYWORDS_RAW[key].map(yaNormalize);
+  });
+
+  // أيقونات صغيرة زخرفية فقط لبطاقات الأماكن الثلاث (نفس مسار SVG
+  // المستخدم أصلاً في #soonCardRestaurants/#soonCardMarkets/
+  // #soonCardFutureOffice داخل index.html — منسوخة للعرض هنا فقط،
+  // لا علاقة لها بأي منطق). خدمات النقل الستة تستخدم ICONS[] الموجودة
+  // أصلاً في app.js أعلى هذا الملف.
+  var YA_PLACE_ICONS = {
+    restaurants: '<path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+    markets: '<path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
+    futureOffice: '<path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/>'
+  };
+
+  // وصف كل مسار: أين يظهر اسمه (من SERVICES الموجودة فعلاً للخدمات
+  // الستة، أو نص ثابت لبقية المسارات)، هل يحتاج عرض "الوجهة"، وكيف
+  // يُنفَّذ الانتقال الفعلي عند التأكيد فقط.
+  function yaRouteMeta(key) {
+    if (typeof SERVICES !== 'undefined' && SERVICES[key]) {
+      return {
+        kind: 'service',
+        label: SERVICES[key].label,
+        icon: (typeof ICONS !== 'undefined' && ICONS[key]) ? ICONS[key] : '',
+        needsDropoff: true,
+        action: function () { if (typeof window.openBooking === 'function') window.openBooking(key); }
+      };
+    }
+    if (key === 'restaurants') {
+      return {
+        kind: 'place', label: 'المطاعم', icon: YA_PLACE_ICONS.restaurants, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardRestaurants'); if (b) b.click(); }
+      };
+    }
+    if (key === 'markets') {
+      return {
+        kind: 'place', label: 'الأسواق', icon: YA_PLACE_ICONS.markets, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardMarkets'); if (b) b.click(); }
+      };
+    }
+    if (key === 'futureOffice') {
+      return {
+        kind: 'place', label: 'مكتب المستقبل', icon: YA_PLACE_ICONS.futureOffice, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardFutureOffice'); if (b) b.click(); }
+      };
+    }
+    // "other" — لا يوجد Flow حقيقي لها بعد: لا زر تأكيد، لا توجيه وهمي.
+    return { kind: 'other', label: 'خدمات أخرى', icon: '', needsDropoff: false, action: null };
+  }
+
+  // يطابق نصاً حراً مع كل المسارات، ويُرجع مصفوفة {key, score} مرتّبة
+  // تنازلياً حسب عدد الكلمات المفتاحية المطابقة (مطابقة substring
+  // محلية بسيطة — لا AI، لا شبكة).
+  function yaMatchRoutes(text) {
+    var norm = yaNormalize(text);
+    if (!norm) return [];
+    var results = [];
+    Object.keys(YA_KEYWORDS).forEach(function (key) {
+      var score = 0;
+      YA_KEYWORDS[key].forEach(function (kw) {
+        if (norm.indexOf(kw) !== -1) score += 1;
+      });
+      if (score > 0) results.push({ key: key, score: score });
+    });
+    results.sort(function (a, b) { return b.score - a.score; });
+    return results;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var wrap = document.getElementById('yaAssist');
+    var field = document.getElementById('yaField');
+    var input = document.getElementById('yaInput');
+    var micBtn = document.getElementById('yaMicBtn');
+    var suggestBar = document.getElementById('yaSuggest');
+    var confirmCard = document.getElementById('yaConfirm');
+    var confirmTitle = document.getElementById('yaConfirmTitle');
+    var confirmBody = document.getElementById('yaConfirmBody');
+    var confirmActions = document.getElementById('yaConfirmActions');
+    // العنصر الجديد كامل اختياري: إن غاب أي جزء أساسي منه لا نكسر
+    // بقية الصفحة، فقط نوقف تفعيل هذا القسم بصمت.
+    if (!wrap || !field || !input || !suggestBar || !confirmCard || !confirmBody || !confirmActions) return;
+
+    var esc = (typeof escapeHtmlText === 'function') ? escapeHtmlText : function (s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    };
+    var doHaptic = (typeof haptic === 'function') ? haptic : function () {};
+
+    function yaResetUI(clearInput) {
+      confirmCard.hidden = true;
+      suggestBar.hidden = true;
+      suggestBar.innerHTML = '';
+      field.hidden = false;
+      if (clearInput) input.value = '';
+    }
+
+    // -------- قراءة فقط: نص الموقع/الوجهة الحاليين من حقلي البحجز
+    // الموجودين أصلاً (#pickup/#dropoff) — لا استدعاء GPS جديد، لا
+    // كتابة على state.pickupLatLng/dropoffLatLng إطلاقاً. --------
+    function yaPickupText() {
+      var val = (document.getElementById('pickup') || {}).value;
+      val = val ? String(val).trim() : '';
+      if (val) return val;
+      if (state && state.pickupLatLng) return 'تم تحديد موقعك على الخريطة';
+      return 'سيُحدَّد تلقائياً عند المتابعة';
+    }
+    function yaDropoffText() {
+      var val = (document.getElementById('dropoff') || {}).value;
+      val = val ? String(val).trim() : '';
+      if (val) return val;
+      if (state && state.dropoffLatLng) return 'تم تحديدها على الخريطة';
+      return 'تُحدَّد في الخطوة التالية';
+    }
+
+    function yaRenderConfirm(key, sourceText) {
+      var meta = yaRouteMeta(key);
+      field.hidden = true;
+      suggestBar.hidden = true;
+      confirmCard.hidden = false;
+
+      if (meta.kind === 'other') {
+        confirmTitle.textContent = 'قريباً';
+        confirmBody.innerHTML =
+          '<div class="ya-confirm-note">هذه الخدمة ستكون متاحة قريباً — لا يمكن المتابعة بها الآن.</div>';
+        confirmActions.innerHTML = '';
+        var backBtn = document.createElement('button');
+        backBtn.type = 'button'; backBtn.className = 'ya-btn-edit'; backBtn.textContent = 'رجوع';
+        backBtn.addEventListener('click', function () { yaResetUI(false); input.focus(); });
+        confirmActions.appendChild(backBtn);
+        doHaptic();
+        return;
+      }
+
+      confirmTitle.textContent = 'فهمت طلبك';
+      var rows = '';
+      rows += '<div class="ya-confirm-row"><b>الخدمة:</b><span>' + esc(meta.label) + '</span></div>';
+      if (sourceText) {
+        rows += '<div class="ya-confirm-row"><b>طلبك:</b><span>«' + esc(sourceText) + '»</span></div>';
+      }
+      rows += '<div class="ya-confirm-row"><b>' + (meta.needsDropoff ? 'الانطلاق:' : 'الموقع:') + '</b><span>' + esc(yaPickupText()) + '</span></div>';
+      if (meta.needsDropoff) {
+        rows += '<div class="ya-confirm-row"><b>الوجهة:</b><span>' + esc(yaDropoffText()) + '</span></div>';
+      }
+      confirmBody.innerHTML = rows;
+
+      confirmActions.innerHTML = '';
+      var okBtn = document.createElement('button');
+      okBtn.type = 'button'; okBtn.className = 'ya-btn-confirm'; okBtn.textContent = 'تأكيد ومتابعة';
+      // النقطة الوحيدة في هذا الملف التي تنتقل فعلياً إلى Flow الأصلي —
+      // فقط عند نقرة صريحة هنا، لا من أي حدث نص/صوت آخر.
+      okBtn.addEventListener('click', function () {
+        doHaptic();
+        yaResetUI(true);
+        if (typeof meta.action === 'function') meta.action();
+      });
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button'; editBtn.className = 'ya-btn-edit'; editBtn.textContent = 'تعديل';
+      editBtn.addEventListener('click', function () {
+        confirmCard.hidden = true;
+        field.hidden = false;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+      confirmActions.appendChild(okBtn);
+      confirmActions.appendChild(editBtn);
+      doHaptic();
+    }
+
+    // حالة الغموض: لا تطابق واضح لمسار واحد — تُعرض أفضل 2-3 احتمالات
+    // كأزرار + خيار الرجوع لكل البطاقات، بدل أي تخمين صامت.
+    function yaRenderAmbiguous(candidates, sourceText) {
+      field.hidden = true;
+      suggestBar.hidden = true;
+      confirmCard.hidden = false;
+      confirmTitle.textContent = 'ما فهمت الطلب بالضبط';
+      confirmBody.innerHTML = '<p class="ya-confirm-row" style="margin:0 0 4px;"><span>تقصد وحدة من هذي؟</span></p>' +
+        '<div class="ya-guess-list" id="yaGuessList"></div>';
+      var list = document.getElementById('yaGuessList');
+      var top = candidates.slice(0, 3);
+      if (top.length === 0) {
+        // لا أي تطابق إطلاقاً — نعرض أشيع أربعة مسارات كنقطة انطلاق عامة
+        top = [{ key: 'taxi' }, { key: 'courier' }, { key: 'restaurants' }, { key: 'markets' }];
+      }
+      top.forEach(function (c) {
+        var meta = yaRouteMeta(c.key);
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'ya-guess-btn';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none">' + (meta.icon || '') + '</svg><span>' + esc(meta.label) + '</span>';
+        btn.addEventListener('click', function () { yaRenderConfirm(c.key, sourceText); });
+        list.appendChild(btn);
+      });
+      confirmActions.innerHTML = '';
+      var allBtn = document.createElement('button');
+      allBtn.type = 'button'; allBtn.className = 'ya-btn-edit'; allBtn.style.flex = '1 1 auto';
+      allBtn.textContent = 'اعرض كل الخدمات';
+      allBtn.addEventListener('click', function () {
+        yaResetUI(false);
+        var qs = document.getElementById('quickServices');
+        if (qs && qs.scrollIntoView) qs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      confirmActions.appendChild(allBtn);
+    }
+
+    // -------- شريط الاقتراحات أثناء الكتابة (بعد أول حرفين) --------
+    function yaRenderSuggestChips(matches, sourceText) {
+      suggestBar.innerHTML = '';
+      if (!matches.length) { suggestBar.hidden = true; return; }
+      matches.slice(0, 5).forEach(function (m) {
+        var meta = yaRouteMeta(m.key);
+        var chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'ya-suggest-chip';
+        chip.innerHTML = '<svg viewBox="0 0 24 24" fill="none">' + (meta.icon || '') + '</svg><span>' + esc(meta.label) + '</span>';
+        chip.addEventListener('click', function () { yaRenderConfirm(m.key, sourceText); });
+        suggestBar.appendChild(chip);
+      });
+      suggestBar.hidden = false;
+    }
+
+    input.addEventListener('input', function () {
+      var text = input.value;
+      if (text.trim().length < 2) { suggestBar.hidden = true; suggestBar.innerHTML = ''; return; }
+      yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
+    });
+
+    function yaRunFullMatch() {
+      var text = input.value.trim();
+      if (!text) return;
+      var matches = yaMatchRoutes(text);
+      if (matches.length === 1 || (matches.length > 1 && matches[0].score > matches[1].score)) {
+        yaRenderConfirm(matches[0].key, text);
+      } else {
+        yaRenderAmbiguous(matches, text);
+      }
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); yaRunFullMatch(); }
+    });
+
+    // -------- الصوت (اختياري بالكامل) --------
+    // يظهر زر المايك فقط إن كان المتصفح يدعم SpeechRecognition فعلياً؛
+    // غير ذلك يبقى hidden كما هو افتراضياً في index.html، والتجربة
+    // تعمل بالكتابة فقط دون أي كسر.
+    var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    if (SpeechRecognitionCtor && micBtn) {
+      var recognition = null;
+      var listening = false;
+      micBtn.hidden = false;
+      micBtn.addEventListener('click', function () {
+        if (listening) return;
+        try {
+          recognition = new SpeechRecognitionCtor();
+          recognition.lang = 'ar-IQ';
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+          recognition.onstart = function () {
+            listening = true;
+            micBtn.classList.add('ya-listening');
+          };
+          recognition.onresult = function (ev) {
+            var transcript = (ev.results && ev.results[0] && ev.results[0][0]) ? ev.results[0][0].transcript : '';
+            if (transcript) {
+              // النص المحوَّل يُكتب داخل نفس حقل الكتابة للمراجعة —
+              // لا إرسال تلقائي من الصوت أبداً؛ يُعامَل كأنه مكتوب يدوياً.
+              input.value = transcript;
+              input.focus();
+              yaRenderSuggestChips(yaMatchRoutes(transcript), transcript.trim());
+            }
+          };
+          recognition.onerror = function () {
+            listening = false;
+            micBtn.classList.remove('ya-listening');
+            if (typeof toast === 'function') toast('تعذّر التعرف على الصوت — جرّب الكتابة');
+          };
+          recognition.onend = function () {
+            listening = false;
+            micBtn.classList.remove('ya-listening');
+          };
+          recognition.start();
+          doHaptic();
+        } catch (err) {
+          listening = false;
+          micBtn.classList.remove('ya-listening');
+        }
+      });
+    }
+  });
+})();
+
+/* =========================================================================
+   نظام الرسائل الديناميكي (Home) — إضافة معزولة بالكامل
+   -------------------------------------------------------------------------
+   يستبدل الرسائل الترويجية الثابتة السابقة (زر "إلى أين تذهب؟" وبانر
+   "رحلتك تبدأ من هنا" وبطاقة "وصول سريع خلال دقائق" — حُذفت من
+   index.html) بشريط واحد ديناميكي #yaMsgBar، تتبدل رسالته تلقائياً حسب:
+   فتح التطبيق (+ وقت اليوم)، الخدمة/المسار الذي يختاره الزبون، العودة
+   للصفحة الرئيسية، وإتمام الطلب.
+
+   المصدر الوحيد لكل نص هو كائن YA_MESSAGES أدناه — لإضافة أو تعديل أي
+   رسالة مستقبلاً (بما فيها تنبيهات/عروض جديدة)، عدّل فقط داخل هذا
+   الكائن؛ لا حاجة لأي تعديل على HTML أو على أي بطاقة خدمة.
+
+   لا تعديل هنا على GPS، منطق الطلبات، Supabase/RPC، أو الخدمات الستة —
+   هذا القسم فقط "يستمع" لاستدعاءات الدوال العامة الموجودة أصلاً
+   (openBooking, showView) عبر تغليف غير-تدخّلي (نفس أسلوب الإضافات
+   الأخرى في هذا الملف)، ثم يكتب نصاً في عنصر HTML واحد. لا إرسال لأي
+   جهة خارج التطبيق — مجرد نص داخل الواجهة.
+   ========================================================================= */
+(function () {
+
+  var YA_MESSAGES = {
+    // رسائل فتح التطبيق — تُختار حسب وقت اليوم؛ أكثر من رسالة لكل وقت
+    // فتُعرض بالتناوب في كل فتح جديد للتطبيق.
+    appOpen: {
+      morning: ['صباح الخير — جاهزين نخدمك اليوم.', 'يم صباحك زين، اختر خدمتك وابدأ.'],
+      afternoon: ['أهلاً بيك بيمّك — شنو تحتاج اليوم؟', 'وقتك ثمين — اطلب بضغطة وحدة.'],
+      evening: ['مسا الخير — جاهزين نوصّلك بسرعة.', 'أهلاً بيك، اختر خدمتك وكمّل طلبك.'],
+      night: ['نشتغل حتى بالساعات المتأخرة — اطلب وقتما تريد.', 'موجودين طول الليل لخدمتك.'],
+    },
+    // رسالة عند اختيار كل خدمة من الخدمات الستة (openBooking)
+    service: {
+      taxi: 'اختر موقعك وخلّينا نوصّلك بسرعة.',
+      private: 'رحلة خاصة ومريحة — أكمل بياناتك للتأكيد.',
+      courier: 'حدّد نقطة الاستلام والتسليم لنبدأ التوصيل.',
+      intercity: 'مشوار بين المحافظات؟ حدد وجهتك وكمّل الحجز.',
+      cargo: 'وضّح تفاصيل الحمل لنجهزلك السيارة المناسبة.',
+      starx: 'مجموعة أشخاص؟ اختر عدد الركاب وكمّل الطلب.',
+    },
+    // رسالة عند اختيار مسار مكان (مطاعم/أسواق/مكتب المستقبل)
+    place: {
+      restaurants: 'تصفح المطاعم القريبة واطلب وجبتك.',
+      markets: 'تسوّق من الأسواق القريبة وخلّها توصلك.',
+      futureOffice: 'قرطاسية وطباعة — بيانات الفرع بين إيديك.',
+    },
+    // رسائل العودة للصفحة الرئيسية — تتبدل بالتناوب في كل عودة
+    returnHome: ['أهلاً من جديد — شنو نساعدك بيه؟', 'رجعت للصفحة الرئيسية — اختر خدمتك.', 'جاهزين لطلبك التالي.'],
+    // رسالة بعد إرسال/تأكيد الطلب بنجاح (عند فتح شاشة "status")
+    orderComplete: 'تم استلام طلبك — تابع حالته من هذه الشاشة.',
+    // تنبيهات/عروض تُضاف مستقبلاً من هنا فقط — إن وُجد عنصر بهذه
+    // المصفوفة يُعرض بأولوية أعلى من رسالة فتح التطبيق العادية.
+    // مثال: { text: 'عرض اليوم: توصيل مجاني داخل المدينة', type: 'offer' }
+    alerts: [],
+  };
+
+  var yaMsgRotate = { appOpen: 0, returnHome: 0 };
+
+  function yaTimeSlot() {
+    var h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'morning';
+    if (h >= 12 && h < 17) return 'afternoon';
+    if (h >= 17 && h < 22) return 'evening';
+    return 'night';
+  }
+
+  function yaPickRotating(list, key) {
+    if (!list || !list.length) return '';
+    if (list.length === 1) return list[0];
+    var i = (yaMsgRotate[key] || 0) % list.length;
+    yaMsgRotate[key] = i + 1;
+    return list[i];
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var bar = document.getElementById('yaMsgBar');
+    var textEl = document.getElementById('yaMsgBarText');
+    // إن غاب الشريط من الصفحة لا نكسر شيئاً — نتوقف بصمت، بقية
+    // التطبيق يعمل كالمعتاد (بلا رسائل فقط).
+    if (!bar || !textEl) return;
+
+    function yaShowMessage(text, type) {
+      if (!text) return;
+      textEl.textContent = text;
+      bar.classList.remove('ya-msg-info', 'ya-msg-success', 'ya-msg-warning', 'ya-msg-offer');
+      bar.classList.add('ya-msg-' + (type || 'info'));
+    }
+
+    function yaShowAppOpenMessage() {
+      if (YA_MESSAGES.alerts && YA_MESSAGES.alerts.length) {
+        var a = YA_MESSAGES.alerts[0];
+        yaShowMessage(a.text, a.type || 'offer');
+        return;
+      }
+      yaShowMessage(yaPickRotating(YA_MESSAGES.appOpen[yaTimeSlot()], 'appOpen'), 'info');
+    }
+
+    // 1) عند فتح التطبيق
+    yaShowAppOpenMessage();
+
+    // 2) عند اختيار إحدى الخدمات الستة — تغليف غير-تدخّلي لـ
+    // openBooking() الحقيقية (لا تعديل على تعريفها ولا على منطقها؛
+    // فقط نلتقط اسم الخدمة المُختارة قبل تمرير الاستدعاء لها كما هو).
+    var realOpenBooking = window.openBooking;
+    if (typeof realOpenBooking === 'function') {
+      window.openBooking = function (serviceKey) {
+        if (serviceKey && YA_MESSAGES.service[serviceKey]) {
+          yaShowMessage(YA_MESSAGES.service[serviceKey], 'success');
+        }
+        return realOpenBooking.apply(this, arguments);
+      };
+    }
+
+    // 3) عند اختيار مسار مكان (مطاعم/أسواق/مكتب المستقبل) — نفس أزرار
+    // شاشة "المزيد" الحقيقية (#soonCardRestaurants إلخ)، بلا أي تعديل
+    // على places.js أو أزرارها.
+    [['soonCardRestaurants', 'restaurants'], ['soonCardMarkets', 'markets'], ['soonCardFutureOffice', 'futureOffice']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.addEventListener('click', function () { yaShowMessage(YA_MESSAGES.place[pair[1]], 'success'); });
+    });
+
+    // 4) العودة للصفحة الرئيسية + 5) إتمام الطلب — تغليف غير-تدخّلي
+    // لـ showView() الحقيقية (لا تعديل على تعريفها). name === 'home'
+    // لا يُحتسب "عودة" أول مرة عند تحميل الصفحة (الرئيسية مفعّلة
+    // أصلاً بالـ HTML، بلا استدعاء showView('home') عندها).
+    var realShowView = window.showView;
+    var yaHomeShownBefore = false;
+    if (typeof realShowView === 'function') {
+      window.showView = function (name) {
+        var result = realShowView.apply(this, arguments);
+        if (name === 'home') {
+          if (yaHomeShownBefore) yaShowMessage(yaPickRotating(YA_MESSAGES.returnHome, 'returnHome'), 'info');
+          yaHomeShownBefore = true;
+        } else if (name === 'status') {
+          yaShowMessage(YA_MESSAGES.orderComplete, 'success');
+        }
+        return result;
+      };
+    }
+  });
+})();

@@ -797,43 +797,294 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-// Best-effort, non-blocking: notifications are a convenience on top of
-// the core GPS reporting, so any failure here (unsupported browser,
-// permission denied, offline) must never interrupt reportOnce()/
-// startReporting() above.
-async function setupPushNotifications() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+// ---- Web Push (driver) ----
+// Enabling notifications is driven by a TAP on #driverPushBtn, never by
+// page load: iOS Safari requires Notification.requestPermission() to run
+// inside a user gesture, and Chrome may silently block prompts that
+// aren't gesture-initiated. The previous version asked automatically on
+// open, swallowed every failure (the save RPC's `{ error }` was never
+// read) and reused any old subscription regardless of its VAPID key —
+// which is how driver_push_subscriptions ended up empty with no visible
+// sign of it. Every step below now either succeeds or shows the driver a
+// specific reason.
+//
+// Best-effort and non-blocking: nothing here can interrupt
+// reportOnce()/startReporting() — every failure is caught and displayed
+// in #driverPushMsg, never thrown upward.
+let pushBusy = false;
+
+const PUSH_STAGE_LABELS = {
+  permission: 'طلب إذن الإشعارات',
+  register: 'تسجيل عامل الخدمة driver-sw.js',
+  subscribe: 'إنشاء اشتراك Push',
+  save: 'حفظ الاشتراك في النظام',
+};
+
+function pushSupport() {
+  const hasSW = 'serviceWorker' in navigator;
+  const hasPush = 'PushManager' in window;
+  const hasNotif = 'Notification' in window;
+  return { ok: hasSW && hasPush && hasNotif, hasSW, hasPush, hasNotif };
+}
+
+function isIOSDevice() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// Plain-text reason for a failure: handles Error objects, DOMExceptions
+// (name + message) and Supabase/PostgREST error objects
+// ({ message, code, details, hint }) alike.
+function describePushError(err) {
+  if (!err) return 'خطأ غير معروف';
+  if (typeof err === 'string') return err;
+  const parts = [];
+  if (err.name && err.name !== 'Error') parts.push(err.name);
+  if (err.message) parts.push(err.message);
+  if (err.code) parts.push(`(code ${err.code})`);
+  if (err.details) parts.push(String(err.details));
+  if (err.hint) parts.push(String(err.hint));
+  return parts.join(' ').trim() || String(err);
+}
+
+function setPushBtn(label, opts) {
+  const btn = document.getElementById('driverPushBtn');
+  if (!btn) return;
+  const { disabled = false, on = false } = opts || {};
+  btn.textContent = label;
+  btn.disabled = disabled;
+  btn.classList.toggle('is-on', on);
+}
+
+// kind: 'ok' | 'warn' | 'error' | undefined. `detail` (a raw technical
+// reason) goes in its own LTR element so English/URL text doesn't
+// scramble inside the RTL sentence. Built with textContent/createElement
+// only — nothing here is ever parsed as HTML.
+function setPushMsg(text, kind, detail) {
+  const el = document.getElementById('driverPushMsg');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.remove('is-ok', 'is-warn', 'is-error');
+  if (!text) { el.hidden = true; return; }
+  el.appendChild(document.createTextNode(text));
+  if (detail) {
+    el.appendChild(document.createElement('br'));
+    const code = document.createElement('code');
+    code.className = 'driver-push-detail';
+    code.dir = 'ltr';
+    code.textContent = detail;
+    el.appendChild(code);
+  }
+  if (kind) el.classList.add('is-' + kind);
+  el.hidden = false;
+}
+
+function showPushUnsupported(support) {
+  setPushBtn('🔔 تفعيل إشعارات الطلبات', { disabled: true });
+  const missing = [];
+  if (!support.hasSW) missing.push('Service Worker');
+  if (!support.hasPush) missing.push('PushManager');
+  if (!support.hasNotif) missing.push('Notification');
+  let text = 'المتصفح لا يدعم إشعارات Push.';
+  if (isIOSDevice()) {
+    text += ' على آيفون تعمل الإشعارات فقط داخل تطبيق مضاف إلى الشاشة الرئيسية.';
+  }
+  setPushMsg(text, 'error', missing.length ? 'missing: ' + missing.join(', ') : null);
+}
+
+function showPushDenied() {
+  setPushBtn('🔔 تفعيل إشعارات الطلبات');
+  setPushMsg('الإذن مرفوض — فعّل الإشعارات لهذا الموقع من إعدادات المتصفح أو الجهاز ثم اضغط الزر مجدداً.', 'error');
+}
+
+// Promise wrapper that also covers the legacy callback-only form of
+// Notification.requestPermission() (older Safari).
+function requestNotificationPermission() {
+  return new Promise((resolve, reject) => {
+    try {
+      const maybePromise = Notification.requestPermission(resolve);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(resolve, reject);
+      }
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// pushManager.subscribe() needs an ACTIVE worker on the registration.
+// register() can return while the worker is still installing, so wait
+// (bounded) for it. Deliberately does not change the scope/registration
+// itself — it only observes it.
+async function waitForActiveWorker(registration) {
+  const isDriverSw = (w) => !!w && /driver-sw\.js(\?|#|$)/.test(w.scriptURL);
+  if (isDriverSw(registration.active)) return registration;
+
+  const pending = registration.installing || registration.waiting;
+  if (pending) {
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 8000);
+      const finish = () => { clearTimeout(timer); resolve(); };
+      if (pending.state === 'activated' || pending.state === 'redundant') return finish();
+      pending.addEventListener('statechange', () => {
+        if (pending.state === 'activated' || pending.state === 'redundant') finish();
+      });
+    });
+  } else if (!registration.active) {
+    await navigator.serviceWorker.ready;
+  }
+  return registration;
+}
+
+function subscriptionMatchesKey(subscription, appKeyBytes) {
+  const buf = subscription.options && subscription.options.applicationServerKey;
+  // Some browsers don't expose the key used at subscribe time — then a
+  // mismatch can't be detected here (subscribe() itself throws
+  // InvalidStateError for a different key; handled below).
+  if (!buf) return true;
+  const existing = new Uint8Array(buf);
+  if (existing.length !== appKeyBytes.length) return false;
+  for (let i = 0; i < existing.length; i++) {
+    if (existing[i] !== appKeyBytes[i]) return false;
+  }
+  return true;
+}
+
+// Reuses an existing subscription only when it was made with the CURRENT
+// VAPID public key; otherwise unsubscribes it and creates a new one.
+async function ensureFreshSubscription(registration) {
+  const appKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  const subscribeOpts = { userVisibleOnly: true, applicationServerKey: appKey };
+
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription && !subscriptionMatchesKey(subscription, appKey)) {
+    try { await subscription.unsubscribe(); } catch (_) {}
+    subscription = null;
+  }
+  if (!subscription) {
+    try {
+      subscription = await registration.pushManager.subscribe(subscribeOpts);
+    } catch (err) {
+      // A leftover subscription with a different key makes subscribe()
+      // throw InvalidStateError — drop it and try once more.
+      if (err && err.name === 'InvalidStateError') {
+        const stale = await registration.pushManager.getSubscription();
+        if (stale) { try { await stale.unsubscribe(); } catch (_) {} }
+        subscription = await registration.pushManager.subscribe(subscribeOpts);
+      } else {
+        throw err;
+      }
+    }
+  }
+  return subscription;
+}
+
+// Same RPCs and parameter names as before (unchanged on the server) —
+// but the returned `{ error }` is now actually checked.
+async function saveDriverPushSubscription(subscription) {
+  const json = subscription.toJSON();
+  if (!json || !json.endpoint || !json.keys || !json.keys.p256dh || !json.keys.auth) {
+    throw new Error('الاشتراك الناتج غير مكتمل (endpoint/keys)');
+  }
+  const { error } = authMode
+    ? await supabaseClient.rpc('save_driver_push_subscription_auth', {
+        p_subscription: json,
+      })
+    : await supabaseClient.rpc('save_driver_push_subscription', {
+        p_token: driverToken,
+        p_subscription: json,
+      });
+  if (error) throw error;
+}
+
+// Core flow. `userInitiated` is true only when called from the button's
+// click handler — the ONLY place Notification.requestPermission() is
+// ever called. With permission already 'granted', a non-user-initiated
+// call just re-syncs the subscription (no prompt involved).
+async function setupPushNotifications(options) {
+  const userInitiated = !!(options && options.userInitiated);
+  if (pushBusy) return;
+
+  const support = pushSupport();
+  if (!support.ok) { showPushUnsupported(support); return; }
   if (!authMode && !driverToken) return;
 
+  pushBusy = true;
+  let stage = 'permission';
   try {
-    const registration = await navigator.serviceWorker.register('driver-sw.js');
+    setPushBtn('جارٍ التفعيل…', { disabled: true });
+    setPushMsg(null);
+
     let permission = Notification.permission;
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
+    if (userInitiated) {
+      // First await in the click handler, so the tap's user-gesture
+      // activation is still valid when the prompt is requested.
+      permission = await requestNotificationPermission();
     }
-    if (permission !== 'granted') return;
-
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+    if (permission === 'denied') { showPushDenied(); return; }
+    if (permission !== 'granted') {
+      setPushBtn('🔔 تفعيل إشعارات الطلبات');
+      setPushMsg('لم يتم منح الإذن بعد — اضغط الزر ثم اختر «سماح».', 'warn');
+      return;
     }
 
-    if (authMode) {
-      await supabaseClient.rpc('save_driver_push_subscription_auth', {
-        p_subscription: subscription.toJSON(),
-      });
+    stage = 'register';
+    const registration = await navigator.serviceWorker.register('driver-sw.js');
+    await waitForActiveWorker(registration);
+    if (!registration.active) {
+      throw new Error('لم يُفعَّل عامل الخدمة بعد — أعد فتح الصفحة وحاول مجدداً');
+    }
+    const activeScript = registration.active.scriptURL || '';
+    const foreignWorker = !/driver-sw\.js(\?|#|$)/.test(activeScript);
+
+    stage = 'subscribe';
+    const subscription = await ensureFreshSubscription(registration);
+
+    stage = 'save';
+    await saveDriverPushSubscription(subscription);
+
+    setPushBtn('🔔 إشعارات الطلبات مفعّلة', { disabled: true, on: true });
+    if (foreignWorker) {
+      setPushMsg('تم تفعيل الإشعارات ✅ — لكن عامل خدمة آخر نشط حالياً على هذا الجهاز. أعد فتح الصفحة إن لم تصلك الإشعارات.', 'warn', activeScript);
     } else {
-      await supabaseClient.rpc('save_driver_push_subscription', {
-        p_token: driverToken,
-        p_subscription: subscription.toJSON(),
-      });
+      setPushMsg('تم تفعيل الإشعارات ✅', 'ok');
     }
   } catch (err) {
-    console.error('push setup failed (non-fatal)', err);
+    console.error('push setup failed at stage "' + stage + '"', err);
+    setPushBtn('🔔 تفعيل إشعارات الطلبات');
+    setPushMsg(
+      'فشل تفعيل الإشعارات (' + (PUSH_STAGE_LABELS[stage] || stage) + '). اضغط الزر للمحاولة مجدداً.',
+      'error',
+      describePushError(err)
+    );
+  } finally {
+    pushBusy = false;
   }
+}
+
+// Called once from startDriverApp(): wires the button and shows the
+// right initial state WITHOUT prompting. Permission already granted →
+// silently re-syncs the subscription (covers a subscription that was
+// never saved, or that the browser rotated); default → waits for a tap;
+// denied/unsupported → explains why.
+function initPushNotificationsUI() {
+  const btn = document.getElementById('driverPushBtn');
+  if (!btn) return;
+  if (!btn.dataset.wired) {
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', () => setupPushNotifications({ userInitiated: true }));
+  }
+
+  const support = pushSupport();
+  if (!support.ok) { showPushUnsupported(support); return; }
+
+  const permission = Notification.permission;
+  if (permission === 'denied') { showPushDenied(); return; }
+  if (permission === 'granted') { setupPushNotifications({ userInitiated: false }); return; }
+
+  setPushBtn('🔔 تفعيل إشعارات الطلبات');
+  setPushMsg('اضغط الزر لتصلك إشعارات الطلبات حتى والتطبيق مغلق.');
 }
 
 // Verifies the token from the URL/localStorage actually matches an
@@ -932,7 +1183,7 @@ function startDriverApp() {
 
   startReporting();
   startTripPolling();
-  setupPushNotifications();
+  initPushNotificationsUI();
 }
 
 async function initDriverPage() {

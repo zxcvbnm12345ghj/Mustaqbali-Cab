@@ -105,6 +105,21 @@ function openPlaceDetail(kind, row) {
 /* ============================================================
    List / grid
    ============================================================ */
+// FIX (صور المطاعم/الأسواق لا تظهر — real image_url fails silently):
+// كانت <img> الحقيقية بلا أي onerror، فإن كان image_url غير صالح
+// (مسار خاطئ/رابط خاص/الملف محذوف) تبقى الصورة فارغة بصمت دون أي
+// بديل. الحل هنا فقط: عند فشل تحميل <img> الحقيقية، تُستبدل بنفس
+// الحالة الفارغة الموجودة أصلاً في المشروع (span.plc-card-img-ph
+// بأيقونة التصنيف emptyIcon) — لا صورة وهمية جديدة، ولا تغيير على
+// image_url أو مصدر البيانات نفسه.
+function placeImgFallback(imgEl, emptyIcon) {
+  if (!imgEl) return;
+  const ph = document.createElement('span');
+  ph.className = 'plc-card-img-ph';
+  ph.textContent = emptyIcon;
+  imgEl.replaceWith(ph);
+}
+
 function renderPlaceCard(kind, row) {
   placesState.rowsCache[row.id] = row;
   const img = row.image_url;
@@ -112,7 +127,7 @@ function renderPlaceCard(kind, row) {
   return `
     <button type="button" class="plc-card" data-place-row-id="${escapeHtmlAttr(row.id)}">
       <span class="plc-card-img">
-        ${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy">` : `<span class="plc-card-img-ph">${cfg.emptyIcon}</span>`}
+        ${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy" onerror="placeImgFallback(this, '${cfg.emptyIcon}')">` : `<span class="plc-card-img-ph">${cfg.emptyIcon}</span>`}
       </span>
       <span class="plc-card-body">
         <b class="plc-card-title">${escapeHtmlText(row.name)}</b>
@@ -174,19 +189,41 @@ async function loadPlacesList(kind) {
 /* ============================================================
    Detail page
    ============================================================ */
+// FIX (صفحة تفاصيل مطعم/سوق — نفس مشكلة الصور): background-image لا
+// يملك onerror أصلاً، فإن فشل image_url كانت الصورة تبقى مفقودة بصمت
+// رغم أن hero.classList تحمل has-img. الحل: تحميل الصورة أولاً عبر
+// Image() قبل اعتمادها خلفية؛ إن نجحت تُطبَّق كما كانت، وإن فشلت
+// تُعرض نفس الحالة الفارغة الموجودة أصلاً (heroPh + emptyIcon) بدل
+// خلفية مكسورة. التوكن (placeDetailImgToken) يمنع فقط أن يطبّق تحميل
+// قديم متأخر صورة خاطئة إن فتح الزبون مطعماً/سوقاً آخر بسرعة قبل
+// اكتمال التحميل السابق — لا تغيير آخر على منطق العرض.
+let placeDetailImgToken = 0;
 function renderPlaceDetail(kind, row) {
   const cfg = PLACE_KINDS[kind];
 
   const hero = document.getElementById('plcDetailHero');
   const heroPh = document.getElementById('plcDetailHeroPh');
-  if (row.image_url) {
-    hero.style.backgroundImage = `url("${row.image_url.replace(/"/g, '')}")`;
-    hero.classList.add('has-img');
-    if (heroPh) heroPh.hidden = true;
-  } else {
+  const myImgToken = ++placeDetailImgToken;
+  const showHeroEmpty = () => {
     hero.style.backgroundImage = '';
     hero.classList.remove('has-img');
     if (heroPh) { heroPh.hidden = false; heroPh.textContent = cfg.emptyIcon; }
+  };
+  if (row.image_url) {
+    const preload = new Image();
+    preload.onload = () => {
+      if (myImgToken !== placeDetailImgToken) return; // فُتح عنصر آخر قبل اكتمال هذا التحميل
+      hero.style.backgroundImage = `url("${row.image_url.replace(/"/g, '')}")`;
+      hero.classList.add('has-img');
+      if (heroPh) heroPh.hidden = true;
+    };
+    preload.onerror = () => {
+      if (myImgToken !== placeDetailImgToken) return;
+      showHeroEmpty();
+    };
+    preload.src = row.image_url;
+  } else {
+    showHeroEmpty();
   }
 
   document.getElementById('plcDetailName').textContent = row.name || '—';

@@ -128,8 +128,9 @@ html, body.driver-body{
 }
 .driver-screen[hidden]{ display: none; }
 
-/* ---------------- Invalid-link screen ---------------- */
-.driver-screen-invalid{
+/* ---------------- Invalid-link screen (+ login screen, same layout) ---------------- */
+.driver-screen-invalid,
+.driver-screen-login{
   align-items: center;
   justify-content: center;
   padding:
@@ -138,7 +139,8 @@ html, body.driver-body{
     max(24px, env(safe-area-inset-bottom))
     max(20px, env(safe-area-inset-left));
 }
-.driver-screen-invalid .driver-card{
+.driver-screen-invalid .driver-card,
+.driver-screen-login .driver-card{
   width: 100%;
   max-width: 400px;
   margin: 0 auto;
@@ -149,6 +151,47 @@ html, body.driver-body{
   box-shadow: var(--shadow-deep);
   text-align: center;
 }
+
+/* ---------------- Login form (driver-screen-login only) ---------------- */
+.driver-login-form{
+  margin-top: 18px;
+  text-align: right;
+}
+.driver-form-group{ margin-bottom: 14px; }
+.driver-form-group label{
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.driver-input{
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: var(--app-r-sm);
+  border: 1.5px solid var(--surface-brd);
+  background: var(--surface-hi);
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  transition: border-color .15s, background .15s;
+}
+.driver-input:focus{
+  outline: none;
+  border-color: var(--teal);
+  background: var(--surface);
+}
+.driver-login-error{
+  margin: 2px 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--app-r-sm);
+  background: rgba(225,29,72,0.08);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.driver-login-error[hidden]{ display: none; }
 .driver-invalid-icon{
   width: 54px;
   height: 54px;
@@ -236,6 +279,10 @@ html, body.driver-body{
 
 .driver-header{
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 4px 2px 18px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--surface-brd);
@@ -250,6 +297,23 @@ html, body.driver-body{
   color: var(--text-faint);
   margin-top: 2px;
 }
+#driverHeaderName:empty{ display: none; }
+
+/* Only shown in real-login mode (driver.js toggles [hidden] in
+   startDriverApp()) — a token-based driver never sees this. */
+.driver-logout-btn{
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: var(--app-r-pill);
+  background: var(--surface-hi);
+  border: 1px solid var(--surface-brd);
+  color: var(--teal-text);
+  font-size: 12.5px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+.driver-logout-btn[hidden]{ display: none; }
 
 .driver-sheet{
   flex: 1;
@@ -579,6 +643,72 @@ html, body.driver-body{
 }
 .driver-trip-gone-msg[hidden]{ display: none; }
 
+/* ---------------- Push notifications card ----------------
+   Markup: #driverPushBox in driver.html; driver.js's
+   setPushBtn()/setPushMsg() only toggle text, [disabled], `.is-on` on
+   the button and `.is-ok/.is-warn/.is-error` on the message. Sits
+   between the hero card and the trip card, using the same surface /
+   border tokens as they do. */
+.driver-push{
+  margin: 0 0 16px;
+  padding: 14px 16px 12px;
+  border-radius: var(--app-r-lg);
+  background: var(--surface);
+  border: 1.5px solid var(--surface-brd);
+  box-shadow: var(--elev-1);
+}
+.driver-push .driver-push-btn{
+  margin-top: 0;
+  min-height: 50px;
+  font-size: 14.5px;
+  /* Same long-label rule as the trip action buttons: wrap instead of
+     overflowing on 360px screens. */
+  white-space: normal;
+  line-height: 1.25;
+}
+.driver-push .driver-push-btn:disabled{
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: default;
+  transform: none;
+}
+/* Enabled state — quiet success look. Declared after (and more specific
+   than) the generic :disabled rule above so a disabled-but-enabled
+   button reads as "done", not "greyed out". */
+.driver-push .driver-push-btn.is-on:disabled{
+  opacity: 1;
+  background: rgba(22,163,74,0.09);
+  color: var(--success);
+  border: 1.5px solid rgba(22,163,74,0.3);
+}
+.driver-push-msg{
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.7;
+  text-align: center;
+  color: var(--teal-text);
+}
+.driver-push-msg[hidden]{ display: none; }
+.driver-push-msg.is-ok{ color: var(--success); }
+.driver-push-msg.is-warn{ color: var(--orange-text); }
+.driver-push-msg.is-error{ color: var(--danger); }
+/* Raw technical reason (error name/message/code) — LTR, wraps anywhere
+   so a long URL or message never widens the card. */
+.driver-push-detail{
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--surface-hi);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------- Small screens ---------------- */
 @media (max-width: 360px){
   .driver-app{ padding-inline: 14px; }
@@ -586,6 +716,7 @@ html, body.driver-body{
   .driver-trip-list b{ max-width: 48%; }
   .driver-trip-actions-row{ gap: 8px; }
   .driver-trip-actions-row .driver-btn{ font-size: 13px; padding-inline: 6px; }
+  .driver-push{ padding-inline: 12px; }
 }
 
 /* ---------------- Larger screens (tablets) ---------------- */

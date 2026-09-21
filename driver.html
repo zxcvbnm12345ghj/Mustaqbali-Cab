@@ -108,6 +108,17 @@
           <button type="button" class="driver-btn" id="driverToggleBtn">إيقاف مؤقت</button>
         </section>
 
+        <!-- Push notifications (Web Push) — new. Enabling needs a TAP:
+             driver.js never requests notification permission on page
+             load (iOS/Chrome ignore or block prompts that aren't
+             user-initiated). driver.js only changes the button's
+             text/disabled state and fills #driverPushMsg with the
+             current status or the real failure reason. -->
+        <section class="driver-push" id="driverPushBox">
+          <button type="button" class="driver-btn driver-push-btn" id="driverPushBtn">🔔 تفعيل إشعارات الطلبات</button>
+          <p class="driver-push-msg" id="driverPushMsg" role="status" aria-live="polite" hidden></p>
+        </section>
+
         <!-- Current trip (get_driver_current_trip RPC) — same ids as
              before, restructured into an icon-row list for readability. -->
         <section class="driver-trip" id="driverTripBox" hidden>

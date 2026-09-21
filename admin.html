@@ -180,6 +180,83 @@
   .driver-requests-empty{
     padding: 14px; font-size: 12.5px; color: var(--text-faint, #8091A0);
   }
+  /* ============================================================
+     Service boards (تبويب الطلبات) — additive only. One board per
+     service, built from SERVICES in admin.js. Reuses the existing
+     design tokens and .admin-date-input/.admin-btn/.admin-table
+     classes; nothing above is changed.
+     ============================================================ */
+  .svc-tabs{
+    display:flex; align-items:center; gap:6px; flex-wrap:nowrap;
+    overflow-x:auto; padding: 2px 2px 12px; margin-bottom: 6px;
+  }
+  .svc-tab{
+    display:flex; align-items:center; gap:8px; white-space:nowrap;
+    padding: 9px 14px; border-radius: 12px;
+    border: 1px solid var(--surface-brd, rgba(20,50,80,0.14));
+    background: var(--surface, #fff); color: var(--text, #14243a);
+    font-size: 13.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .svc-tab.active{
+    background: var(--teal-dim, rgba(29,111,209,0.12));
+    border-color: var(--teal-text, #1D6FD1);
+    color: var(--teal-text, #1D6FD1);
+  }
+  .svc-badge{
+    min-width: 22px; padding: 1px 7px; border-radius: 100px;
+    background: var(--teal-text, #1D6FD1); color:#fff;
+    font-size: 11.5px; font-weight: 800; text-align:center;
+  }
+  .svc-tab:not(.active) .svc-badge{ background: var(--bg-deep, rgba(20,50,80,0.08)); color: var(--text, #14243a); }
+  .svc-stats{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0 16px;
+  }
+  .svc-stat{
+    background: var(--surface, #fff);
+    border: 1px solid var(--surface-brd, rgba(20,50,80,0.1));
+    border-radius: 16px; padding: 16px 14px; text-align:center;
+  }
+  .svc-stat b{ display:block; font-size: 30px; line-height: 1.15; color: var(--teal-text, #1D6FD1); }
+  .svc-stat.total b{ color: var(--text, #14243a); }
+  .svc-stat span{ display:block; margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--text, #14243a); }
+  .svc-stat small{ display:block; margin-top: 2px; font-size: 11.5px; color: var(--text-faint, #8091A0); min-height: 14px; }
+  @media (max-width: 520px){
+    .svc-stats{ gap: 8px; }
+    .svc-stat{ padding: 12px 6px; border-radius: 14px; }
+    .svc-stat b{ font-size: 24px; }
+    .svc-stat span{ font-size: 12px; }
+  }
+  .svc-controls{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom: 12px;
+  }
+  .svc-controls label{ font-size: 13px; font-weight: 700; }
+  .svc-msg{
+    display:none; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+    font-size: 13px; line-height: 1.6; white-space: pre-line;
+    background: rgba(201,68,53,0.1); border: 1px solid rgba(201,68,53,0.25); color: var(--danger, #C94435);
+  }
+  .svc-msg.show{ display:block; }
+  .svc-msg.ok{ background: rgba(30,142,86,0.1); border-color: rgba(30,142,86,0.25); color: var(--success, #1E8E56); }
+  .svc-msg.info{ background: var(--bg-deep, rgba(20,50,80,0.05)); border-color: var(--surface-brd, rgba(20,50,80,0.14)); color: var(--text, #14243a); }
+  .svc-table-wrap{ overflow-x:auto; }
+  #svcTable th, #svcTable td{ white-space: nowrap; }
+  #svcTable td.svc-check, #svcTable th.svc-check{ width: 34px; text-align:center; }
+  #svcTable td.svc-check input, #svcTable th.svc-check input{ width:16px; height:16px; cursor:pointer; }
+  #svcTable td.svc-dt b{ display:block; font-size: 13.5px; }
+  #svcTable td.svc-dt span{ display:block; font-size: 12px; color: var(--text-faint, #8091A0); }
+  #svcTable td.svc-wrap{ white-space: normal; max-width: 220px; }
+  #svcTable tr.selected{ background: var(--teal-dim, rgba(29,111,209,0.07)); }
+  .svc-delete-bar{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px dashed var(--surface-brd, rgba(20,50,80,0.14));
+  }
+  .svc-delete-bar .svc-delete-label{ font-size: 12.5px; color: var(--text-faint, #8091A0); }
+  .admin-btn.danger-outline{
+    background: transparent; color: var(--danger, #C94435);
+    border: 1px solid rgba(201,68,53,0.35); box-shadow:none;
+  }
+  .admin-btn:disabled{ opacity: .5; cursor: not-allowed; }
 </style>
 </head>
 <body class="admin-body">
@@ -467,6 +544,58 @@
 
     <!-- الطلبات -->
     <div class="admin-tab-panel" id="tabPanel-requests" data-tab-panel="requests">
+      <!-- Service switcher — built from SERVICES in admin.js. Adding a
+           service later = one line in that list, no HTML change. -->
+      <nav class="svc-tabs" id="serviceTabs"></nav>
+
+      <!-- Per-service board: shared skeleton, filled for the active service. -->
+      <div id="serviceBoard">
+        <div class="svc-stats">
+          <div class="svc-stat today"><b id="svcStatToday">0</b><span>طلبات اليوم</span><small></small></div>
+          <div class="svc-stat date"><b id="svcStatDate">0</b><span>طلبات هذا التاريخ</span><small id="svcStatDateLabel"></small></div>
+          <div class="svc-stat total"><b id="svcStatTotal">0</b><span>إجمالي الطلبات</span><small></small></div>
+        </div>
+
+        <div class="svc-controls">
+          <label for="svcDate">التاريخ</label>
+          <input type="date" id="svcDate" class="admin-date-input">
+          <button type="button" class="admin-btn ghost" id="svcTodayBtn" style="width:auto; padding:8px 14px;">اليوم</button>
+          <button type="button" class="admin-btn ghost" id="svcYesterdayBtn" style="width:auto; padding:8px 14px;">أمس</button>
+          <button type="button" class="admin-btn" id="svcRefreshBtn" style="width:auto; padding:8px 16px;">تحديث</button>
+          <button type="button" class="admin-btn danger-outline" id="svcDeleteSelectedBtn" style="width:auto; padding:8px 14px; margin-inline-start:auto;" disabled>حذف المحدد (0)</button>
+        </div>
+
+        <div class="svc-msg" id="svcMsg"></div>
+
+        <div class="admin-table-wrap svc-table-wrap">
+          <table class="admin-table" id="svcTable">
+            <thead>
+              <tr>
+                <th class="svc-check"><input type="checkbox" id="svcSelectAll" aria-label="تحديد الكل"></th>
+                <th>رقم الطلب</th>
+                <th>العميل</th>
+                <th>الجوال</th>
+                <th>من</th>
+                <th>الحالة</th>
+                <th>وقت إنشاء الطلب</th>
+              </tr>
+            </thead>
+            <tbody id="svcBody"></tbody>
+          </table>
+          <div class="admin-empty" id="svcEmpty" style="display:none;"></div>
+          <div class="admin-empty" id="svcLoading" style="display:none;">جارٍ التحميل...</div>
+        </div>
+
+        <div class="svc-delete-bar">
+          <span class="svc-delete-label">حذف الطلبات المكتملة/الملغاة الأقدم من بداية يوم:</span>
+          <input type="date" id="svcPurgeDate" class="admin-date-input">
+          <button type="button" class="admin-btn danger-outline" id="svcPurgeBtn" style="width:auto; padding:8px 14px;">حذف الأقدم</button>
+        </div>
+      </div>
+
+      <!-- كل الطلبات — العرض السابق كما هو (آخر 300 طلب، كل الخدمات) -->
+      <div id="allRequestsView" hidden>
+
     <div class="admin-toolbar">
       <input type="text" class="admin-search" id="searchInput" placeholder="بحث بالاسم، الجوال، أو رقم الطلب...">
       <button type="button" class="admin-filter active" data-status="all">الكل</button>
@@ -496,6 +625,8 @@
       </table>
       <div class="admin-empty" id="emptyState" style="display:none;">لا توجد طلبات مطابقة.</div>
     </div>
+    
+      </div>
     </div>
     <!-- /tabPanel-requests -->
   </div>

@@ -55,6 +55,7 @@ const marketState = {
   myAdsStatus: 'active',
   myAdsRows: { active: [], paused: [], sold: [] },
   myAdsPhone: '',
+  myAdsError: false,    // true when the last get_my_market_listings call failed (≠ "no ads")
   wizardStep: 1,
   photos: [],           // [{file, previewUrl}]
 };
@@ -78,6 +79,46 @@ function getMarketPhone() {
 
 function rememberMarketPhone(phone) {
   try { localStorage.setItem(MARKET_PHONE_KEY, phone); } catch { /* non-critical */ }
+}
+
+// Search text goes into an ILIKE pattern: neutralize the LIKE wildcards (%, _)
+// and the escape character itself (\) so the customer's text always matches
+// literally. The surrounding %…% added by the caller stay real wildcards.
+function escapeMarketLike(text) {
+  return String(text).replace(/[\\%_]/g, '\\$&');
+}
+
+// "Failed to load" state — deliberately different from the "no ads yet" empty
+// state, so a broken connection / backend is never presented as an empty market.
+// Reuses the existing .mkt-empty look and app-btn classes: no HTML/CSS change.
+const MARKET_LOAD_ERROR_TEXT = 'تعذّر تحميل الإعلانات الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.';
+
+function buildMarketLoadError(id, retry) {
+  const el = document.createElement('div');
+  el.className = 'mkt-empty mkt-load-error';
+  el.id = id;
+  el.setAttribute('role', 'alert');
+  el.innerHTML = `<span class="mkt-empty-ic">⚠️</span><p>${MARKET_LOAD_ERROR_TEXT}</p>`;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'app-btn secondary';
+  btn.textContent = 'إعادة المحاولة';
+  btn.addEventListener('click', () => { haptic(); retry(); });
+  el.appendChild(btn);
+  return el;
+}
+
+function clearMarketLoadError(id) {
+  document.getElementById(id)?.remove();
+}
+
+// For grids that have a separate "empty" element: hide it, clear the grid and
+// show the error block right after the grid.
+function showMarketGridLoadError(grid, emptyEl, id, retry) {
+  grid.innerHTML = '';
+  if (emptyEl) emptyEl.hidden = true;
+  clearMarketLoadError(id);
+  grid.insertAdjacentElement('afterend', buildMarketLoadError(id, retry));
 }
 
 /* ============================================================
@@ -205,13 +246,37 @@ function populateMarketCategorySelect() {
 /* ============================================================
    Listings — browse / search
    ============================================================ */
+// FIX (صور إعلانات السوق لا تظهر — image_urls فشل بصمت): <img> الحقيقية
+// كانت بلا onerror، فإن فشل تحميل رابط الصورة (مثلاً رابط Storage غير
+// صالح/محذوف) تبقى فارغة دون بديل. عند الفشل تُستبدل بنفس الحالة
+// الفارغة المستخدمة أصلاً حين لا توجد صورة إطلاقاً (span.mkt-card-img-ph)
+// — لا صورة وهمية، ولا تغيير على image_urls أو طريقة الرفع/التخزين.
+function marketImgFallback(imgEl) {
+  if (!imgEl) return;
+  const ph = document.createElement('span');
+  ph.className = 'mkt-card-img-ph';
+  ph.textContent = '🛍️';
+  imgEl.replaceWith(ph);
+}
+
+// نفس الفكرة لصورة واحدة داخل معرض صور صفحة المنتج (قد تحوي أكثر من
+// صورة) — الصورة الفاشلة فقط تُستبدل بعنصر بديل صغير، بقية صور
+// المعرض (إن وُجدت) تبقى كما هي دون تأثر.
+function marketGalleryImgFallback(imgEl) {
+  if (!imgEl) return;
+  const ph = document.createElement('div');
+  ph.className = 'mkt-gallery-ph';
+  ph.textContent = '🛍️';
+  imgEl.replaceWith(ph);
+}
+
 function renderListingCard(row) {
   marketState.listingsCache[row.id] = row;
   const img = Array.isArray(row.image_urls) && row.image_urls[0];
   return `
     <button type="button" class="mkt-card" data-listing-id="${escapeHtmlAttr(row.id)}">
       <span class="mkt-card-img">
-        ${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy">` : `<span class="mkt-card-img-ph">🛍️</span>`}
+        ${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy" onerror="marketImgFallback(this)">` : `<span class="mkt-card-img-ph">🛍️</span>`}
         ${row.condition === 'new' ? '<span class="mkt-card-tag">جديد</span>' : ''}
       </span>
       <span class="mkt-card-body">
@@ -240,6 +305,7 @@ async function loadMarketLatest() {
   const grid = document.getElementById('mktLatestGrid');
   const empty = document.getElementById('mktLatestEmpty');
   if (!grid || !empty) return;
+  clearMarketLoadError('mktLatestGridError');
   try {
     const { data, error } = await supabaseClient
       .from('market_listings')
@@ -247,7 +313,8 @@ async function loadMarketLatest() {
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(12);
-    if (error || !data || data.length === 0) {
+    if (error) throw error;
+    if (!data || data.length === 0) {
       grid.innerHTML = '';
       empty.hidden = false;
       return;
@@ -257,8 +324,7 @@ async function loadMarketLatest() {
     wireListingCards(grid, data);
   } catch (err) {
     console.error('loadMarketLatest failed', err);
-    grid.innerHTML = '';
-    empty.hidden = false;
+    showMarketGridLoadError(grid, empty, 'mktLatestGridError', loadMarketLatest);
   }
 }
 
@@ -266,14 +332,16 @@ async function loadCategoryListings() {
   const grid = document.getElementById('mktCatGrid');
   const empty = document.getElementById('mktCatEmpty');
   if (!grid || !empty) return;
+  clearMarketLoadError('mktCatGridError');
   grid.innerHTML = '<div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>';
   empty.hidden = true;
   try {
     let query = supabaseClient.from('market_listings').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(60);
     if (marketState.currentCategoryKey) query = query.eq('category_key', marketState.currentCategoryKey);
-    if (marketState.currentSearch) query = query.ilike('title', `%${marketState.currentSearch}%`);
+    if (marketState.currentSearch) query = query.ilike('title', `%${escapeMarketLike(marketState.currentSearch)}%`);
     const { data, error } = await query;
-    if (error || !data || data.length === 0) {
+    if (error) throw error;
+    if (!data || data.length === 0) {
       grid.innerHTML = '';
       empty.hidden = false;
       return;
@@ -282,8 +350,7 @@ async function loadCategoryListings() {
     wireListingCards(grid, data);
   } catch (err) {
     console.error('loadCategoryListings failed', err);
-    grid.innerHTML = '';
-    empty.hidden = false;
+    showMarketGridLoadError(grid, empty, 'mktCatGridError', loadCategoryListings);
   }
 }
 
@@ -304,7 +371,7 @@ function renderMarketProduct(row) {
   const gallery = document.getElementById('mktProductGallery');
   const images = Array.isArray(row.image_urls) && row.image_urls.length ? row.image_urls : [];
   gallery.innerHTML = images.length
-    ? `<div class="mkt-gallery-track">${images.map((u) => `<img src="${escapeHtmlAttr(u)}" alt="" loading="lazy">`).join('')}</div>`
+    ? `<div class="mkt-gallery-track">${images.map((u) => `<img src="${escapeHtmlAttr(u)}" alt="" loading="lazy" onerror="marketGalleryImgFallback(this)">`).join('')}</div>`
     : `<div class="mkt-gallery-ph">🛍️</div>`;
 
   document.getElementById('mktProductTitle').textContent = row.title || '—';
@@ -390,20 +457,20 @@ async function loadMyAds() {
   if (!list || !marketState.myAdsPhone) return;
   list.innerHTML = '<div class="qs-skel"></div><div class="qs-skel"></div>';
   empty.hidden = true;
+  marketState.myAdsError = false;
   try {
     const { data, error } = await supabaseClient.rpc('get_my_market_listings', { p_phone: marketState.myAdsPhone });
-    if (error || !data) {
-      marketState.myAdsRows = { active: [], paused: [], sold: [] };
-    } else {
-      marketState.myAdsRows = {
-        active: data.filter((r) => r.status === 'active'),
-        paused: data.filter((r) => r.status === 'paused'),
-        sold: data.filter((r) => r.status === 'sold'),
-      };
-    }
+    if (error) throw error;
+    const rows = data || [];
+    marketState.myAdsRows = {
+      active: rows.filter((r) => r.status === 'active'),
+      paused: rows.filter((r) => r.status === 'paused'),
+      sold: rows.filter((r) => r.status === 'sold'),
+    };
   } catch (err) {
     console.error('loadMyAds failed', err);
     marketState.myAdsRows = { active: [], paused: [], sold: [] };
+    marketState.myAdsError = true;
   }
   renderMyAdsList();
 }
@@ -412,6 +479,12 @@ function renderMyAdsList() {
   const list = document.getElementById('mktMyAdsList');
   const empty = document.getElementById('mktMyAdsEmpty');
   if (!list) return;
+  if (marketState.myAdsError) {
+    list.innerHTML = '';
+    if (empty) empty.hidden = true;
+    list.appendChild(buildMarketLoadError('mktMyAdsListError', loadMyAds));
+    return;
+  }
   const rows = marketState.myAdsRows[marketState.myAdsStatus] || [];
   if (rows.length === 0) {
     list.innerHTML = '';
@@ -423,7 +496,7 @@ function renderMyAdsList() {
     const img = Array.isArray(row.image_urls) && row.image_urls[0];
     return `
     <div class="mkt-myad-card" data-listing-id="${escapeHtmlAttr(row.id)}">
-      <span class="mkt-myad-img">${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy">` : '<span class="mkt-card-img-ph">🛍️</span>'}</span>
+      <span class="mkt-myad-img">${img ? `<img src="${escapeHtmlAttr(img)}" alt="" loading="lazy" onerror="marketImgFallback(this)">` : '<span class="mkt-card-img-ph">🛍️</span>'}</span>
       <span class="mkt-myad-body">
         <b>${escapeHtml(row.title)}</b>
         <span class="mkt-myad-price">${formatIQD(row.price)}</span>
@@ -609,15 +682,35 @@ function renderMarketConfirmCard() {
   `;
 }
 
+// Any photo that fails to upload (or comes back without a public URL) aborts the
+// whole publish: the caller never reaches create_market_listing, so an ad is never
+// published with fewer photos than the seller chose, and the seller is told.
+function marketPhotoUploadError(cause) {
+  const err = new Error('market photo upload failed');
+  err.code = 'MARKET_PHOTO_UPLOAD';
+  err.cause = cause;
+  return err;
+}
+
 async function uploadMarketPhotos() {
   const urls = [];
   for (const p of marketState.photos) {
     const ext = (p.file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabaseClient.storage.from('market-images').upload(path, p.file, { upsert: false });
-    if (error) { console.error('market photo upload failed', error); continue; }
+    let uploadError = null;
+    try {
+      const { error } = await supabaseClient.storage.from('market-images').upload(path, p.file, { upsert: false });
+      uploadError = error || null;
+    } catch (err) {
+      uploadError = err;
+    }
+    if (uploadError) {
+      console.error('market photo upload failed', uploadError);
+      throw marketPhotoUploadError(uploadError);
+    }
     const { data: pub } = supabaseClient.storage.from('market-images').getPublicUrl(path);
-    if (pub?.publicUrl) urls.push(pub.publicUrl);
+    if (!pub?.publicUrl) throw marketPhotoUploadError(new Error('no public URL for uploaded photo'));
+    urls.push(pub.publicUrl);
   }
   return urls;
 }
@@ -663,8 +756,13 @@ async function handleMarketAddSubmit(e) {
     sheet.setSnap('full');
     haptic();
   } catch (err) {
-    console.error('create_market_listing failed', err);
-    msg.textContent = 'تعذّر نشر الإعلان، يرجى المحاولة مرة أخرى.';
+    if (err && err.code === 'MARKET_PHOTO_UPLOAD') {
+      console.error('market publish aborted — photo upload failed', err);
+      msg.textContent = 'فشل رفع الصور، لذلك لم يُنشر إعلانك. تحقق من اتصالك ثم أعد المحاولة، أو أزل الصور وانشر الإعلان بدونها.';
+    } else {
+      console.error('create_market_listing failed', err);
+      msg.textContent = 'تعذّر نشر الإعلان، يرجى المحاولة مرة أخرى.';
+    }
     msg.classList.add('show', 'err');
   } finally {
     submitBtn.disabled = !document.getElementById('mktConsentCheck').checked;

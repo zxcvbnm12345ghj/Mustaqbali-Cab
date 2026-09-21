@@ -145,6 +145,8 @@ async function handleLogout() {
   await supabaseClient.auth.signOut();
   state.session = null;
   state.requests = [];
+  boardState.rows = [];
+  boardState.selected.clear();
   document.getElementById('adminShell').classList.remove('active');
   document.getElementById('adminLogin').style.display = 'flex';
 }
@@ -830,6 +832,7 @@ async function loadRequests() {
   state.requests = data || [];
   updateStats(state.requests);
   renderTable();
+  refreshServiceBoard(); // per-service boards (see "Service boards" section)
 }
 
 function updateStats(rows) {
@@ -978,7 +981,7 @@ async function populateDriverAssignSelect(currentPhone) {
    Detail modal
    ============================================================ */
 async function openDetail(id) {
-  const r = state.requests.find(x => x.id === id);
+  const r = findRequestById(id);
   if (!r) return;
   state.selectedId = id;
 
@@ -1075,7 +1078,7 @@ async function saveDriver() {
   const eta_minutes = etaNum === null ? null : Math.min(999, Math.max(0, Math.round(etaNum)));
 
   // Assigning a driver to a "new" request moves it to "assigned" automatically.
-  const current = state.requests.find(r => r.id === state.selectedId);
+  const current = findRequestById(state.selectedId);
   const nextStatus = (current && current.status === 'new' && driver_name) ? 'assigned' : current?.status;
 
   const { error } = await supabaseClient
@@ -1093,7 +1096,7 @@ async function saveDriver() {
   }
   showAdminError(null);
   await loadRequests();
-  const refreshed = state.requests.find(r => r.id === state.selectedId);
+  const refreshed = findRequestById(state.selectedId);
   if (refreshed) openDetail(refreshed.id);
   // Driver assignment can change which driver a request counts toward —
   // refresh the stats table so the numbers stay accurate. Non-blocking:
@@ -1115,7 +1118,7 @@ async function updateStatus(newStatus) {
   }
   showAdminError(null);
   await loadRequests();
-  const refreshed = state.requests.find(r => r.id === state.selectedId);
+  const refreshed = findRequestById(state.selectedId);
   if (refreshed) openDetail(refreshed.id);
 }
 
@@ -1605,6 +1608,432 @@ async function savePlace() {
 }
 
 /* ============================================================
+   Service boards — لوحة طلبات منفصلة لكل خدمة (تبويب "الطلبات")
+
+   Additive module. Reads/deletes trip_requests only through the
+   existing supabaseClient; no schema change, no new service_type,
+   no RPC touched. Everything the rest of this file uses
+   (state.requests, loadRequests, openDetail, polling) is unchanged
+   apart from tiny hooks:
+     - loadRequests() calls refreshServiceBoard() when it finishes
+       (so polling / status changes / driver saves refresh the board)
+     - openDetail()/saveDriver()/updateStatus() look a request up via
+       findRequestById(), which also finds rows only the board loaded
+       (e.g. requests older than the latest-300 set).
+
+   Counters are real database counts (head:true, count:'exact') per
+   service + local calendar day — NOT computed from state.requests.
+
+   To add a service later: flip `enabled: true` on its line below.
+   ============================================================ */
+const SERVICES = [
+  { key: 'taxi',      icon: '🚕', label: 'التاكسي',       enabled: true },
+  { key: 'courier',   icon: '🛵', label: 'الدليفري',      enabled: true },
+  { key: 'private',   icon: '🚘', label: 'الخصوصي',      enabled: true },
+  { key: 'starx',     icon: '🚐', label: 'نقل نفرات',     enabled: false },
+  { key: 'cargo',     icon: '📦', label: 'شحن أو حمل',    enabled: false },
+  { key: 'intercity', icon: '🛣️', label: 'بين المحافظات', enabled: false },
+];
+const BOARD_ROW_LIMIT = 500;                       // max rows shown for one service + one day
+const BOARD_PURGE_STATUSES = ['completed', 'cancelled']; // "delete older" never touches live requests
+const BOARD_DELETE_CHUNK = 50;                     // ids per delete request (keeps URLs short)
+
+const boardState = {
+  active: null,        // service key, or 'all' for the previous all-requests view
+  date: null,          // 'YYYY-MM-DD' (local calendar day)
+  rows: [],            // rows of the active service on the selected date
+  dateCount: 0,        // real count for that date (can exceed rows.length)
+  totalCount: 0,
+  todayCounts: {},     // service key -> today's count
+  selected: new Set(), // ids ticked for deletion
+  loadToken: 0,        // drops out-of-order responses
+  busy: false,
+};
+
+function enabledServices() { return SERVICES.filter(s => s.enabled); }
+function boardService(key) { return SERVICES.find(s => s.key === key) || null; }
+
+// state.requests first (latest 300), then whatever the board loaded.
+function findRequestById(id) {
+  return state.requests.find(r => r.id === id)
+    || boardState.rows.find(r => r.id === id)
+    || null;
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// Created-at split into a clock time and a date, in the admin's local time.
+function formatDateTimeParts(iso) {
+  if (!iso) return { date: '—', time: '', full: '' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: String(iso), time: '', full: '' };
+  const date = `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const h24 = d.getHours();
+  const time = `${pad2(h24 % 12 || 12)}:${pad2(d.getMinutes())} ${h24 >= 12 ? 'م' : 'ص'}`;
+  const full = `${date} ${time}:${pad2(d.getSeconds())}`;
+  return { date, time, full };
+}
+
+function dateStrToDisplay(dateStr) {
+  const [y, m, d] = String(dateStr).split('-');
+  return (y && m && d) ? `${d}/${m}/${y}` : String(dateStr || '');
+}
+
+function shiftDateStr(dateStr, deltaDays) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + deltaDays);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// kind: 'error' | 'ok' | 'info' | falsy to hide.
+// source: 'action' (delete results etc. — stays until the admin changes
+// tab/date or refreshes) or 'auto' (row-limit note / load error — cleared
+// by the next successful automatic refresh, never overwriting an 'action').
+function showBoardMsg(text, kind, source) {
+  const el = document.getElementById('svcMsg');
+  if (!el) return;
+  el.classList.remove('show', 'ok', 'info');
+  el.dataset.source = '';
+  if (!text) { el.textContent = ''; return; }
+  el.textContent = text;
+  el.dataset.source = source || 'action';
+  el.classList.add('show');
+  if (kind === 'ok') el.classList.add('ok');
+  if (kind === 'info') el.classList.add('info');
+}
+function clearAutoBoardMsg() {
+  const el = document.getElementById('svcMsg');
+  if (el && el.dataset.source === 'auto') showBoardMsg(null);
+}
+function canShowAutoBoardMsg() {
+  const el = document.getElementById('svcMsg');
+  return !el || el.dataset.source !== 'action' || !el.classList.contains('show');
+}
+
+// Exact count for one service; with dateStr → only that local day.
+async function countServiceRequests(key, dateStr) {
+  let q = supabaseClient
+    .from('trip_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('service_type', key);
+  if (dateStr) {
+    const { startIso, endIso } = dayBoundsIso(dateStr);
+    q = q.gte('created_at', startIso).lt('created_at', endIso);
+  }
+  const { count, error } = await q;
+  if (error) { console.error(error); return null; }
+  return count ?? 0;
+}
+
+async function loadTodayCounts() {
+  const today = todayDateStr();
+  const list = enabledServices();
+  const counts = await Promise.all(list.map(s => countServiceRequests(s.key, today)));
+  list.forEach((s, i) => { if (counts[i] !== null) boardState.todayCounts[s.key] = counts[i]; });
+  renderTabBadges();
+}
+
+function renderTabBadges() {
+  document.querySelectorAll('[data-svc-badge]').forEach(el => {
+    const n = boardState.todayCounts[el.dataset.svcBadge];
+    el.textContent = (n === undefined) ? '…' : n;
+  });
+}
+
+function setBoardLoading(on) {
+  const el = document.getElementById('svcLoading');
+  if (el) el.style.display = on ? 'block' : 'none';
+}
+
+async function refreshServiceBoard() {
+  if (!document.getElementById('serviceBoard')) return;
+  if (!state.session) return;
+
+  if (boardState.active === 'all' || !boardService(boardState.active)) {
+    loadTodayCounts(); // keep the tab badges fresh even while viewing "all"
+    return;
+  }
+
+  const token = ++boardState.loadToken;
+  const key = boardState.active;
+  const date = boardState.date;
+  const { startIso, endIso } = dayBoundsIso(date);
+
+  setBoardLoading(true);
+  const [rowsRes, totalCount] = await Promise.all([
+    supabaseClient
+      .from('trip_requests')
+      .select('*', { count: 'exact' })
+      .eq('service_type', key)
+      .gte('created_at', startIso)
+      .lt('created_at', endIso)
+      .order('created_at', { ascending: false })
+      .limit(BOARD_ROW_LIMIT),
+    countServiceRequests(key, null),
+    loadTodayCounts(),
+  ]);
+  if (token !== boardState.loadToken) return; // a newer refresh superseded this one
+  setBoardLoading(false);
+
+  if (rowsRes.error) {
+    console.error(rowsRes.error);
+    boardState.rows = [];
+    boardState.dateCount = 0;
+    if (canShowAutoBoardMsg()) showBoardMsg('تعذّر تحميل الطلبات. تأكد من صلاحيات حسابك.', 'error', 'auto');
+    renderServiceBoard();
+    return;
+  }
+
+  boardState.rows = rowsRes.data || [];
+  boardState.dateCount = rowsRes.count ?? boardState.rows.length;
+  boardState.totalCount = totalCount ?? boardState.totalCount;
+
+  // Keep ticks only for rows that are still on screen.
+  const visible = new Set(boardState.rows.map(r => r.id));
+  boardState.selected = new Set([...boardState.selected].filter(id => visible.has(id)));
+
+  if (boardState.dateCount > boardState.rows.length) {
+    if (canShowAutoBoardMsg()) showBoardMsg(`يُعرض أحدث ${boardState.rows.length} طلب من أصل ${boardState.dateCount} في هذا التاريخ. الأرقام أعلاه هي العدد الحقيقي.`, 'info', 'auto');
+  } else {
+    clearAutoBoardMsg();
+  }
+  renderServiceBoard();
+}
+
+function renderServiceBoard() {
+  const svc = boardService(boardState.active);
+  if (!svc) return;
+
+  const today = todayDateStr();
+  const todayN = boardState.todayCounts[svc.key];
+  document.getElementById('svcStatToday').textContent = (todayN === undefined) ? '…' : todayN;
+  document.getElementById('svcStatDate').textContent = boardState.dateCount;
+  document.getElementById('svcStatDateLabel').textContent =
+    dateStrToDisplay(boardState.date) + (boardState.date === today ? ' (اليوم)' : '');
+  document.getElementById('svcStatTotal').textContent = boardState.totalCount;
+
+  const body = document.getElementById('svcBody');
+  const empty = document.getElementById('svcEmpty');
+  const rows = boardState.rows;
+
+  if (rows.length === 0) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = `لا توجد طلبات ${svc.label} بتاريخ ${dateStrToDisplay(boardState.date)}.`;
+  } else {
+    empty.style.display = 'none';
+    body.innerHTML = rows.map(r => {
+      const dt = formatDateTimeParts(r.created_at);
+      const checked = boardState.selected.has(r.id);
+      return `
+        <tr class="clickable${checked ? ' selected' : ''}" data-id="${escapeAttr(r.id)}">
+          <td class="svc-check"><input type="checkbox" data-select-id="${escapeAttr(r.id)}" aria-label="تحديد الطلب"${checked ? ' checked' : ''}></td>
+          <td>${escapeHtml(r.request_number || r.id.slice(0, 8))}</td>
+          <td>${escapeHtml(r.customer_name)}</td>
+          <td>${escapeHtml(r.phone)}</td>
+          <td class="svc-wrap">${escapeHtml(r.pickup_location)}</td>
+          <td><span class="status-pill ${escapeAttr(r.status)}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
+          <td class="svc-dt" title="${escapeAttr(dt.full)}"><b>${escapeHtml(dt.time)}</b><span>${escapeHtml(dt.date)}</span></td>
+        </tr>`;
+    }).join('');
+  }
+  updateBoardSelectionUi();
+}
+
+function updateBoardSelectionUi() {
+  const n = boardState.selected.size;
+  const btn = document.getElementById('svcDeleteSelectedBtn');
+  if (btn) {
+    btn.textContent = `حذف المحدد (${n})`;
+    btn.disabled = boardState.busy || n === 0;
+  }
+  const purge = document.getElementById('svcPurgeBtn');
+  if (purge) purge.disabled = boardState.busy;
+  const all = document.getElementById('svcSelectAll');
+  if (all) {
+    const total = boardState.rows.length;
+    all.checked = total > 0 && n === total;
+    all.indeterminate = n > 0 && n < total;
+  }
+}
+
+function selectService(key) {
+  boardState.active = key;
+  boardState.selected.clear();
+  showBoardMsg(null);
+
+  document.querySelectorAll('.svc-tab').forEach(b => b.classList.toggle('active', b.dataset.svc === key));
+  const isAll = (key === 'all');
+  document.getElementById('serviceBoard').hidden = isAll;
+  document.getElementById('allRequestsView').hidden = !isAll;
+
+  if (!isAll) {
+    boardState.rows = [];
+    boardState.dateCount = 0;
+    boardState.totalCount = 0;
+    renderServiceBoard();
+  }
+  refreshServiceBoard();
+}
+
+function setBoardDate(dateStr) {
+  if (!dateStr) return;
+  boardState.date = dateStr;
+  boardState.selected.clear();
+  showBoardMsg(null);
+  const input = document.getElementById('svcDate');
+  if (input) input.value = dateStr;
+  refreshServiceBoard();
+}
+
+/* ---------- Deletion ---------- */
+// Reports honestly what happened. Supabase/RLS silently deletes 0 rows
+// (no error) when the admin has no DELETE policy, so we compare the rows
+// actually returned with what was requested.
+function reportBoardDelete(deleted, requested) {
+  if (deleted === 0) {
+    showBoardMsg('لم يُحذف أي طلب. غالباً حسابك لا يملك صلاحية الحذف على جدول الطلبات (RLS) — راجع ملف SQL المقترح قبل تنفيذه.', 'error');
+  } else if (deleted < requested) {
+    showBoardMsg(`تم حذف ${deleted} من أصل ${requested} طلب. الباقي لم يُحذف (صلاحيات أو قيود في قاعدة البيانات).`, 'error');
+  } else {
+    showBoardMsg(`تم حذف ${deleted} طلب.`, 'ok');
+  }
+}
+
+async function afterBoardDelete() {
+  boardState.selected.clear();
+  await loadRequests(); // refreshes state.requests and (via hook) the board
+  loadDriverStats(driverStatsState.selectedDate); // driver day-counts derive from trip_requests
+}
+
+async function deleteSelectedRequests() {
+  const ids = [...boardState.selected];
+  if (ids.length === 0 || boardState.busy) return;
+
+  const live = ids.map(findRequestById).filter(r => r && !BOARD_PURGE_STATUSES.includes(r.status)).length;
+  let msg = `سيتم حذف ${ids.length} طلب نهائياً ولا يمكن التراجع عن ذلك.`;
+  if (live > 0) msg += `\n\nتنبيه: ${live} منها ما زالت قيد المعالجة (ليست مكتملة أو ملغاة).`;
+  if (!window.confirm(msg)) return;
+
+  boardState.busy = true;
+  updateBoardSelectionUi();
+  let deleted = 0;
+  try {
+    for (let i = 0; i < ids.length; i += BOARD_DELETE_CHUNK) {
+      const chunk = ids.slice(i, i + BOARD_DELETE_CHUNK);
+      const { data, error } = await supabaseClient
+        .from('trip_requests')
+        .delete()
+        .in('id', chunk)
+        .select('id');
+      if (error) throw error;
+      deleted += (data || []).length;
+    }
+    reportBoardDelete(deleted, ids.length);
+  } catch (err) {
+    console.error(err);
+    showBoardMsg('تعذّر الحذف: ' + (err.message || err) + (deleted ? `\n(تم حذف ${deleted} قبل الخطأ)` : ''), 'error');
+  } finally {
+    boardState.busy = false;
+    await afterBoardDelete();
+  }
+}
+
+// Deletes finished (completed/cancelled) requests of the ACTIVE service that
+// were created before the start of the chosen day. Live requests are never
+// touched by this button.
+async function purgeOldRequests() {
+  if (boardState.busy) return;
+  const svc = boardService(boardState.active);
+  const dateStr = document.getElementById('svcPurgeDate').value;
+  if (!svc) return;
+  if (!dateStr) { showBoardMsg('اختر التاريخ أولاً.', 'error'); return; }
+
+  const { startIso } = dayBoundsIso(dateStr);
+  const { count, error: countErr } = await supabaseClient
+    .from('trip_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('service_type', svc.key)
+    .in('status', BOARD_PURGE_STATUSES)
+    .lt('created_at', startIso);
+  if (countErr) { console.error(countErr); showBoardMsg('تعذّر حساب الطلبات: ' + countErr.message, 'error'); return; }
+  if (!count) { showBoardMsg(`لا توجد طلبات ${svc.label} مكتملة/ملغاة قبل ${dateStrToDisplay(dateStr)}.`, 'info'); return; }
+
+  const msg = `سيتم حذف ${count} طلب (مكتمل/ملغى) من «${svc.label}» أُنشئت قبل ${dateStrToDisplay(dateStr)} نهائياً ولا يمكن التراجع عن ذلك.\n\nالطلبات غير المكتملة لن تُحذف.`;
+  if (!window.confirm(msg)) return;
+
+  boardState.busy = true;
+  updateBoardSelectionUi();
+  try {
+    const { data, error } = await supabaseClient
+      .from('trip_requests')
+      .delete()
+      .eq('service_type', svc.key)
+      .in('status', BOARD_PURGE_STATUSES)
+      .lt('created_at', startIso)
+      .select('id');
+    if (error) throw error;
+    reportBoardDelete((data || []).length, count);
+  } catch (err) {
+    console.error(err);
+    showBoardMsg('تعذّر الحذف: ' + (err.message || err), 'error');
+  } finally {
+    boardState.busy = false;
+    await afterBoardDelete();
+  }
+}
+
+function initServiceBoards() {
+  const tabs = document.getElementById('serviceTabs');
+  if (!tabs || !document.getElementById('serviceBoard')) return;
+
+  boardState.date = todayDateStr();
+  boardState.active = enabledServices()[0]?.key || 'all';
+
+  tabs.innerHTML = enabledServices().map(s => `
+    <button type="button" class="svc-tab" data-svc="${escapeAttr(s.key)}">
+      <span>${escapeHtml(s.icon)} ${escapeHtml(s.label)}</span>
+      <span class="svc-badge" data-svc-badge="${escapeAttr(s.key)}">…</span>
+    </button>`).join('') + `
+    <button type="button" class="svc-tab" data-svc="all"><span>📋 كل الطلبات</span></button>`;
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-svc]');
+    if (btn) selectService(btn.dataset.svc);
+  });
+
+  document.getElementById('svcDate').value = boardState.date;
+  document.getElementById('svcPurgeDate').value = shiftDateStr(boardState.date, -30);
+  document.getElementById('svcDate').addEventListener('change', (e) => setBoardDate(e.target.value));
+  document.getElementById('svcTodayBtn').addEventListener('click', () => setBoardDate(todayDateStr()));
+  document.getElementById('svcYesterdayBtn').addEventListener('click', () => setBoardDate(shiftDateStr(todayDateStr(), -1)));
+  document.getElementById('svcRefreshBtn').addEventListener('click', () => { showBoardMsg(null); refreshServiceBoard(); });
+  document.getElementById('svcDeleteSelectedBtn').addEventListener('click', deleteSelectedRequests);
+  document.getElementById('svcPurgeBtn').addEventListener('click', purgeOldRequests);
+
+  document.getElementById('svcSelectAll').addEventListener('change', (e) => {
+    boardState.selected = e.target.checked ? new Set(boardState.rows.map(r => r.id)) : new Set();
+    renderServiceBoard();
+  });
+
+  const body = document.getElementById('svcBody');
+  body.addEventListener('change', (e) => {
+    const box = e.target.closest('input[data-select-id]');
+    if (!box) return;
+    if (box.checked) boardState.selected.add(box.dataset.selectId);
+    else boardState.selected.delete(box.dataset.selectId);
+    box.closest('tr')?.classList.toggle('selected', box.checked);
+    updateBoardSelectionUi();
+  });
+  body.addEventListener('click', (e) => {
+    if (e.target.closest('.svc-check')) return; // ticking a box must not open the modal
+    const tr = e.target.closest('tr[data-id]');
+    if (tr) openDetail(tr.dataset.id);
+  });
+
+  selectService(boardState.active);
+}
+
+/* ============================================================
    Init
    ============================================================ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1651,6 +2080,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.admin-status-actions button').forEach(b => {
     b.addEventListener('click', () => updateStatus(b.dataset.status));
   });
+  initServiceBoards();
   document.getElementById('searchInput').addEventListener('input', (e) => {
     state.searchTerm = e.target.value.trim();
     renderTable();

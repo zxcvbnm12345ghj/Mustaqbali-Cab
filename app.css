@@ -1783,14 +1783,31 @@ body.kb-open .sheet{ transition: none; }
    class app.js toggles (.active on .bnav-item) is unchanged — only
    the visual shell changes.
    ============================================================ */
-:root{ --bnav-h: 78px; }
+/* --bnav-h is the height of the tab row ALONE, i.e. WITHOUT the home-
+   indicator inset — every consumer (.sheet-scroll's padding-bottom below,
+   the in-app / PWA-install cards in app.js) adds env(safe-area-inset-bottom)
+   itself. .bottom-nav's total height is therefore exactly
+   --bnav-h + env(safe-area-inset-bottom), and nothing else.
+   (Was 78px while the bar was really 66px + TWO insets tall — see the
+   box-sizing note on .bottom-nav.) */
+:root{ --bnav-h: 66px; }
 .bottom-nav{
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: 50;
   display:flex; align-items:stretch;
-  height: calc(66px + env(safe-area-inset-bottom));
-  padding: 0 4px calc(env(safe-area-inset-bottom));
+  /* FIX (white strip under the tab row on iPhone): this project has no
+     global box-sizing reset, so with the default content-box the
+     `height` below did NOT include the padding-bottom or the 1px border —
+     the inset was counted twice (height: 66px + inset, PLUS
+     padding-bottom: inset) and the bar came out 67px + 2 x inset tall
+     (135px instead of 100px with a 34px inset): an extra blank band
+     under the icons. border-box makes `height` the true total. */
+  box-sizing: border-box;
+  height: calc(var(--bnav-h) + env(safe-area-inset-bottom));
+  /* bottom = the home-indicator zone, painted by this same bar; sides
+     respect the notch/rounded corners in landscape (never less than 4px). */
+  padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
   border-radius: var(--app-r-lg) var(--app-r-lg) 0 0;
   background: rgba(243,248,247,0.97);
   backdrop-filter: blur(24px);
@@ -5234,3 +5251,1336 @@ html, body.app-body{ background: var(--bg-deep); }
    selectService() أصلاً — CSS فقط، بلا JS ولا تغيير في الوصف الحالي. ---- */
 .sec-intro-svc{ display:none; margin: -6px 0 var(--sp-4); }
 .sheet-view[data-view="booking"][data-current-step="1"]:has(.svc-pill.active[data-service="courier"]) .svc-switch-wrap.is-focused ~ .sec-intro-svc{ display:flex; }
+
+/* =====================================================================
+   HOME SCREEN REDESIGN — customer-UI task (see chat).
+   Appended at the end of the file on purpose: everything below wins the
+   cascade over the older, conflicting home-screen rules above (several
+   earlier .quick-services/.qs-row/.home-columns blocks accumulated from
+   past patches and fought each other — this block is the single source
+   of truth for the home screen going forward instead of one more patch
+   layered on top of them).
+
+   Root cause of "services don't scroll / feel stuck": the home screen
+   squeezed the 6 services into a narrow, sticky-positioned column
+   (.home-col-services{ position:sticky }) sitting inside a flex-row
+   two-column layout (.home-columns{ flex-direction:row }), packed next
+   to a second column (.home-col-more) that only ever holds a hidden
+   button. On real phone widths those compact vertical mini-cards had
+   almost no room, and the sticky column fought the scroll container
+   for its own scroll position — which reads as "not moving" even
+   though .sheet-scroll itself was scrollable the whole time.
+
+   Fix: drop the two-column split and the sticky column entirely. Home
+   is now one normal, full-width, block-level column that scrolls
+   inside the existing .sheet-scroll (untouched — still the same
+   overflow-y:auto/touch-action:pan-y from earlier in this file), with
+   the map given more height and the 6 services as full-width cards.
+   No id, class, or app.js function is removed — #quickServices,
+   .qs-row, data-service, .home-col-more, #marketBannerBtn all still
+   exist in the DOM exactly as before; this only changes how they lay
+   out and look.
+   ===================================================================== */
+
+/* ---- Brand palette: purple + green + orange + gold ----
+   Added alongside the existing tokens (nothing removed, so any screen
+   not covered by this pass — wizard steps, profile, market, status
+   tracking — keeps working exactly as it does today) and used below
+   for the home screen's primary accents. */
+:root{
+  --purple: #6D28D9;
+  --purple-soft: #9F67F2;
+  --purple-text: #4C1D95;
+  --purple-dim: rgba(109,40,217,0.13);
+  --brand-grad-home: linear-gradient(135deg, var(--purple) 0%, #8B5CF6 45%, var(--green, #22C55E) 100%);
+}
+
+/* ---- Bigger map ---- */
+:root{ --app-map-h: clamp(340px, 50vh, 520px); }
+@media (max-height: 700px){
+  :root{ --app-map-h: clamp(280px, 40vh, 420px); }
+}
+
+/* ---- Home view: single column, normal scroll, no fixed heights ---- */
+.home-columns{
+  flex-direction: column;
+}
+.home-col{
+  width: 100%;
+  flex: none;
+}
+/* The "more" column has no visible content on Home today
+   (#marketBannerBtn stays a hidden functional proxy — see the HTML
+   comment by that button) — hiding its now-empty wrapper instead of
+   leaving a decorative panel with nothing inside it. The button itself
+   keeps working exactly as before; only its empty visual shell here
+   is hidden. */
+.home-col-more{
+  display: none;
+}
+.home-col-services{
+  position: static;
+  top: auto;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.home-col-services .section-label::before{
+  background: linear-gradient(90deg, var(--purple), var(--green, #22C55E));
+}
+
+.discover-banner{
+  background: var(--brand-grad-home);
+}
+
+/* ---- Service cards: one full-width, clearly separate card per
+   service, stacked top to bottom — no swipe/drag needed, everything
+   is visible by scrolling the page normally. ---- */
+.quick-services{
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.qs-row{
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--sp-4);
+  width: 100%;
+  padding: 14px 16px;
+  text-align: start;
+  border-radius: 20px 20px 20px 8px;
+}
+.qs-row-ic{ width: 56px; height: 56px; }
+.qs-row-ic svg{ width: 32px; height: 32px; }
+.qs-row-photo{ width: 48px; height: 48px; }
+.qs-row-label{
+  flex: 1 1 auto;
+  align-items: flex-start;
+  text-align: start;
+  gap: 3px;
+  min-width: 0;
+}
+.qs-row-label b{ font-size: 14.5px; }
+.qs-row-label span{ font-size: 12px; }
+.qs-row-chev{
+  display: flex;
+  margin-inline-start: auto;
+}
+.qs-row::before{
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  height: auto;
+  width: 4px;
+  transform: none;
+  border-radius: 4px 0 0 4px;
+}
+
+.qs-skel{ height: 84px; border-radius: 20px 20px 20px 8px; }
+
+/* Make sure the very last card never sits flush against the bottom
+   nav — .sheet-scroll already reserves --bnav-h in its padding-bottom
+   (unchanged, earlier in this file), this just adds a little breathing
+   room after the last card specifically. */
+.quick-services{ margin-bottom: var(--sp-5); }
+
+/* Home-screen accents restyled to the purple/green/orange/gold
+   palette (booking wizard, profile, market and status screens are
+   untouched — out of scope for this pass). */
+.home-fixed .where-to svg{
+  background: linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
+}
+.where-to.expanded{ border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-dim); }
+.map-search-pill, .map-avatar-btn{ color: var(--purple-text); }
+.recenter-fab svg{ color: var(--purple); }
+
+/* =========================================================================
+   ========  CUSTOMER UI REDESIGN — unified identity, all non-home screens  ===
+   =========================================================================
+   Purple (primary) + green (success / live / positive) + orange (offers,
+   market highlights) + gold (ratings, badges, current-step glow) — the same
+   identity the home screen already uses (see "HOME SCREEN REDESIGN" above).
+
+   Rules of this layer (same convention as every pass in this file):
+   - appended at the very end; nothing above is edited, removed or reordered;
+   - CSS only: no id / class / data-attribute / hook is added, renamed or
+     removed, and no app.js / config.js / Supabase / RPC / order / GPS / map
+     logic is touched (no HTML change is needed at all);
+   - every selector is prefixed with ".app-shell .sheet-view" (or is scoped to
+     the shared bottom nav / toast / customer dialogs / welcome screen), so
+     the Home screen is untouched — except the two items called out in the
+     "HOME — banner contrast" block at the very end of this layer;
+   - "hidden" is honoured again wherever an earlier display rule beat it.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------
+   0) Shared tokens — re-point the primary tokens (--teal family and the
+   brand gradients) to purple ONLY inside the customer's non-home screens
+   and the shared chrome. Hundreds of existing rules read var(--teal),
+   var(--teal-dim), var(--brand-grad)… so they pick this up untouched.
+   --------------------------------------------------------------- */
+:root{
+  --ui-grad: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+  --ui-grad-fresh: linear-gradient(135deg, #7C3AED 0%, #8B5CF6 55%, #22C55E 130%);
+  --ui-grad-warm: linear-gradient(135deg, #FF7A29 0%, #F0B429 100%);
+  --ui-line: rgba(76,29,149,0.10);
+  --ui-line-strong: rgba(109,40,217,0.24);
+  --ui-shadow: 0 14px 30px -22px rgba(76,29,149,0.42), 0 2px 8px -4px rgba(76,29,149,0.10);
+  --ui-shadow-sm: 0 8px 18px -14px rgba(76,29,149,0.35);
+  --ui-ink: #1B1240;
+  --ui-muted: #6B6790;
+}
+.app-shell .sheet-view:not([data-view="home"]),
+.bottom-nav,
+.app-toast,
+.ios-modal-backdrop,
+#welcomeScreen,
+body #pwaInstallCard,
+body #inAppBrowserCard,
+body #inAppGuideBackdrop{
+  --teal: var(--purple);
+  --teal-soft: var(--purple-soft);
+  --teal-text: var(--purple-text);
+  --teal-dim: var(--purple-dim);
+  --brand-grad: var(--ui-grad);
+  --brand-grad-soft: linear-gradient(135deg, rgba(109,40,217,0.14) 0%, rgba(34,197,94,0.12) 100%);
+  --gold-text: #8A5A00;
+}
+
+/* Box model — the project has no global box-sizing reset, which made
+   width:100% + padding elements bleed off the left edge (profile fields,
+   banners, login fields). Fixed only inside the redesigned screens. */
+.app-shell .sheet-view:not([data-view="home"]), .app-shell .sheet-view:not([data-view="home"]) *, .app-shell .sheet-view:not([data-view="home"]) *::before, .app-shell .sheet-view:not([data-view="home"]) *::after,
+#welcomeScreen, #welcomeScreen *, #welcomeScreen *::before, #welcomeScreen *::after,
+.ios-modal-backdrop *, body #pwaInstallCard, body #pwaInstallCard *,
+body #inAppBrowserCard, body #inAppBrowserCard *{ box-sizing: border-box; }
+
+/* "hidden" must always hide — earlier display rules were beating it. */
+.app-shell .sheet-view:not([data-view="home"]) [hidden],
+.orders-empty[hidden], .mkt-empty[hidden], .plc-empty[hidden], .more-panel[hidden]{ display: none !important; }
+
+/* The little grabber pill on top of the sheet is meaningless on full-screen
+   screens (the sheet is not draggable there) and collided with the titles. */
+.app-shell.is-fullscreen-view .sheet::before{ display: none; }
+
+/* ---------------------------------------------------------------
+   1) Screen header — back button + title on one row
+   --------------------------------------------------------------- */
+.app-shell .sheet-view:not([data-view="home"]).active{
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+  align-content: start;
+}
+.app-shell .sheet-view:not([data-view="home"]).active > *{ grid-column: 1 / -1; min-width: 0; }
+.app-shell .sheet-view:not([data-view="home"]).active > .sheet-back{
+  grid-column: 1; grid-row: 1; align-self: center; justify-self: start;
+  margin: 0 0 14px;
+}
+.app-shell .sheet-view:not([data-view="home"]).active > .sheet-back + .sheet-title{
+  grid-column: 2; grid-row: 1; align-self: center; margin: 0 0 14px;
+}
+.app-shell .sheet-view:not([data-view="home"]) .sheet-title{
+  font-size: 22px; font-weight: 900; letter-spacing: -.2px;
+  color: var(--ui-ink); line-height: 1.25; margin: 6px 0 16px;
+}
+.app-shell .sheet-view:not([data-view="home"]) .sheet-back{
+  min-height: 40px;
+  padding: 8px 14px 8px 12px;
+  font-size: 13px; font-weight: 800;
+  color: var(--purple-text);
+  background: #fff;
+  border: 1px solid var(--ui-line-strong);
+  box-shadow: var(--ui-shadow-sm);
+}
+.app-shell .sheet-view:not([data-view="home"]) .sheet-back:active{ background: var(--purple-dim); box-shadow: none; }
+.app-shell .sheet-view:not([data-view="home"]) .sheet-back svg{ width: 16px; height: 16px; color: var(--purple); }
+
+/* section labels — same purple→green tick as the Home */
+.app-shell .sheet-view:not([data-view="home"]) .section-label{
+  font-size: 12.5px; font-weight: 900; color: var(--ui-ink);
+  letter-spacing: 0; text-transform: none; margin: 18px 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.app-shell .sheet-view:not([data-view="home"]) .section-label::before{
+  content: ''; flex: 0 0 auto; display: block;
+  width: 18px; height: 6px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--purple), var(--green, #22C55E));
+}
+.app-shell .sheet-view:not([data-view="home"]) .section-label-more{ color: var(--purple); font-weight: 800; font-size: 12px; }
+
+/* ---------------------------------------------------------------
+   2) Buttons, fields, messages
+   --------------------------------------------------------------- */
+.app-btn{
+  min-height: 52px;
+  border-radius: 16px;
+  font-size: 15.5px; font-weight: 800; letter-spacing: 0;
+  background: var(--ui-grad);
+  color: #fff;
+  box-shadow: 0 14px 26px -14px rgba(109,40,217,0.6), 0 4px 10px -6px rgba(109,40,217,0.4);
+}
+.app-btn:focus-visible{ outline: 3px solid rgba(139,92,246,0.45); outline-offset: 2px; }
+.app-btn[disabled]{ opacity: .5; box-shadow: none; }
+.app-btn.secondary{
+  background: #fff;
+  color: var(--purple-text);
+  border: 1.5px solid var(--ui-line-strong);
+  box-shadow: none;
+}
+.app-btn.secondary:active{ background: var(--purple-dim); }
+.app-btn.whatsapp{
+  background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
+  color: #fff;
+  box-shadow: 0 14px 26px -14px rgba(22,163,74,0.6);
+}
+
+.app-shell .sheet-view:not([data-view="home"]) .float-field input,
+.app-shell .sheet-view:not([data-view="home"]) .float-field select,
+.app-shell .sheet-view:not([data-view="home"]) .float-field textarea{
+  width: 100%;
+  background: #fff;
+  border: 1.5px solid var(--ui-line-strong);
+  border-radius: 16px;
+  color: var(--ui-ink);
+  min-height: 58px;
+}
+.app-shell .sheet-view:not([data-view="home"]) .float-field input:not(:placeholder-shown){
+  border-color: rgba(109,40,217,0.34); box-shadow: none;
+}
+.app-shell .sheet-view:not([data-view="home"]) .float-field input:focus,
+.app-shell .sheet-view:not([data-view="home"]) .float-field select:focus,
+.app-shell .sheet-view:not([data-view="home"]) .float-field textarea:focus{
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 4px var(--purple-dim);
+}
+.app-shell .sheet-view:not([data-view="home"]) .float-field input:focus + label,
+.app-shell .sheet-view:not([data-view="home"]) .float-field input:not(:placeholder-shown) + label{ color: var(--purple-text); }
+.app-shell .sheet-view:not([data-view="home"]) .float-field .field-hint{ color: var(--ui-muted); }
+.app-shell .sheet-view:not([data-view="home"]) .float-field.invalid input{ border-color: var(--danger); box-shadow: 0 0 0 4px rgba(229,72,77,0.14); }
+.app-shell .sheet-view:not([data-view="home"]) .app-msg{ border-radius: 14px; }
+.app-shell .sheet-view:not([data-view="home"]) .app-msg.show:not(.err){
+  background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.32); color: #14803D; font-weight: 700;
+}
+.app-shell .sheet-view:not([data-view="home"]) .consent-check{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 16px;
+  padding: 12px 14px; color: var(--ui-muted); font-size: 12.5px; line-height: 1.6; margin: 12px 0;
+}
+.app-shell .sheet-view:not([data-view="home"]) .consent-check input{ width: 20px; height: 20px; margin-top: 1px; accent-color: var(--purple); }
+
+/* ---------------------------------------------------------------
+   3) Shared chrome — bottom nav (unified purple on every screen) + toast
+   --------------------------------------------------------------- */
+.bottom-nav{
+  /* The bar (tab row + the home-indicator zone that is its own bottom
+     padding) uses the app's own canvas colour (--surface, the same
+     lavender as .sheet and #map) instead of a flat white, so the bottom
+     edge reads as part of the app rather than a separate white rectangle.
+     The first declaration is the fallback for browsers without
+     color-mix() (iOS < 16.2). */
+  background: rgba(241,237,251,0.94);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-top: 1px solid var(--ui-line);
+  box-shadow: 0 -14px 30px -22px rgba(76,29,149,0.4);
+}
+.bnav-item.active{ color: var(--purple-text); }
+.bnav-item.active .bnav-icon{
+  background: var(--ui-grad);
+  box-shadow: 0 8px 16px -6px rgba(109,40,217,0.55);
+}
+.bnav-item.active .bnav-icon svg{ color: #fff; }
+.bnav-item.active .bnav-icon::after{
+  background: radial-gradient(circle, rgba(139,92,246,0.22) 0%, transparent 72%);
+}
+.bnav-item:focus-visible{ outline: 2px solid var(--purple); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .bottom-nav{ background: var(--surface); }
+}
+.app-toast{
+  background: #2A1470; color: #fff;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px; font-weight: 700;
+  box-shadow: 0 18px 36px -16px rgba(42,20,112,0.7);
+}
+@media (prefers-reduced-motion: reduce){
+  .app-shell .sheet-view:not([data-view="home"]).active{ animation: none; }
+}
+
+/* =========================================================================
+   4) Wizard stepper (booking + "add listing") and BOOKING screens
+   ========================================================================= */
+.app-shell .sheet-view:not([data-view="home"]) .wizard-progress{
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin: 2px 0 16px; padding: 14px 10px 10px;
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px;
+  box-shadow: var(--ui-shadow-sm);
+}
+.app-shell .sheet-view:not([data-view="home"]) .wp-step{ flex: 0 0 auto; width: 58px; gap: 6px; }
+.app-shell .sheet-view:not([data-view="home"]) .wp-dot{
+  position: relative;
+  width: 30px; height: 30px; font-size: 13px; font-weight: 800;
+  background: #fff; color: var(--ui-muted);
+  border: 2px solid rgba(109,40,217,0.20) !important;
+}
+.app-shell .sheet-view:not([data-view="home"]) .wp-label{ font-size: 11px; font-weight: 700; color: var(--ui-muted); }
+.app-shell .sheet-view:not([data-view="home"]) .wp-line{
+  flex: 1 1 auto; align-self: flex-start; height: 3px; border-radius: 3px;
+  margin: 14px -4px 0; background: rgba(109,40,217,0.14);
+}
+/* ---- generated: stepper states (booking: data-current-step, market add: .active/.done) ---- */
+.app-shell .sheet-view[data-view="booking"][data-current-step="1"] .wp-step[data-wp-step="1"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-step[data-wp-step="2"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="3"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="4"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"]:not([data-current-step]) .wp-step[data-wp-step="1"] .wp-dot,
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.active .wp-dot{ background: var(--ui-grad) !important; color:#fff !important; border-color: transparent !important; box-shadow: 0 0 0 4px var(--purple-dim), 0 8px 14px -6px rgba(109,40,217,0.55); }
+.app-shell .sheet-view[data-view="booking"][data-current-step="1"] .wp-step[data-wp-step="1"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-step[data-wp-step="2"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="3"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="4"] .wp-label,
+.app-shell .sheet-view[data-view="booking"]:not([data-current-step]) .wp-step[data-wp-step="1"] .wp-label,
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.active .wp-label{ color: var(--purple-text); font-weight: 800; }
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-step[data-wp-step="1"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="1"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="2"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="1"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="2"] .wp-dot,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="3"] .wp-dot,
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.done .wp-dot{ background: var(--green) !important; color: transparent !important; font-size: 0 !important; border-color: transparent !important; box-shadow: none; }
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-step[data-wp-step="1"] .wp-dot::after,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="1"] .wp-dot::after,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="2"] .wp-dot::after,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="1"] .wp-dot::after,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="2"] .wp-dot::after,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="3"] .wp-dot::after,
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.done .wp-dot::after{ content:''; position:absolute; inset:0; margin:auto; width:14px; height:14px; background:#fff; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M20 6 9 17l-5-5' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M20 6 9 17l-5-5' stroke='%23000' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-step[data-wp-step="1"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="1"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-step[data-wp-step="2"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="1"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="2"] .wp-label,
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-step[data-wp-step="3"] .wp-label,
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.done .wp-label{ color: #14803D; }
+.app-shell .sheet-view[data-view="booking"][data-current-step="2"] .wp-line:nth-of-type(1),
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-line:nth-of-type(1),
+.app-shell .sheet-view[data-view="booking"][data-current-step="3"] .wp-line:nth-of-type(2),
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-line:nth-of-type(1),
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-line:nth-of-type(2),
+.app-shell .sheet-view[data-view="booking"][data-current-step="4"] .wp-line:nth-of-type(3),
+.app-shell .sheet-view[data-view="marketAdd"] .wp-step.done + .wp-line{ background: linear-gradient(90deg, var(--green), var(--purple)) !important; }
+
+
+/* per-service colour wash removed — one identity across the booking flow */
+.app-shell .sheet-view[data-view="booking"]:has(#svcSwitchCaption){ background: none; }
+.app-shell .sheet-view[data-view="booking"] .svc-switch-caption{
+  color: var(--ui-muted); font-size: 12.5px; font-weight: 700; margin: 4px 2px 14px;
+}
+
+/* ---- Step 1 — service picker ---- */
+.app-shell .sheet-view[data-view="booking"] .svc-switch{
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+}
+.app-shell .sheet-view[data-view="booking"] .svc-pill{
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  min-height: 96px; padding: 14px 10px;
+  background: #fff; border: 1.5px solid var(--ui-line); border-radius: 20px;
+  box-shadow: var(--ui-shadow-sm); color: var(--ui-ink);
+}
+.app-shell .sheet-view[data-view="booking"] .svc-pill span{ font-size: 13.5px; font-weight: 800; color: var(--ui-ink); text-align: center; }
+.app-shell .sheet-view[data-view="booking"] .svc-pill-photo,
+.app-shell .sheet-view[data-view="booking"] .svc-pill.active .svc-pill-photo{ width: 46px; height: 46px; transform: none; box-shadow: none; }
+.app-shell .sheet-view[data-view="booking"] .svc-pill svg{ width: 34px; height: 34px; }
+.app-shell .sheet-view[data-view="booking"] .svc-pill.active{
+  background: linear-gradient(180deg, #fff 0%, var(--purple-dim) 130%);
+  border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-dim), var(--ui-shadow-sm);
+}
+.app-shell .sheet-view[data-view="booking"] .svc-pill.active span{ color: var(--purple-text); }
+/* focused (one service chosen): a single wide, clearly "selected" card */
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-switch{ grid-template-columns: minmax(0, 1fr); }
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-pill:not(.active){ display: none; }
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-pill.active{
+  flex-direction: row; justify-content: flex-start; gap: 14px; min-height: 76px; padding: 12px 16px;
+}
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-pill.active .svc-pill-photo{ width: 52px; height: 52px; }
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-pill.active span{ font-size: 16px; text-align: start; }
+.app-shell .sheet-view[data-view="booking"] .svc-switch-wrap.is-focused .svc-pill.active::after{
+  content: ''; margin-inline-start: auto; flex: 0 0 auto;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--green);
+  -webkit-mask: none; mask: none;
+  box-shadow: inset 0 0 0 0 transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M17.5 8.5 10.4 15.6 7 12.2' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+.app-shell .sheet-view[data-view="booking"] .svc-switch-back{
+  align-self: flex-start; margin-bottom: 12px; min-height: 36px;
+  background: #fff; color: var(--purple-text); border: 1px solid var(--ui-line-strong);
+  box-shadow: var(--ui-shadow-sm); font-size: 12.5px; font-weight: 800;
+}
+.app-shell .sheet-view[data-view="booking"] .svc-switch-back svg{ color: var(--purple); }
+.app-shell .sheet-view:not([data-view="home"]) .sec-intro{
+  background: linear-gradient(135deg, rgba(255,122,41,0.12), rgba(240,180,41,0.14));
+  color: var(--orange-text); border: 1px solid rgba(255,122,41,0.22);
+  border-radius: 16px; font-size: 12.5px; font-weight: 800;
+}
+.app-shell .sheet-view:not([data-view="home"]) .sec-intro::before{ background: var(--orange); }
+
+/* driver roster (step 1) */
+.app-shell .sheet-view[data-view="booking"] .drivers-list-app{ gap: 10px; margin-bottom: 12px; }
+.app-shell .sheet-view[data-view="booking"] .driver-card-app{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px;
+  box-shadow: var(--ui-shadow-sm); padding: 12px 14px;
+}
+.app-shell .sheet-view[data-view="booking"] .driver-card-app.driver-live{ border-color: rgba(34,197,94,0.45); }
+.app-shell .sheet-view[data-view="booking"] .driver-avatar{
+  background: var(--purple-dim); color: var(--purple); border-radius: 50%;
+  width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.app-shell .sheet-view[data-view="booking"] .driver-avatar svg{ width: 24px; height: 24px; }
+.app-shell .sheet-view[data-view="booking"] .driver-info b{ color: var(--ui-ink); font-size: 14.5px; }
+.app-shell .sheet-view[data-view="booking"] .driver-actions{ display: flex; gap: 8px; margin: -2px 0 6px; }
+.app-shell .sheet-view[data-view="booking"] .driver-action-btn{
+  flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 42px; padding: 8px 10px; border-radius: 14px;
+  font-size: 13px; font-weight: 800; color: var(--purple-text);
+  background: #fff; border: 1.5px solid var(--ui-line-strong); box-shadow: none;
+}
+.app-shell .sheet-view[data-view="booking"] .driver-action-btn svg{ width: 16px; height: 16px; }
+.app-shell .sheet-view[data-view="booking"] .driver-action-btn.whatsapp{ background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.4); color: #14803D; }
+.app-shell .sheet-view[data-view="booking"] .driver-action-btn.request{ background: var(--ui-grad); border-color: transparent; color: #fff; }
+.app-shell .sheet-view:not([data-view="home"]) .badge-live{ background: rgba(34,197,94,0.14); color: #14803D; border-radius: 100px; padding: 3px 10px; font-weight: 800; }
+.app-shell .sheet-view:not([data-view="home"]) .badge-onjob{ background: var(--orange-dim); color: var(--orange-text); border-radius: 100px; padding: 3px 10px; font-weight: 800; }
+.app-shell .sheet-view:not([data-view="home"]) .badge-done{ background: rgba(34,197,94,0.14); color: #14803D; border-radius: 100px; padding: 3px 10px; font-weight: 800; }
+.app-shell .sheet-view:not([data-view="home"]) .badge-offline{ background: rgba(229,72,77,0.10); color: #C0392B; border-radius: 100px; padding: 3px 10px; font-weight: 800; }
+
+/* ---- Step 2 — location ---- */
+.app-shell .sheet-view[data-view="booking"] .map-target-toggle{
+  gap: 6px; padding: 5px; margin-bottom: 12px;
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 18px; box-shadow: var(--ui-shadow-sm);
+}
+.app-shell .sheet-view[data-view="booking"] .mt-btn{
+  flex: 1 1 0; min-height: 44px; padding: 8px 10px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12.5px; font-weight: 800; line-height: 1.3; text-align: center;
+  color: var(--ui-muted); background: transparent; border: 0;
+}
+.app-shell .sheet-view[data-view="booking"] .mt-btn.active{ background: var(--ui-grad); color: #fff; box-shadow: 0 8px 16px -10px rgba(109,40,217,0.6); }
+.app-shell .sheet-view[data-view="booking"] .mt-btn svg{ width: 16px; height: 16px; flex: 0 0 auto; }
+.app-shell .sheet-view[data-view="booking"] .distance-tag{
+  background: rgba(34,197,94,0.12); color: #14803D; border: 1px solid rgba(34,197,94,0.3);
+  border-radius: 14px; font-weight: 800; padding: 9px 14px; margin-bottom: 12px;
+}
+.app-shell .sheet-view[data-view="booking"] .route-card{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px;
+  box-shadow: var(--ui-shadow); padding: 16px 40px 6px 16px; margin-bottom: 14px;
+}
+.app-shell .sheet-view[data-view="booking"] .route-card .float-field input{ background: #fff; }
+.app-shell .sheet-view[data-view="booking"] .route-connector{ right: 16px; top: 32px; bottom: 34px; }
+.app-shell .sheet-view[data-view="booking"] .route-dot{ box-shadow: 0 0 0 3px #fff; width: 12px; height: 12px; }
+.app-shell .sheet-view[data-view="booking"] .route-dot.start{ background: var(--purple); }
+.app-shell .sheet-view[data-view="booking"] .route-dot.end{ background: var(--green); }
+.app-shell .sheet-view[data-view="booking"] .route-line{
+  background-image: repeating-linear-gradient(180deg, rgba(109,40,217,0.35) 0 4px, transparent 4px 8px);
+}
+.app-shell .sheet-view[data-view="booking"] .btn-locate-app{
+  color: var(--purple-text); background: var(--purple-dim);
+  border: 1px solid var(--ui-line-strong); border-radius: 12px; min-height: 40px;
+}
+.app-shell .sheet-view[data-view="booking"] .field-hint.map-link-hint a{ color: var(--purple); }
+
+/* ---- Step 4 — confirmation ---- */
+.app-shell .sheet-view[data-view="booking"] .confirm-summary-card{
+  background: #fff; border: 1px solid var(--ui-line); border-bottom: 0;
+  border-radius: 22px 22px 0 0; box-shadow: none; padding: 16px 16px 12px; margin-bottom: 0;
+}
+.app-shell .sheet-view[data-view="booking"] .confirm-summary-head{ border-bottom: 1px dashed var(--ui-line-strong); }
+.app-shell .sheet-view[data-view="booking"] .confirm-summary-icon{ background: var(--purple-dim); }
+.app-shell .sheet-view[data-view="booking"] .confirm-summary-head-text b{ color: var(--ui-ink); font-size: 16px; }
+.app-shell .sheet-view[data-view="booking"] .confirm-summary-head-text span{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="booking"] .csr-row span{ color: var(--ui-muted); font-weight: 700; }
+.app-shell .sheet-view[data-view="booking"] .csr-row b{ color: var(--ui-ink); }
+.app-shell .sheet-view[data-view="booking"] .price-bar[data-wizard-step="4"]{
+  background: linear-gradient(135deg, rgba(109,40,217,0.10), rgba(34,197,94,0.10));
+  border: 1px solid var(--ui-line); border-top: 1px dashed var(--ui-line-strong);
+  border-radius: 0 0 22px 22px; margin: 0 0 14px; padding: 12px 16px;
+}
+.app-shell .sheet-view[data-view="booking"] .price-bar[data-wizard-step="4"] b{
+  background: var(--ui-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.app-shell .sheet-view[data-view="booking"] #bookSubmitBtn{ min-height: 56px; font-size: 16px; }
+.app-shell .sheet-view:not([data-view="home"]) .wizard-nav{ gap: 10px; margin-top: 10px; }
+.app-shell .sheet-view:not([data-view="home"]) .wizard-nav .app-btn{ flex: 1 1 0; }
+.app-shell .sheet-view:not([data-view="home"]) #wizardBackBtn{ flex: 0 0 34%; }
+.app-shell .sheet-view:not([data-view="home"]) .submitting-view p{ color: var(--ui-muted); font-weight: 700; }
+.app-shell .sheet-view:not([data-view="home"]) .spinner-ring{ border-color: var(--purple-dim); border-top-color: var(--purple); border-right-color: var(--green); }
+
+/* =========================================================================
+   5) Order status / tracking
+   ========================================================================= */
+.app-shell .sheet-view[data-view="status"] .status-header{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px;
+  box-shadow: var(--ui-shadow-sm); padding: 12px 14px; margin: 0 0 14px;
+  align-items: center; flex-wrap: wrap;
+}
+.app-shell .sheet-view[data-view="status"] .status-header .req-chip{
+  background: rgba(240,180,41,0.16); color: #7A4E00; border: 1px solid rgba(240,180,41,0.45);
+  padding: 6px 12px; font-size: 14px; direction: ltr; unicode-bidi: isolate;
+}
+.app-shell .sheet-view[data-view="status"] .status-time{ color: var(--ui-muted); margin-top: 8px; }
+.app-shell .sheet-view[data-view="status"] .status-svc-tag{ background: var(--purple-dim); color: var(--purple-text); font-weight: 800; }
+
+.app-shell .sheet-view[data-view="status"] .timeline-app{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow-sm);
+  padding: 16px 6px 12px; margin-bottom: 14px; align-items: flex-start;
+}
+.app-shell .sheet-view[data-view="status"] .tla-step{ min-width: 0; }
+.app-shell .sheet-view[data-view="status"] .tla-step:not(:last-child)::after{
+  top: 13px; right: calc(50% + 17px); left: auto; width: calc(100% - 34px); height: 3px;
+  background: rgba(109,40,217,0.14);
+}
+.app-shell .sheet-view[data-view="status"] .tla-step.done:not(:last-child)::after{ background: linear-gradient(90deg, var(--green), var(--purple)); }
+.app-shell .sheet-view[data-view="status"] .tla-dot{ width: 28px; height: 28px; margin-bottom: 8px; background: #fff; border: 2px solid rgba(109,40,217,0.20); }
+.app-shell .sheet-view[data-view="status"] .tla-step.done .tla-dot{ background: var(--green); border-color: transparent; color: #fff; }
+.app-shell .sheet-view[data-view="status"] .tla-step.current .tla-dot{
+  background: var(--ui-grad-warm); border-color: transparent; color: #fff;
+  box-shadow: 0 0 0 5px rgba(240,180,41,0.22), 0 6px 14px -4px rgba(255,122,41,0.6);
+  transform: scale(1.08);
+}
+.app-shell .sheet-view[data-view="status"] .tla-step span{ font-size: 11px; line-height: 1.3; color: var(--ui-muted); padding-inline: 1px; }
+.app-shell .sheet-view[data-view="status"] .tla-step.done span, .app-shell .sheet-view[data-view="status"] .tla-step.current span{ color: var(--ui-ink); font-weight: 800; }
+.app-shell .sheet-view[data-view="status"] .tla-step.cancelled .tla-dot{ background: var(--danger); }
+
+.app-shell .sheet-view[data-view="status"] .driver-card-app,
+.app-shell .sheet-view[data-view="status"] #driverCard.driver-card-app{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px;
+  box-shadow: var(--ui-shadow); padding: 14px; margin-bottom: 12px;
+}
+.app-shell .sheet-view[data-view="status"] .driver-card-top{ align-items: center; gap: 12px; }
+.app-shell .sheet-view[data-view="status"] .driver-avatar{
+  width: 58px; height: 58px; border-radius: 18px; background: var(--purple-dim); color: var(--purple);
+  border: 2px solid rgba(109,40,217,0.18); box-shadow: none;
+}
+.app-shell .sheet-view[data-view="status"] .driver-card-app.driver-live .driver-avatar{ border-color: var(--purple); background: var(--purple-dim); box-shadow: none; }
+.app-shell .sheet-view[data-view="status"] .driver-status-dot{ background: var(--purple); border-color: #fff; }
+.app-shell .sheet-view[data-view="status"] .driver-status-dot.arrived{ background: var(--green); }
+.app-shell .sheet-view[data-view="status"] .driver-name-row b{ color: var(--ui-ink); }
+.app-shell .sheet-view[data-view="status"] .driver-info > span{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="status"] .driver-rating{ background: rgba(240,180,41,0.18); color: #7A4E00 !important; }
+.app-shell .sheet-view[data-view="status"] .driver-rating svg{ color: var(--gold); }
+.app-shell .sheet-view[data-view="status"] .driver-phone-row{ background: var(--purple-dim); color: var(--purple-text); }
+.app-shell .sheet-view[data-view="status"] .driver-phone-row svg{ color: var(--purple); }
+.app-shell .sheet-view[data-view="status"] .driver-chip{ background: #F6F3FF; border-color: var(--ui-line); color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="status"] .driver-chip.driver-plate{ background: #fff; color: var(--ui-ink); border-color: var(--ui-line-strong); }
+.app-shell .sheet-view[data-view="status"] .driver-eta{
+  flex: 0 0 auto; width: 62px; height: 62px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  background: var(--ui-grad-warm); color: #fff; box-shadow: 0 10px 18px -10px rgba(255,122,41,0.7);
+}
+.app-shell .sheet-view[data-view="status"] .driver-eta b{ font-size: 22px; line-height: 1; color: #fff; }
+.app-shell .sheet-view[data-view="status"] .driver-eta span{ font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.92); }
+.app-shell .sheet-view[data-view="status"] .driver-status-banner{ background: rgba(34,197,94,0.12); color: #14803D; border-radius: 14px; font-weight: 800; }
+.app-shell .sheet-view[data-view="status"] .driver-status-banner-dot{ background: var(--green); box-shadow: 0 0 0 3px rgba(34,197,94,0.22); }
+.app-shell .sheet-view[data-view="status"] .driver-meta span.badge-live{ background: rgba(34,197,94,0.14); color: #14803D; }
+
+.app-shell .sheet-view[data-view="status"] #driverActions.driver-actions{ display: flex; gap: 10px; margin: 0 0 12px; }
+.app-shell .sheet-view[data-view="status"] #driverActions .driver-action-btn{
+  flex: 1 1 0; min-height: 52px; border-radius: 16px; gap: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14.5px; font-weight: 800; box-shadow: none;
+}
+.app-shell .sheet-view[data-view="status"] #driverActions .driver-action-btn.call{ background: var(--ui-grad); color: #fff; border: 0; }
+.app-shell .sheet-view[data-view="status"] #driverActions .driver-action-btn.whatsapp{ background: linear-gradient(135deg, #22C55E, #16A34A); color: #fff; border: 0; }
+.app-shell .sheet-view[data-view="status"] #driverActions .driver-action-ic{ display: flex; background: transparent; color: inherit; }
+.app-shell .sheet-view[data-view="status"] #driverActions .driver-action-ic svg{ width: 20px; height: 20px; }
+
+.app-shell .sheet-view[data-view="status"] .trip-summary-app{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px; box-shadow: var(--ui-shadow-sm);
+  padding: 4px 16px; margin-bottom: 14px;
+}
+.app-shell .sheet-view[data-view="status"] .tsa-row{
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 12px 0; border-bottom: 1px dashed var(--ui-line-strong);
+}
+.app-shell .sheet-view[data-view="status"] .tsa-row:last-child{ border-bottom: 0; }
+.app-shell .sheet-view[data-view="status"] .tsa-row span{ font-size: 12.5px; font-weight: 700; color: var(--ui-muted); flex: 0 0 auto; }
+.app-shell .sheet-view[data-view="status"] .tsa-row b{ font-size: 13.5px; font-weight: 800; color: var(--ui-ink); text-align: end; overflow-wrap: anywhere; }
+.app-shell .sheet-view[data-view="status"] .status-actions{ display: flex; flex-direction: column; gap: 10px; }
+
+/* =========================================================================
+   6) My orders
+   ========================================================================= */
+.app-shell .sheet-view[data-view="orders"] .orders-filter{ gap: 8px; margin: 0 0 14px; padding: 2px 1px 6px; }
+.app-shell .sheet-view[data-view="orders"] .of-chip{
+  min-height: 40px; padding: 8px 18px; font-size: 13px; font-weight: 800;
+  background: #fff; color: var(--ui-muted); border: 1.5px solid var(--ui-line); box-shadow: none;
+}
+.app-shell .sheet-view[data-view="orders"] .of-chip.active{ background: var(--ui-grad); color: #fff; border-color: transparent; box-shadow: 0 8px 16px -10px rgba(109,40,217,0.6); }
+.app-shell .sheet-view[data-view="orders"] .orders-list{ display: flex; flex-direction: column; gap: 12px; }
+.app-shell .sheet-view[data-view="orders"] .order-card{
+  background: #fff; border: 1px solid var(--ui-line); border-inline-start: 1px solid var(--ui-line);
+  border-radius: 22px; box-shadow: var(--ui-shadow); padding: 14px; margin: 0;
+}
+.app-shell .sheet-view[data-view="orders"] .order-card::before, .app-shell .sheet-view[data-view="orders"] .order-card::after{ content: none; }
+.app-shell .sheet-view[data-view="orders"] .order-card-row{ display: flex; gap: 12px; align-items: flex-start; }
+.app-shell .sheet-view[data-view="orders"] .order-card-icon{ width: 48px; height: 48px; border-radius: 16px; background: var(--purple-dim) !important; }
+.app-shell .sheet-view[data-view="orders"] .order-card-icon img{ width: 34px; height: 34px; }
+.app-shell .sheet-view[data-view="orders"] .order-card-main{ flex: 1 1 auto; min-width: 0; }
+.app-shell .sheet-view[data-view="orders"] .order-card-top{ margin-bottom: 6px; gap: 8px; }
+.app-shell .sheet-view[data-view="orders"] .req-chip{
+  direction: ltr; unicode-bidi: isolate; font-size: 12px; font-weight: 800; color: #7A4E00;
+  background: rgba(240,180,41,0.16); border: 1px solid rgba(240,180,41,0.4); padding: 3px 10px; border-radius: 100px;
+}
+.app-shell .sheet-view[data-view="orders"] .order-card-svc{ font-size: 15px; font-weight: 900; color: var(--ui-ink); margin-bottom: 4px; }
+.app-shell .sheet-view[data-view="orders"] .order-card-route{ color: var(--ui-muted); font-weight: 600; margin-bottom: 6px; }
+.app-shell .sheet-view[data-view="orders"] .order-card-route .order-arrow{ color: var(--purple); font-weight: 900; }
+.app-shell .sheet-view[data-view="orders"] .order-card-time{ color: var(--ui-muted); margin-bottom: 0; }
+.app-shell .sheet-view[data-view="orders"] .order-track-btn{ margin-top: 12px; min-height: 46px; padding: 10px; font-size: 13.5px; }
+.app-shell .sheet-view[data-view="orders"] .orders-empty{ padding: 40px 6px 10px; }
+.app-shell .sheet-view[data-view="orders"] .orders-empty-ic{ width: 68px; height: 68px; border-radius: 50%; background: var(--purple-dim); color: var(--purple); }
+.app-shell .sheet-view[data-view="orders"] .orders-empty-ic svg{ width: 28px; height: 28px; }
+.app-shell .sheet-view[data-view="orders"] .orders-empty p{ color: var(--ui-muted); font-weight: 700; margin-bottom: 18px; }
+
+/* =========================================================================
+   7) Account (حسابي)
+   ========================================================================= */
+.app-shell .sheet-view[data-view="profile"] .account-card{
+  background:
+    radial-gradient(70% 110% at 100% 0%, rgba(240,180,41,0.30) 0%, transparent 60%),
+    radial-gradient(60% 90% at 0% 100%, rgba(34,197,94,0.28) 0%, transparent 60%),
+    linear-gradient(135deg, #5B21B6 0%, #7C3AED 55%, #8B5CF6 100%);
+  border-radius: 28px; padding: 24px 18px 20px; margin-bottom: 16px;
+  box-shadow: 0 22px 40px -22px rgba(91,33,182,0.7);
+}
+.app-shell .sheet-view[data-view="profile"] .account-avatar-badge{ border-color: #6D28D9; color: var(--purple); }
+.app-shell .sheet-view[data-view="profile"] .account-badge{
+  background: var(--ui-grad-warm); color: #3A2200; border: 0; font-weight: 900;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.app-shell .sheet-view[data-view="profile"] .account-form-card,
+.app-shell .sheet-view[data-view="profile"] .account-list{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow);
+}
+.app-shell .sheet-view[data-view="profile"] .account-form-card{ padding: 16px; margin-bottom: 14px; }
+.app-shell .sheet-view[data-view="profile"] .account-list{ gap: 0; margin-bottom: 14px; }
+.app-shell .sheet-view[data-view="profile"] .account-row{ padding: 13px 16px; border-bottom: 1px solid var(--ui-line); color: var(--ui-ink); min-height: 56px; }
+.app-shell .sheet-view[data-view="profile"] .account-row-icon{ background: var(--purple-dim); color: var(--purple); border-radius: 12px; }
+.app-shell .sheet-view[data-view="profile"] .account-row-chev{ color: var(--purple); }
+.app-shell .sheet-view[data-view="profile"] .account-row-soon{ background: var(--orange-dim); color: var(--orange-text); }
+.app-shell .sheet-view[data-view="profile"] .account-row.is-soon{ opacity: .7; }
+.app-shell .sheet-view[data-view="profile"] .account-row-danger{ color: #D6303A; }
+.app-shell .sheet-view[data-view="profile"] .account-row-danger .account-row-icon{ background: rgba(229,72,77,0.10); color: #D6303A; }
+
+/* =========================================================================
+   8) More (المزيد) + Support (الدعم)
+   ========================================================================= */
+/* The earlier Home pass hid .home-col-more everywhere, which also removed
+   the restaurants / markets / other services / future-office entry cards
+   from this screen — the only way into those screens. Restored here. */
+.app-shell .sheet-view[data-view="more"] .home-col-more{ display: block; width: 100%; margin: 0 0 18px; padding: 0; background: none; border: 0; box-shadow: none; }
+.app-shell .sheet-view[data-view="more"] .section-label-row{ display: flex; align-items: center; justify-content: space-between; margin: 4px 0 10px; }
+.app-shell .sheet-view[data-view="more"] .section-label-row .section-label{ margin: 0; }
+.app-shell .sheet-view[data-view="more"] .section-label-more{ color: var(--purple); }
+.app-shell .sheet-view[data-view="more"] .soon-grid{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: visible; }
+.app-shell .sheet-view[data-view="more"] .soon-card{
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 8px;
+  width: auto; min-width: 0; padding: 8px 8px 12px; text-align: center;
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow);
+  position: relative;
+}
+.app-shell .sheet-view[data-view="more"] .soon-card .soon-ic{
+  width: 100%; height: 84px; border-radius: 16px; margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  background-color: var(--purple-dim); background-size: cover; background-position: center;
+}
+.app-shell .sheet-view[data-view="more"] #soonCardRestaurants .soon-ic{ background-color: var(--orange-dim); color: var(--orange-text); }
+.app-shell .sheet-view[data-view="more"] #soonCardMarkets .soon-ic{ background-color: rgba(34,197,94,0.14); color: #14803D; }
+.app-shell .sheet-view[data-view="more"] #soonCardOtherServices .soon-ic{ background-color: rgba(240,180,41,0.18); color: #7A4E00; }
+.app-shell .sheet-view[data-view="more"] #soonCardFutureOffice .soon-ic{ background-color: var(--purple-dim); color: var(--purple); }
+.app-shell .sheet-view[data-view="more"] .soon-label{ font-size: 13.5px; font-weight: 900; color: var(--ui-ink); line-height: 1.3; white-space: normal; }
+.app-shell .sheet-view[data-view="more"] .soon-badge{
+  align-self: center; font-size: 10.5px; font-weight: 800; padding: 3px 10px; border-radius: 100px;
+  background: var(--orange-dim); color: var(--orange-text);
+}
+.app-shell .sheet-view[data-view="more"] #soonCardMarkets .soon-badge{ background: rgba(34,197,94,0.14); color: #14803D; }
+.app-shell .sheet-view[data-view="more"] #soonCardFutureOffice .soon-badge{ background: var(--purple-dim); color: var(--purple-text); }
+.app-shell .sheet-view[data-view="more"] .soon-card-static{ opacity: .8; }
+
+.app-shell .sheet-view[data-view="more"] .more-list{ gap: 0; margin-bottom: 16px; background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow); overflow: hidden; }
+.app-shell .sheet-view[data-view="more"] .more-item{
+  min-height: 58px; padding: 12px 16px; gap: 12px;
+  background: #fff; border: 0; border-bottom: 1px solid var(--ui-line); border-radius: 0;
+  color: var(--ui-ink); font-size: 14px; font-weight: 800;
+}
+.app-shell .sheet-view[data-view="more"] .more-item[aria-expanded="true"]{ background: var(--purple-dim); border-color: var(--ui-line); }
+.app-shell .sheet-view[data-view="more"] .more-item-icon{
+  width: 36px; height: 36px; border-radius: 12px; background: var(--purple-dim); color: var(--purple);
+  display: flex; align-items: center; justify-content: center;
+}
+.app-shell .sheet-view[data-view="more"] .more-item-icon svg{ width: 18px; height: 18px; }
+.app-shell .sheet-view[data-view="more"] .more-item-chevron{ color: var(--purple); font-size: 20px; }
+.app-shell .sheet-view[data-view="more"] .more-panel{ margin: 0; padding: 12px 18px 16px; background: #FBFAFF; border-bottom: 1px solid var(--ui-line); color: var(--ui-muted); font-weight: 600; }
+.app-shell .sheet-view[data-view="more"] .rights-card{
+  background: linear-gradient(135deg, rgba(240,180,41,0.16), rgba(255,122,41,0.10));
+  border: 1px solid rgba(240,180,41,0.4); border-radius: 22px;
+}
+.app-shell .sheet-view[data-view="more"] .rights-title{ color: #7A4E00; }
+.app-shell .sheet-view[data-view="more"] .rights-card p{ color: var(--ui-muted); }
+
+.app-shell .sheet-view[data-view="support"] .more-support-actions{ flex-direction: row; gap: 10px; margin-bottom: 14px; }
+.app-shell .sheet-view[data-view="support"] .more-support-item{
+  flex: 1 1 0; min-height: 56px; justify-content: center; gap: 8px; padding: 10px 12px;
+  background: #fff; border: 1.5px solid var(--ui-line-strong); border-radius: 18px;
+  color: var(--purple-text); font-size: 13px; font-weight: 800; text-align: center; box-shadow: var(--ui-shadow-sm);
+}
+.app-shell .sheet-view[data-view="support"] .more-support-item svg{ width: 20px; height: 20px; color: var(--purple); flex: 0 0 auto; }
+.app-shell .sheet-view[data-view="support"] .more-support-item:nth-child(2){ background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.4); color: #14803D; }
+.app-shell .sheet-view[data-view="support"] .more-support-item:nth-child(2) svg{ color: #16A34A; }
+.app-shell .sheet-view[data-view="support"] .help-header{
+  min-height: 56px; padding: 12px 14px; margin-bottom: 12px;
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px; box-shadow: var(--ui-shadow-sm); color: var(--ui-ink);
+}
+.app-shell .sheet-view[data-view="support"] .help-header .qa-icon{ background: var(--purple-dim); color: var(--purple); }
+.app-shell .sheet-view[data-view="support"] .help-header.open{ background: var(--purple-dim); border-color: var(--ui-line-strong); color: var(--purple-text); }
+.app-shell .sheet-view[data-view="support"] .help-accordion{ display: flex; flex-direction: column; gap: 10px; }
+.app-shell .sheet-view[data-view="support"] .help-item{ background: #fff; border: 1px solid var(--ui-line); border-radius: 18px; box-shadow: var(--ui-shadow-sm); overflow: hidden; }
+.app-shell .sheet-view[data-view="support"] .help-item.open{ border-color: var(--ui-line-strong); }
+.app-shell .sheet-view[data-view="support"] .help-q{ min-height: 52px; padding: 12px 14px; color: var(--ui-ink); font-weight: 800; }
+.app-shell .sheet-view[data-view="support"] .help-a p{ color: var(--ui-muted); font-weight: 600; }
+.app-shell .sheet-view[data-view="support"] .help-chevron{ color: var(--purple); }
+.app-shell .sheet-view[data-view="support"] .help-install-guide .help-install-intro{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="support"] .help-install-block h4{ color: var(--ui-ink); }
+.app-shell .sheet-view[data-view="support"] .step-num{ background: var(--ui-grad); color: #fff; }
+.app-shell .sheet-view[data-view="support"] .help-install-note{ background: var(--orange-dim); color: var(--orange-text); border-radius: 14px; }
+
+/* =========================================================================
+   9) Market (سوق يمّك)
+   ========================================================================= */
+.app-shell .sheet-view[data-view="market"] .mkt-searchbar,
+.app-shell .sheet-view[data-view="marketCategory"] .mkt-searchbar{
+  background: #fff; border: 1.5px solid var(--ui-line-strong); border-radius: 20px; box-shadow: var(--ui-shadow-sm);
+  padding: 8px 12px 8px 8px; min-height: 54px; margin-bottom: 14px;
+}
+.app-shell .sheet-view[data-view="market"] .mkt-searchbar-ic{ color: var(--purple); }
+.app-shell .sheet-view[data-view="market"] .mkt-searchbar input{ color: var(--ui-ink); font-size: 15px; }
+.app-shell .sheet-view[data-view="market"] .mkt-filter-btn{ background: var(--purple-dim); color: var(--purple); width: 40px; height: 40px; border-radius: 14px; }
+.app-shell .sheet-view[data-view="market"] .mkt-searchbar:focus-within{ border-color: var(--purple); box-shadow: 0 0 0 4px var(--purple-dim); }
+.app-shell .sheet-view[data-view="market"] .mkt-hero{
+  width: 100%; border-radius: 26px; padding: 18px; margin-bottom: 18px;
+  background:
+    radial-gradient(70% 120% at 0% 0%, rgba(255,255,255,0.28) 0%, transparent 60%),
+    linear-gradient(120deg, #FF7A29 0%, #F0B429 100%);
+  box-shadow: 0 20px 34px -20px rgba(255,122,41,0.7);
+}
+.app-shell .sheet-view[data-view="market"] .mkt-hero-text b{ font-size: 16px; font-weight: 900; }
+.app-shell .sheet-view[data-view="market"] .mkt-hero-text span{ font-size: 12px; font-weight: 600; line-height: 1.45; }
+.app-shell .sheet-view[data-view="market"] .mkt-hero-cta{ background: #fff; color: var(--orange-text); font-weight: 900; padding: 9px 14px; box-shadow: 0 8px 16px -10px rgba(0,0,0,0.35); }
+.app-shell .sheet-view[data-view="market"] .mkt-section-row{ margin: 4px 0 10px; }
+.app-shell .sheet-view[data-view="market"] .mkt-section-row .section-label{ margin: 0; }
+.app-shell .sheet-view[data-view="market"] .mkt-section-row .section-label-more{ color: var(--purple); font-weight: 800; }
+.app-shell .sheet-view[data-view="market"] .mkt-cats-grid{ gap: 8px 6px; margin-bottom: 18px; }
+.app-shell .sheet-view[data-view="market"] .mkt-cat-card{ padding: 4px 0; gap: 7px; min-width: 0; }
+.app-shell .sheet-view[data-view="market"] .mkt-cat-ic{
+  width: 58px; height: 58px; border-radius: 20px; background: var(--purple-dim); color: var(--purple);
+  box-shadow: none; border: 1px solid var(--ui-line);
+}
+.app-shell .sheet-view[data-view="market"] .mkt-cat-card:nth-child(4n+2) .mkt-cat-ic{ background: var(--orange-dim); color: var(--orange-text); border-color: rgba(255,122,41,0.2); }
+.app-shell .sheet-view[data-view="market"] .mkt-cat-card:nth-child(4n+3) .mkt-cat-ic{ background: rgba(34,197,94,0.14); color: #14803D; border-color: rgba(34,197,94,0.25); }
+.app-shell .sheet-view[data-view="market"] .mkt-cat-card:nth-child(4n+4) .mkt-cat-ic{ background: rgba(240,180,41,0.20); color: #7A4E00; border-color: rgba(240,180,41,0.35); }
+.app-shell .sheet-view[data-view="market"] .mkt-cat-label{ font-size: 11.5px; font-weight: 800; color: var(--ui-ink); }
+
+.app-shell .sheet-view:not([data-view="home"]) .mkt-chip{ min-height: 40px; padding: 8px 16px; background: #fff; border: 1.5px solid var(--ui-line); color: var(--ui-muted); font-weight: 800; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-chip.active{ background: var(--ui-grad); border-color: transparent; color: #fff; box-shadow: 0 8px 16px -10px rgba(109,40,217,0.6); }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-cats-scroll{ padding: 2px 1px 8px; margin-bottom: 8px; }
+
+.app-shell .sheet-view:not([data-view="home"]) .mkt-grid{ gap: 12px; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow); min-width: 0;
+}
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-img{ aspect-ratio: 1 / 1; background: linear-gradient(135deg, var(--purple-dim), rgba(240,180,41,0.16)); }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-tag{ background: var(--green); font-size: 10px; font-weight: 900; padding: 3px 9px; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-body{ padding: 10px 12px 12px; gap: 5px; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-title{ color: var(--ui-ink); font-weight: 800; font-size: 13px; min-height: 2.6em; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-price{ background: var(--orange-dim); color: var(--orange-text); }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-loc{ color: var(--ui-muted); font-weight: 600; }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-card-body::after{ color: var(--purple); }
+.app-shell .sheet-view:not([data-view="home"]) .mkt-empty, .app-shell .sheet-view:not([data-view="home"]) .plc-empty{
+  background: #fff; border: 1.5px dashed var(--ui-line-strong); border-radius: 22px; padding: 30px 16px;
+  color: var(--ui-muted); font-weight: 700;
+}
+.app-shell .sheet-view:not([data-view="home"]) .mkt-empty-ic, .app-shell .sheet-view:not([data-view="home"]) .plc-empty-ic{
+  width: 60px; height: 60px; border-radius: 50%; background: var(--purple-dim); color: var(--purple);
+  display: flex; align-items: center; justify-content: center; font-size: 26px; opacity: 1;
+}
+.app-shell .sheet-view:not([data-view="home"]) .mkt-empty-ic svg, .app-shell .sheet-view:not([data-view="home"]) .plc-empty-ic svg{ width: 26px; height: 26px; }
+.app-shell .sheet-view[data-view="market"] .mkt-add-fab, .app-shell .sheet-view[data-view="marketMyAds"] .mkt-add-fab{ margin: 8px 0 4px; min-height: 54px; background: var(--ui-grad-warm); color: #fff; box-shadow: 0 14px 26px -14px rgba(255,122,41,0.7); }
+
+/* product page: full-bleed gallery with the back button floating on it */
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-gallery{
+  grid-row: 1; grid-column: 1 / -1;
+  margin: -4px calc(-1 * var(--sp-5)) 16px;
+  border-radius: 0 0 28px 28px; overflow: hidden; background: linear-gradient(135deg, var(--purple-dim), rgba(240,180,41,0.18));
+}
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-gallery-ph{ background: transparent; aspect-ratio: 4 / 3; opacity: .55; }
+.app-shell .sheet-view[data-view="marketProduct"] .sheet-back{ grid-row: 1; align-self: start; z-index: 3; margin: 14px 0 0; box-shadow: 0 10px 20px -10px rgba(27,18,64,0.5); }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-body{ padding: 0 2px 8px; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-top{ align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-top h2{ font-size: 20px; font-weight: 900; color: var(--ui-ink); line-height: 1.3; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-price{
+  font-size: 15px; font-weight: 900; color: var(--orange-text); background: var(--orange-dim);
+  padding: 6px 12px; border-radius: 100px; align-self: flex-start;
+}
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-badges{ flex-wrap: wrap; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-badge{ background: rgba(34,197,94,0.14); color: #14803D; font-weight: 800; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-badge-muted{ background: var(--purple-dim); color: var(--purple-text); }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-desc{ color: var(--ui-ink); font-weight: 500; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-location{
+  align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border: 1px solid var(--ui-line); border-radius: 16px; font-weight: 700;
+}
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-location svg{ width: 20px; height: 20px; flex: 0 0 20px; color: var(--purple); }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-location span{ flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-number{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-actions,
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-actions{
+  gap: 10px; padding: 22px 0 6px;
+  background: linear-gradient(180deg, rgba(228,245,244,0) 0%, #E4F5F4 34%);
+}
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-actions .app-btn,
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-actions .app-btn{ min-height: 54px; padding: 10px 12px; font-size: 14.5px; }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-whatsapp-btn, .app-shell .sheet-view[data-view="placeDetail"] .plc-call-btn{
+  background: linear-gradient(135deg, #22C55E, #16A34A); color: #fff; box-shadow: 0 14px 26px -14px rgba(22,163,74,0.6);
+}
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-delivery-btn svg, .app-shell .sheet-view[data-view="placeDetail"] .plc-delivery-btn svg,
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-whatsapp-btn svg, .app-shell .sheet-view[data-view="placeDetail"] .plc-call-btn svg{ width: 18px; height: 18px; flex: 0 0 auto; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-delivery-btn{ background: var(--ui-grad); color: #fff; border: 0; box-shadow: 0 14px 26px -14px rgba(109,40,217,0.6); }
+
+/* my ads */
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myads-tabs{ padding: 5px; background: #fff; border: 1px solid var(--ui-line); border-radius: 100px; box-shadow: var(--ui-shadow-sm); gap: 4px; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myads-tab{ min-height: 40px; border: 0; background: transparent; color: var(--ui-muted); font-weight: 800; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myads-tab.active{ background: var(--ui-grad); color: #fff; box-shadow: 0 8px 16px -10px rgba(109,40,217,0.6); }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-card{ background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow); padding: 12px; align-items: center; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-img{ width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, var(--purple-dim), rgba(240,180,41,0.16)); }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-body b{ color: var(--ui-ink); font-size: 14px; font-weight: 800; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-price{ background: var(--orange-dim); color: var(--orange-text); align-self: flex-start; padding: 2px 9px; border-radius: 100px; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-date{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-act{ min-height: 32px; padding: 6px 12px; background: var(--purple-dim); color: var(--purple-text); border: 1px solid var(--ui-line-strong); font-weight: 800; }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-myad-act-danger{ background: rgba(229,72,77,0.08); color: #D6303A; border-color: rgba(229,72,77,0.3); }
+.app-shell .sheet-view[data-view="marketMyAds"] .mkt-phone-gate p{ color: var(--ui-muted); font-weight: 700; }
+
+/* add listing */
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-photo-grid{ gap: 10px; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-photo-add{ border: 2px dashed var(--ui-line-strong); background: var(--purple-dim); color: var(--purple-text); border-radius: 20px; font-weight: 800; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-photo-add small{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-photo-thumb{ border-radius: 20px; border: 1px solid var(--ui-line); }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-select-field select{
+  background: #fff; border: 1.5px solid var(--ui-line-strong); border-radius: 16px; min-height: 58px; color: var(--ui-ink); padding: 22px 14px 8px;
+}
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-select-field::after{ border-color: var(--purple); }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-select-field label, .app-shell .sheet-view[data-view="marketAdd"] .mkt-textarea-field label{ color: var(--purple-text); font-weight: 700; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-textarea-field textarea{ padding: 26px 14px 10px; min-height: 96px; font-size: 16px; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-condition-opt span{ min-height: 48px; border: 1.5px solid var(--ui-line-strong); border-radius: 16px; background: #fff; color: var(--ui-muted); font-weight: 800; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-condition-opt input:checked + span{ border-color: var(--purple); background: var(--purple-dim); color: var(--purple-text); box-shadow: 0 0 0 3px var(--purple-dim); }
+.app-shell .sheet-view[data-view="marketAdd"] .confirm-summary-card{ background: #fff; border: 1px solid var(--ui-line); border-radius: 22px; box-shadow: var(--ui-shadow); padding: 16px; margin-bottom: 12px; }
+.app-shell .sheet-view[data-view="marketAdd"] .csr-row span{ color: var(--ui-muted); font-weight: 700; }
+.app-shell .sheet-view[data-view="marketAdd"] .csr-row b{ color: var(--ui-ink); }
+.app-shell .sheet-view[data-view="marketDone"] .mkt-done{ padding: 40px 12px; }
+.app-shell .sheet-view[data-view="marketDone"] .mkt-done h2{ color: var(--ui-ink); font-size: 20px; font-weight: 900; }
+.app-shell .sheet-view[data-view="marketDone"] .mkt-done p{ color: var(--ui-muted); font-weight: 600; }
+.app-shell .sheet-view[data-view="marketDone"] .mkt-done-check{ width: 84px; height: 84px; box-shadow: 0 0 0 10px rgba(34,197,94,0.14), 0 18px 30px -14px rgba(22,163,74,0.6); }
+.app-shell .sheet-view[data-view="marketDone"] .mkt-done-check svg{ width: 38px; height: 38px; }
+
+/* =========================================================================
+   10) Restaurants / markets / other services (places)
+   ========================================================================= */
+.app-shell .sheet-view[data-view="places"] .plc-hero-banner{
+  border-radius: 26px; min-height: 140px; padding: 18px 16px; margin-bottom: 14px;
+  box-shadow: 0 20px 34px -22px rgba(76,29,149,0.7);
+}
+.app-shell .sheet-view[data-view="places"] .plc-hero-banner::before{ background: linear-gradient(180deg, rgba(76,29,149,0.05) 0%, rgba(30,10,80,0.82) 100%); }
+.app-shell .sheet-view[data-view="places"] .plc-hero-banner-ic{ background: rgba(255,255,255,0.22); border-radius: 16px; }
+.app-shell .sheet-view[data-view="places"] .plc-hero-banner-text b{ font-size: 17px; }
+.app-shell .sheet-view[data-view="places"] .plc-tabs{ padding: 5px; gap: 4px; background: #fff; border: 1px solid var(--ui-line); border-radius: 100px; box-shadow: var(--ui-shadow-sm); margin-bottom: 6px; }
+.app-shell .sheet-view[data-view="places"] .plc-tab{ min-height: 44px; border: 0; background: transparent; color: var(--ui-muted); font-weight: 800; box-shadow: none; }
+.app-shell .sheet-view[data-view="places"] .plc-tab.active{ background: var(--ui-grad); color: #fff; box-shadow: 0 8px 16px -10px rgba(109,40,217,0.6); }
+.app-shell .sheet-view[data-view="places"] #plcGrid{ gap: 14px; }
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card,
+.app-shell .sheet-view[data-view="places"] .plc-card{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 24px; box-shadow: var(--ui-shadow);
+}
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card-img{ border-radius: 0; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--purple-dim), rgba(240,180,41,0.16)); }
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card-body{ padding: 14px 16px 16px; gap: 7px; }
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card-title{ color: var(--ui-ink); font-size: 16.5px; font-weight: 900; }
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card-meta{ color: var(--ui-muted); }
+.app-shell .sheet-view[data-view="places"] #plcGrid .plc-card-body::after{ background: var(--purple-dim); color: var(--purple-text); font-weight: 900; padding: 8px 16px; }
+.app-shell .sheet-view[data-view="places"] .plc-card-cat-restaurants{ background: var(--orange-dim); color: var(--orange-text); }
+.app-shell .sheet-view[data-view="places"] .plc-card-cat-markets{ background: rgba(34,197,94,0.14); color: #14803D; }
+.app-shell .sheet-view[data-view="places"] .plc-card-cat-futureOffice{ background: var(--purple-dim); color: var(--purple-text); }
+.app-shell .sheet-view[data-view="places"] .plc-empty{ padding: 30px 16px; }
+
+/* place detail: hero photo full-bleed, back button floating over it */
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-hero{
+  grid-row: 1; grid-column: 1 / -1;
+  margin: -4px calc(-1 * var(--sp-5)) 16px; width: auto;
+  border-radius: 0 0 28px 28px; aspect-ratio: 16 / 10;
+  background-color: var(--purple-dim);
+}
+.app-shell .sheet-view[data-view="placeDetail"] .sheet-back{ grid-row: 1; align-self: start; z-index: 3; margin: 14px 0 0; box-shadow: 0 10px 20px -10px rgba(27,18,64,0.5); }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-body{ padding: 0 2px 8px; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-top{ align-items: flex-start; margin-bottom: 10px; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-top h2{ font-size: 21px; font-weight: 900; color: var(--ui-ink); line-height: 1.3; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-badge{ background: var(--orange-dim); color: var(--orange-text); font-weight: 800; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-desc{ color: var(--ui-ink); font-weight: 500; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-info{ gap: 8px; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-info-row{
+  align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--ui-line); border-radius: 16px; font-weight: 700; color: var(--ui-ink);
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-info-row svg{ width: 20px; height: 20px; flex: 0 0 20px; color: var(--purple); }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-info-row span{ flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
+/* =========================================================================
+   11) Customer dialogs & notices (iOS install modal, install card,
+       in-app-browser notice, guide sheet)
+   ========================================================================= */
+.ios-modal-backdrop{ background: rgba(27,11,78,0.55); }
+.ios-modal{
+  background: #fff; color: var(--ui-ink); border: 1px solid var(--ui-line); border-radius: 28px;
+  box-shadow: 0 30px 60px -24px rgba(27,11,78,0.6);
+}
+.ios-modal-close{ background: var(--purple-dim); color: var(--purple-text); width: 34px; height: 34px; }
+.ios-modal-icon{ background: var(--ui-grad); border-radius: 20px; box-shadow: 0 14px 24px -12px rgba(109,40,217,0.7); color: #fff; }
+.ios-modal h3{ color: var(--ui-ink); font-weight: 900; }
+.ios-modal-steps b{ color: var(--purple-text); }
+.ios-modal .step-num, .help-install-steps .step-num{ background: var(--ui-grad); color: #fff; }
+
+body #pwaInstallCard{
+  background: #fff; color: var(--ui-ink); border: 1px solid var(--ui-line); border-radius: 22px;
+  box-shadow: 0 22px 44px -20px rgba(76,29,149,0.55); padding: 12px 14px;
+}
+body #pwaInstallCard .pwa-icon{ background: var(--ui-grad); border-radius: 14px; width: 44px; height: 44px; }
+body #pwaInstallCard .pwa-icon svg path{ stroke: #fff; }
+body #pwaInstallCard .pwa-icon svg circle{ fill: #F0B429; }
+body #pwaInstallCard .pwa-text b{ color: var(--ui-ink); font-weight: 900; }
+body #pwaInstallCard .pwa-text span{ color: var(--ui-muted); opacity: 1; font-weight: 600; }
+body #pwaInstallCard .pwa-install-btn{ background: var(--ui-grad); border-radius: 14px; min-height: 40px; box-shadow: 0 10px 18px -12px rgba(109,40,217,0.7); }
+body #pwaInstallCard .pwa-close-btn{ color: var(--ui-muted); min-width: 32px; min-height: 32px; }
+
+body #inAppBrowserCard{
+  background: #fff; color: var(--ui-ink); border: 1px solid rgba(240,180,41,0.5); border-radius: 22px;
+  box-shadow: 0 22px 44px -20px rgba(76,29,149,0.5); padding: 12px 14px;
+}
+body #inAppBrowserCard .inapp-icon{
+  width: 40px; height: 40px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: rgba(240,180,41,0.2); font-size: 20px;
+}
+body #inAppBrowserCard .inapp-text b{ color: var(--ui-ink); font-weight: 900; }
+body #inAppBrowserCard .inapp-text span{ color: var(--ui-muted); opacity: 1; font-weight: 600; }
+body #inAppBrowserCard .inapp-open-btn{ background: var(--ui-grad); border-radius: 14px; min-height: 40px; }
+body #inAppBrowserCard .inapp-close-btn{ color: var(--ui-muted); min-width: 32px; min-height: 32px; }
+body #inAppGuideBackdrop{ background: rgba(27,11,78,0.55); }
+body #inAppGuideBackdrop .inapp-guide-card{ background: #fff; border-radius: 26px 26px 0 0; color: var(--ui-ink); }
+body #inAppGuideBackdrop li b{ color: var(--purple-text); }
+
+/* =========================================================================
+   12) Welcome / login screens
+   ========================================================================= */
+#welcomeScreen{
+  background:
+    radial-gradient(620px 420px at 100% -8%, rgba(139,92,246,0.28), transparent 62%),
+    radial-gradient(520px 380px at -6% 108%, rgba(34,197,94,0.16), transparent 60%),
+    radial-gradient(420px 300px at 96% 100%, rgba(255,122,41,0.12), transparent 60%),
+    linear-gradient(170deg, #F4F0FF 0%, #F8F6FF 52%, #EFE9FF 100%);
+}
+#welcomeScreen .welcome-content{ max-width: 390px; }
+#welcomeScreen .welcome-logo,
+#welcomeScreen .welcome-logo-intro{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 28px;
+  box-shadow: 0 22px 40px -20px rgba(91,33,182,0.55), 0 0 0 8px rgba(139,92,246,0.10);
+}
+#welcomeScreen .welcome-content h1,
+#welcomeScreen .welcome-intro-title{ color: var(--ui-ink); }
+#welcomeScreen .welcome-intro-dots{ color: var(--orange); }
+#welcomeScreen .welcome-intro-sub,
+#welcomeScreen .welcome-sub{ color: var(--ui-muted); font-weight: 600; }
+#welcomeScreen .welcome-greeting{ color: var(--purple-text); font-weight: 900; }
+#welcomeSetupName{ color: var(--purple); }
+#welcomeScreen .welcome-step-dot{ background: rgba(109,40,217,0.18); }
+#welcomeScreen .welcome-step-dot.active{ background: var(--ui-grad); box-shadow: 0 0 10px rgba(139,92,246,0.55); }
+#welcomeScreen .welcome-step-line{ background: rgba(109,40,217,0.18); }
+
+#welcomeScreen .welcome-intro-services{ gap: 10px; }
+#welcomeScreen .welcome-intro-chip{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 20px; box-shadow: var(--ui-shadow-sm);
+}
+#welcomeScreen .welcome-intro-chip-ic{ background: var(--purple-dim); color: var(--purple); }
+#welcomeScreen .welcome-intro-chip:nth-child(2) .welcome-intro-chip-ic{ background: var(--orange-dim); color: var(--orange-text); }
+#welcomeScreen .welcome-intro-chip:nth-child(3) .welcome-intro-chip-ic{ background: rgba(34,197,94,0.14); color: #14803D; }
+#welcomeScreen .welcome-intro-chip:nth-child(4) .welcome-intro-chip-ic{ background: rgba(240,180,41,0.2); color: #7A4E00; }
+#welcomeScreen .welcome-intro-chip-label{ color: var(--ui-ink); font-weight: 800; font-size: 11px; }
+
+#welcomeScreen .welcome-login-form{
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 26px;
+  box-shadow: 0 26px 46px -26px rgba(76,29,149,0.5); backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+#welcomeScreen .welcome-input{
+  min-height: 54px; background-color: #fff; border: 1.5px solid var(--ui-line-strong); border-radius: 16px; color: var(--ui-ink); font-weight: 600;
+}
+#welcomeScreen .welcome-input::placeholder{ color: var(--ui-muted); font-weight: 500; }
+#welcomeScreen .welcome-input:focus{ border-color: var(--purple); box-shadow: 0 0 0 4px var(--purple-dim); }
+#welcomeScreen .welcome-field-icon{ width: 30px; height: 30px; right: 12px; background: var(--purple-dim); color: var(--purple); }
+#welcomeScreen .welcome-field .welcome-input{ padding-right: 52px; }
+#welcomeScreen select.welcome-input{
+  background-repeat: no-repeat; background-position: left 14px center; background-size: 16px; padding-left: 40px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%236D28D9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+#welcomeScreen .welcome-login-error{ font-weight: 700; }
+#welcomeScreen .welcome-install-btn{ background: var(--ui-grad-warm); box-shadow: 0 14px 26px -14px rgba(255,122,41,0.7); }
+#welcomeScreen .welcome-hint{ color: var(--ui-muted); font-weight: 600; }
+#welcomeScreen .welcome-platform-guide{ background: #fff; border: 1px solid var(--ui-line); border-radius: 14px; color: var(--ui-muted); }
+#welcomeScreen .welcome-platform-guide-title{ color: var(--ui-ink); }
+#welcomeScreen .welcome-inapp-notice{ background: rgba(240,180,41,0.16); border: 1px solid rgba(240,180,41,0.5); color: #7A4E00; border-radius: 16px; }
+#welcomeScreen .welcome-footer p{ color: var(--ui-muted); }
+
+/* =========================================================================
+   13) HOME — banner contrast only (approved). The banner already carries the
+   purple→green gradient; its text was still dark teal on purple. Text colour
+   only, plus box-sizing so the banner stops bleeding off the left edge.
+   No other Home rule is touched by this layer.
+   ========================================================================= */
+.discover-banner{ box-sizing: border-box; }
+.discover-banner .discover-banner-text b{ color: #fff; }
+.discover-banner .discover-banner-text span{ color: rgba(255,255,255,0.92); }
+
+/* ---- targeted fixes found during QA ---- */
+/* .price-bar[data-wizard-step="4"] used display:flex !important, which beat the
+   step-visibility rule and leaked the price into steps 1–3. Kept for step 4 only. */
+.app-shell .sheet-view[data-view="booking"]:not([data-current-step="4"]) .price-bar[data-wizard-step="4"]{ display: none !important; }
+/* select chevron sat on top of the text (right side in RTL) */
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-select-field::after{ inset-inline-start: auto; inset-inline-end: 18px; }
+.app-shell .sheet-view[data-view="marketAdd"] .mkt-select-field select{ padding-inline-end: 40px; }
+
+/* =========================================================================
+   FINAL IDENTITY OVERRIDE — بنفسجي = هوية يمّك الأساسية (الرئيسية + كل الشاشات)
+   -------------------------------------------------------------------------
+   كتلة :root عند السطر ~4876 (--teal:#0D8A9E + قماشة/تدرجات تركوازية) كانت تفوز
+   على الرئيسية لأن قاعدة البنفسجي (~5408) تستثني data-view="home". هذه الطبقة
+   الأخيرة تُوحّد الهوية بدون حذف/تعديل أي قاعدة قديمة. ألوان الخدمات
+   (أخضر/برتقالي/ذهبي) والتخطيط والأحجام لم تُمَسّ.
+   ========================================================================= */
+:root{
+  --teal: var(--purple);
+  --teal-soft: var(--purple-soft);
+  --teal-text: var(--purple-text);
+  --teal-dim: var(--purple-dim);
+  --brand-grad: var(--ui-grad);
+  --brand-grad-soft: linear-gradient(135deg, rgba(109,40,217,0.14) 0%, rgba(34,197,94,0.12) 100%);
+  --brand-sunset: linear-gradient(120deg, #6D28D9 0%, #16A34A 55%, #FF7A29 100%);
+  --sec-transport: var(--purple);
+  --sec-transport-dim: var(--purple-dim);
+  --surface: #F1EDFB;
+  --surface-hi: #E6DFF8;
+  --surface-brd: #D8CDF1;
+  --bg-deep:
+    radial-gradient(120% 55% at 14% -12%, rgba(109,40,217,0.14) 0%, transparent 55%),
+    radial-gradient(110% 60% at 104% 2%, rgba(255,122,41,0.09) 0%, transparent 55%),
+    radial-gradient(95% 55% at 50% 118%, rgba(34,197,94,0.08) 0%, transparent 60%),
+    #F1EDFB;
+}
+/* الرئيسية صراحةً — نفس قيم الشاشات الداخلية */
+.app-shell .sheet-view[data-view="home"]{
+  --teal: var(--purple);
+  --teal-soft: var(--purple-soft);
+  --teal-text: var(--purple-text);
+  --teal-dim: var(--purple-dim);
+  --brand-grad: var(--ui-grad);
+  --brand-grad-soft: linear-gradient(135deg, rgba(109,40,217,0.14) 0%, rgba(34,197,94,0.12) 100%);
+}
+/* بقايا لون ثابت (rgba) تركوازي/قماشة قديمة — لون فقط، بلا تغيير أبعاد */
+.qs-row[data-service="intercity"]{ box-shadow: 0 16px 30px -16px rgba(109,40,217,0.5); }
+.app-shell .sheet-view[data-view="marketProduct"] .mkt-product-actions,
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-actions{
+  background: linear-gradient(180deg, rgba(241,237,251,0) 0%, #F1EDFB 34%);
+}
+
+/* =========================================================================
+   مساعد يمّك — مدخل ذكي مختصر (Home) — إضافة معزولة بالكامل
+   -------------------------------------------------------------------------
+   كل الأصناف هنا ببادئة .ya- فريدة (غير مستخدمة بأي مكان آخر بالملف)
+   فلا تتقاطع مع أي CSS حالي. تستخدم فقط متغيرات الجذر الموجودة أصلاً
+   (--purple/--green/--orange/--gold وتدرّجاتها، --sp-*، --app-r-*،
+   --surface*، --text*، --elev-1) دون أي قيمة لون جديدة. لا تعديل على
+   .where-to ولا .quick-services ولا .qs-row ولا أي صنف قائم.
+   ========================================================================= */
+.ya-assist{ width:100%; box-sizing:border-box; margin: 0 0 var(--sp-4); }
+
+.ya-field{
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%; box-sizing:border-box;
+  background: var(--surface);
+  border: 1.5px solid var(--surface-brd);
+  border-radius: var(--app-r-md);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: 52px;
+  box-shadow: var(--elev-1);
+  transition: border-color .2s, box-shadow .2s;
+}
+.ya-field:focus-within{
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-dim);
+}
+.ya-ic{
+  flex-shrink:0; width:20px; height:20px;
+  display:flex; align-items:center; justify-content:center;
+  color: var(--purple);
+}
+.ya-ic svg{ width:100%; height:100%; }
+.ya-input{
+  flex:1 1 auto; min-width:0; width:100%;
+  border:none; outline:none; background:transparent;
+  font-family: inherit; font-size:15px; font-weight:700;
+  color: var(--text); padding:0;
+}
+.ya-input::placeholder{ color: var(--text-faint); font-weight:600; }
+.ya-mic{
+  flex-shrink:0; width:36px; height:36px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border:none; border-radius:50%;
+  background: var(--purple-dim); color: var(--purple);
+  transition: background .2s, color .2s;
+}
+.ya-mic svg{ width:18px; height:18px; }
+.ya-mic:active{ transform: scale(0.94); }
+.ya-mic.ya-listening{
+  background: var(--orange); color:#fff;
+  animation: yaPulse 1.15s ease-in-out infinite;
+}
+@keyframes yaPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+@media (prefers-reduced-motion: reduce){
+  .ya-mic.ya-listening{ animation: none; }
+}
+
+/* شريط الاقتراحات أثناء الكتابة — أفقي قابل للتمرير، لا يكسر عرض
+   الشاشة أبداً (overflow-x محصور داخل هذا العنصر فقط). */
+.ya-suggest{
+  display:flex; align-items:center; gap: var(--sp-2);
+  width:100%; box-sizing:border-box;
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+  padding: var(--sp-3) 1px 2px;
+  scrollbar-width:none;
+}
+.ya-suggest::-webkit-scrollbar{ display:none; }
+.ya-suggest-chip{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:6px;
+  padding:8px 14px; border-radius: var(--app-r-pill);
+  background:#fff; border:1px solid var(--surface-brd);
+  font-size:12.5px; font-weight:700; color: var(--text);
+  white-space:nowrap; box-shadow: var(--elev-1);
+}
+.ya-suggest-chip svg{ width:15px; height:15px; flex-shrink:0; color: var(--purple); }
+.ya-suggest-chip:active{ transform: scale(0.96); background: var(--purple-dim); border-color: var(--purple); }
+
+/* بطاقة "فهمت طلبك" / حالة الغموض — تحل محل الحقل بصرياً، وليست نافذة منبثقة */
+.ya-confirm{
+  width:100%; box-sizing:border-box;
+  background:#fff; border:1px solid var(--surface-brd);
+  border-radius: var(--app-r-md); padding: var(--sp-4);
+  margin-top: var(--sp-3); box-shadow: var(--elev-1);
+}
+.ya-confirm-title{
+  display:flex; align-items:center; gap: var(--sp-2);
+  font-size:12px; font-weight:800; color: var(--purple-text);
+  text-transform:uppercase; letter-spacing:.05em;
+  margin:0 0 var(--sp-3);
+}
+.ya-confirm-title::before{
+  content:''; width:16px; height:5px; border-radius:3px; flex-shrink:0;
+  background: linear-gradient(90deg, var(--purple), var(--green, #22C55E));
+}
+.ya-confirm-body{ display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.ya-confirm-row{
+  display:flex; align-items:flex-start; gap: var(--sp-2);
+  font-size:13.5px; line-height:1.5; min-width:0;
+}
+.ya-confirm-row b{ flex-shrink:0; font-weight:800; color: var(--text); }
+.ya-confirm-row span{ color: var(--text-muted); min-width:0; overflow-wrap:anywhere; }
+.ya-confirm-note{
+  font-size:12.5px; font-weight:700; color: var(--orange-text);
+  background: var(--orange-dim); border-radius: var(--app-r-sm);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-4);
+}
+.ya-confirm-actions{ display:flex; gap: var(--sp-3); }
+.ya-btn-confirm{
+  flex:1 1 auto; min-width:0; border:none; cursor:pointer;
+  border-radius: var(--app-r-pill); padding:12px 16px;
+  font-family:inherit; font-size:14px; font-weight:800; color:#fff;
+  background: var(--brand-grad-home, linear-gradient(135deg, var(--purple), var(--green)));
+  box-shadow: 0 10px 20px -12px rgba(109,40,217,0.5);
+}
+.ya-btn-confirm:active{ transform: scale(0.97); }
+.ya-btn-edit{
+  flex:0 0 auto; border:1.5px solid var(--surface-brd); background:transparent;
+  cursor:pointer; border-radius: var(--app-r-pill); padding:12px 16px;
+  font-family:inherit; font-size:14px; font-weight:800; color: var(--text);
+}
+.ya-btn-edit:active{ background: var(--surface-hi); }
+
+/* حالة الغموض — أزرار اقتراحات رأسية بدل السطر الواحد */
+.ya-guess-list{ display:flex; flex-direction:column; gap: var(--sp-2); }
+.ya-guess-btn{
+  display:flex; align-items:center; gap: var(--sp-3); width:100%;
+  box-sizing:border-box; text-align:start; cursor:pointer;
+  padding:10px 14px; border-radius: var(--app-r-sm);
+  border:1px solid var(--surface-brd); background: var(--surface);
+  font-family:inherit; font-size:13.5px; font-weight:700; color: var(--text);
+}
+.ya-guess-btn svg{ width:17px; height:17px; flex-shrink:0; color: var(--purple); }
+.ya-guess-btn:active{ background: var(--purple-dim); border-color: var(--purple); }
+
+/* =========================================================================
+   نظام الرسائل الديناميكي — شريط واحد خفيف (#yaMsgBar) في أعلى محتوى
+   الصفحة الرئيسية، يستبدل الرسائل الترويجية الثابتة السابقة. إضافة
+   معزولة بالكامل، بادئة .ya- فريدة، تستخدم فقط متغيرات الجذر الموجودة
+   أصلاً. لا Horizontal Scroll: النص يُقصّ لسطرين كحد أقصى (ellipsis)
+   بدل أي تمرير أفقي. عنصر عادي داخل تدفق الصفحة (.sheet-scroll) القابل
+   للتمرير أصلاً، وليس شريطاً ثابتاً على حافة الشاشة، فلا يحتاج معالجة
+   safe-area خاصة به — القاعدة الأصلية على .sheet-scroll تبقى كما هي.
+   ========================================================================= */
+.ya-msgbar{
+  display:flex; align-items:center; gap: var(--sp-3);
+  width:100%; box-sizing:border-box;
+  background: var(--surface);
+  border-inline-start: 3px solid var(--purple);
+  border-radius: var(--app-r-sm);
+  padding: 10px var(--sp-4);
+  margin: 0 0 var(--sp-3);
+  box-shadow: var(--elev-1);
+  min-height: 40px;
+}
+.ya-msgbar-ic{
+  flex-shrink:0; width:18px; height:18px;
+  display:flex; align-items:center; justify-content:center;
+  color: var(--purple);
+}
+.ya-msgbar-ic svg{ width:100%; height:100%; }
+.ya-msgbar-text{
+  flex:1 1 auto; min-width:0;
+  font-size:12.5px; font-weight:700; line-height:1.45;
+  color: var(--text);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; text-overflow:ellipsis;
+}
+/* أنواع الرسائل — لون شريط جانبي وأيقونة فقط، بدون تغيير أي شيء آخر
+   بالتخطيط. info (افتراضي، بنفسجي) لرسائل الترحيب/التوجيه العامة،
+   success (أخضر) عند اختيار خدمة أو مسار، warning (برتقالي) للتنبيهات،
+   offer (ذهبي) للعروض المستقبلية. */
+.ya-msgbar.ya-msg-info{ border-inline-start-color: var(--purple); }
+.ya-msgbar.ya-msg-info .ya-msgbar-ic{ color: var(--purple); }
+.ya-msgbar.ya-msg-success{ border-inline-start-color: var(--green); }
+.ya-msgbar.ya-msg-success .ya-msgbar-ic{ color: var(--green-text); }
+.ya-msgbar.ya-msg-warning{ border-inline-start-color: var(--orange); }
+.ya-msgbar.ya-msg-warning .ya-msgbar-ic{ color: var(--orange-text); }
+.ya-msgbar.ya-msg-offer{ border-inline-start-color: var(--gold); }
+.ya-msgbar.ya-msg-offer .ya-msgbar-ic{ color: var(--gold-text); }
