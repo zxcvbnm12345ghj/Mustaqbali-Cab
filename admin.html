@@ -174,6 +174,16 @@
     background: var(--bg-deep, rgba(20,50,80,0.03));
     padding: 0;
   }
+  /* يمّك للخدمات المحلية — same expand-row pattern as the driver
+     stats table above, reused for the sections table. Additive
+     only; does not change the driver-stats CSS above. */
+  #lsSectionsTable tr.driver-row{ cursor: pointer; }
+  #lsSectionsTable tr.driver-row:hover,
+  #lsSectionsTable tr.driver-row.open{ background: var(--bg-deep, rgba(20,50,80,0.03)); }
+  #lsSectionsTable tr.driver-requests-row td{
+    background: var(--bg-deep, rgba(20,50,80,0.03));
+    padding: 0;
+  }
   .driver-requests-wrap{ padding: 10px 14px; overflow-x:auto; }
   .driver-requests-table{ width:100%; }
   .driver-requests-table th, .driver-requests-table td{ white-space: nowrap; font-size: 12.5px; }
@@ -311,6 +321,7 @@
       <button type="button" class="admin-tab-btn" data-tab="requests">الطلبات</button>
       <button type="button" class="admin-tab-btn" data-tab="ads">الإعلانات والإشعارات</button>
       <button type="button" class="admin-tab-btn" data-tab="places">المطاعم والأسواق ومكتب المستقبل</button>
+      <button type="button" class="admin-tab-btn" data-tab="localServices">يمّك للخدمات المحلية</button>
       <button type="button" class="admin-tab-btn" data-tab="settings">الإعدادات</button>
     </nav>
 
@@ -482,6 +493,7 @@
               <th>الصورة</th>
               <th>الاسم</th>
               <th>التصنيف</th>
+              <th>الترتيب</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
@@ -506,6 +518,7 @@
               <th>الصورة</th>
               <th>الاسم</th>
               <th>التصنيف</th>
+              <th>الترتيب</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
@@ -530,6 +543,7 @@
               <th>الصورة</th>
               <th>الاسم</th>
               <th>التصنيف</th>
+              <th>الترتيب</th>
               <th>الحالة</th>
               <th>إجراءات</th>
             </tr>
@@ -541,6 +555,84 @@
     </div>
     </div>
     <!-- /tabPanel-places -->
+
+    <!-- يمّك للخدمات المحلية -->
+    <div class="admin-tab-panel" id="tabPanel-localServices" data-tab-panel="localServices">
+    <!-- ============================================================
+         يمّك للخدمات المحلية — additive only. Reads/writes the
+         pre-existing tables local_service_sections /
+         local_service_categories / local_service_providers (already
+         created and seeded with the 16 agreed sections + their
+         sub-categories; the providers table is empty and is filled
+         from here as real providers are added). Does not touch
+         restaurants/markets/future_office, ads, drivers, pricing,
+         GPS, RPCs, or the requests table/modal in any way. No new
+         table and no migration — same three tables used as-is.
+         Active/inactive here only controls whether a node would be
+         hidden from a future customer-facing screen; that screen
+         does not exist yet, so toggling here has no visible effect
+         on the customer app until it is built.
+         ============================================================ -->
+      <div class="admin-driver-stats">
+        <div class="admin-ads-head">
+          <p class="section-label" style="margin:0;">الأقسام والتصنيفات الفرعية</p>
+          <button type="button" class="admin-btn" id="addLsSectionBtn" style="width:auto; padding:8px 16px;">+ إضافة قسم</button>
+        </div>
+        <p class="admin-driver-stats-hint">اضغط على أي قسم لعرض تصنيفاته الفرعية أو طيّها. التفعيل/التعطيل والتعديل والحذف من هنا مباشرة، وأي تصنيف جديد يصبح متاحًا فورًا عند إضافة مزود خدمة تحته بالأسفل.</p>
+
+        <div class="admin-driver-stats-wrap">
+          <table class="admin-table" id="lsSectionsTable">
+            <thead>
+              <tr>
+                <th></th>
+                <th>القسم</th>
+                <th>الترتيب</th>
+                <th>عدد التصنيفات</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="lsSectionsBody"></tbody>
+          </table>
+          <div class="admin-empty" id="lsSectionsEmpty" style="display:none;">لا توجد أقسام بعد.</div>
+          <div class="admin-empty" id="lsSectionsLoading" style="display:none;">جارٍ التحميل...</div>
+        </div>
+      </div>
+
+      <div class="admin-driver-stats" id="lsProvidersSection">
+        <div class="admin-ads-head">
+          <p class="section-label" style="margin:0;">مزودو الخدمة</p>
+          <button type="button" class="admin-btn" id="addLsProviderBtn" style="width:auto; padding:8px 16px;">+ إضافة مزود خدمة</button>
+        </div>
+        <p class="admin-driver-stats-hint">استخدم بيانات حقيقية فقط لمزودي الخدمة (بدون أسماء أو أرقام أو صور وهمية). مزود "نشط" هنا هو الجاهز للعرض للزبائن لاحقًا عند بناء شاشة الخدمات المحلية في تطبيق الزبون.</p>
+
+        <div class="svc-controls">
+          <label for="lsProviderSectionFilter">القسم</label>
+          <select id="lsProviderSectionFilter" class="admin-date-input"><option value="">كل الأقسام</option></select>
+          <label for="lsProviderCategoryFilter">التصنيف</label>
+          <select id="lsProviderCategoryFilter" class="admin-date-input"><option value="">كل التصنيفات</option></select>
+        </div>
+
+        <div class="admin-ads-wrap">
+          <table class="admin-table" id="lsProvidersTable">
+            <thead>
+              <tr>
+                <th>الصورة</th>
+                <th>الاسم</th>
+                <th>القسم / التصنيف</th>
+                <th>الترتيب</th>
+                <th>الهاتف</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="lsProvidersBody"></tbody>
+          </table>
+          <div class="admin-empty" id="lsProvidersEmpty" style="display:none;">لا يوجد مزودو خدمة بعد. اضغط "+ إضافة مزود خدمة" لإضافة أول مزود ببياناته الحقيقية.</div>
+        </div>
+      </div>
+    </div>
+    <!-- /tabPanel-localServices -->
 
     <!-- الطلبات -->
     <div class="admin-tab-panel" id="tabPanel-requests" data-tab-panel="requests">
@@ -717,7 +809,18 @@
       <input type="text" id="adBody" placeholder="نص الإعلان" maxlength="500">
     </div>
     <div class="admin-field">
-      <label for="adImageUrl">رابط الصورة <span class="opt">(اختياري)</span></label>
+      <label for="adImageUploadBtn">صورة الإعلان <span class="opt">(اختياري)</span></label>
+      <!-- Real upload to Supabase Storage (public read / admin-only write).
+           The manual URL field below is kept on purpose so old links keep
+           working; both write the same image_url column. -->
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <img id="adImagePreview" alt="" style="display:none; width:72px; height:72px; border-radius:10px; object-fit:cover; border:1px solid rgba(0,0,0,0.1);">
+        <button type="button" class="admin-btn" id="adImageUploadBtn" style="width:auto; padding:8px 16px;">📷 رفع صورة</button>
+        <button type="button" class="admin-btn danger" id="adImageRemoveBtn" style="width:auto; padding:8px 16px;" hidden>إزالة الصورة</button>
+        <input type="file" id="adImageFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      </div>
+      <span id="adImageUploadStatus" style="font-size:12px; opacity:0.7; display:block; margin-top:4px;">الحد الأقصى 5MB — JPG / PNG / WebP / GIF</span>
+      <label for="adImageUrl" style="margin-top:8px; display:block;">أو رابط الصورة مباشرة <span class="opt">(اختياري)</span></label>
       <input type="text" id="adImageUrl" placeholder="https://...">
     </div>
     <div class="admin-field">
@@ -801,11 +904,38 @@
     </div>
     <div class="admin-field">
       <label for="placeCategory">التصنيف <span class="opt">(اختياري)</span></label>
-      <input type="text" id="placeCategory" placeholder="مثال: مشاوي، بيتزا، سوبرماركت، قرطاسية" maxlength="80">
+      <input type="text" id="placeCategory" placeholder="مثال: مشاوي، بيتزا، سوبرماركت، قرطاسية" maxlength="80" list="">
+      <!-- list="" toggled to "marketCategorySuggestions" only when kind === 'markets' (openPlaceModal in admin.js) -->
+    </div>
+    <!-- suggested category values for الأسواق only — datalist just offers
+         suggestions in the same free-text placeCategory input above, no
+         schema change, markets.category stays free text as before -->
+    <datalist id="marketCategorySuggestions">
+      <option value="سكائر وتبغ">
+      <option value="أركيلة ولوازمها">
+      <option value="معسل">
+      <option value="فحم أركيلة">
+      <option value="لوازم التدخين">
+      <option value="ولاعات وإكسسوارات">
+    </datalist>
+    <div class="admin-field">
+      <label for="placeImageUploadBtn">صورة المكان <span class="opt">(اختياري)</span></label>
+      <!-- Real upload to Supabase Storage (public read / admin-only write).
+           The manual URL field below is kept on purpose so old links keep
+           working; both write the same image_url column. -->
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <img id="placeImagePreview" alt="" style="display:none; width:72px; height:72px; border-radius:10px; object-fit:cover; border:1px solid rgba(0,0,0,0.1);">
+        <button type="button" class="admin-btn" id="placeImageUploadBtn" style="width:auto; padding:8px 16px;">📷 رفع صورة</button>
+        <button type="button" class="admin-btn danger" id="placeImageRemoveBtn" style="width:auto; padding:8px 16px;" hidden>إزالة الصورة</button>
+        <input type="file" id="placeImageFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      </div>
+      <span id="placeImageUploadStatus" style="font-size:12px; opacity:0.7; display:block; margin-top:4px;">الحد الأقصى 5MB — JPG / PNG / WebP / GIF</span>
+      <label for="placeImageUrl" style="margin-top:8px; display:block;">أو رابط الصورة مباشرة <span class="opt">(اختياري)</span></label>
+      <input type="text" id="placeImageUrl" placeholder="https://...">
     </div>
     <div class="admin-field">
-      <label for="placeImageUrl">رابط الصورة <span class="opt">(اختياري)</span></label>
-      <input type="text" id="placeImageUrl" placeholder="https://...">
+      <label for="placeSortOrder">الترتيب <span class="opt">(رقم صحيح — الأصغر يظهر أولًا، اتركه فارغًا للافتراضي)</span></label>
+      <input type="number" id="placeSortOrder" min="0" max="9999" step="1" placeholder="مثال: 1">
     </div>
     <div class="admin-field">
       <label for="placePhone">رقم الهاتف <span class="opt">(اختياري)</span></label>
@@ -834,6 +964,158 @@
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
       <button type="button" class="admin-btn" id="savePlaceBtn" style="width:auto; padding:10px 18px;">حفظ</button>
       <button type="button" class="admin-btn danger" id="deletePlaceBtn" style="width:auto; padding:10px 18px;" hidden>حذف</button>
+    </div>
+  </div>
+</div>
+
+<!-- LS SECTION MODAL — إضافة/تعديل قسم رئيسي ضمن يمّك للخدمات
+     المحلية (local_service_sections). Own ids/state
+     (localServicesState.editingSectionId), fully separate from every
+     modal above. -->
+<div class="admin-modal-backdrop" id="lsSectionModalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div><h2 id="lsSectionModalTitle" style="font-size:17px;">إضافة قسم</h2></div>
+      <button type="button" class="admin-modal-close" id="lsSectionModalCloseBtn">✕</button>
+    </div>
+    <div class="admin-field">
+      <label for="lsSectionKey">المعرّف (key) <span class="opt">(إنجليزي بدون مسافات، لا يمكن تعديله لاحقًا)</span></label>
+      <input type="text" id="lsSectionKey" placeholder="مثال: workers_craftsmen" maxlength="60">
+    </div>
+    <div class="admin-field">
+      <label for="lsSectionLabel">اسم القسم</label>
+      <input type="text" id="lsSectionLabel" placeholder="مثال: العمال والحرفيين" maxlength="150">
+    </div>
+    <div class="admin-field">
+      <label for="lsSectionIcon">الأيقونة <span class="opt">(إيموجي واحد، اختياري)</span></label>
+      <input type="text" id="lsSectionIcon" placeholder="مثال: 🛠️" maxlength="16">
+    </div>
+    <div class="admin-field">
+      <label for="lsSectionSortOrder">الترتيب <span class="opt">(رقم صحيح — الأصغر يظهر أولًا، اتركه فارغًا للافتراضي)</span></label>
+      <input type="number" id="lsSectionSortOrder" min="0" max="9999" step="1" placeholder="مثال: 1">
+    </div>
+    <label class="admin-ads-toggle-row" for="lsSectionActive">
+      <input type="checkbox" id="lsSectionActive" checked style="width:16px; height:16px;">
+      نشط (ظاهر)
+    </label>
+    <div class="admin-error" id="lsSectionModalError"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="admin-btn" id="saveLsSectionBtn" style="width:auto; padding:10px 18px;">حفظ</button>
+      <button type="button" class="admin-btn danger" id="deleteLsSectionBtn" style="width:auto; padding:10px 18px;" hidden>حذف القسم</button>
+    </div>
+  </div>
+</div>
+
+<!-- LS CATEGORY MODAL — إضافة/تعديل تصنيف فرعي ضمن قسم
+     (local_service_categories). -->
+<div class="admin-modal-backdrop" id="lsCategoryModalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div><h2 id="lsCategoryModalTitle" style="font-size:17px;">إضافة تصنيف</h2></div>
+      <button type="button" class="admin-modal-close" id="lsCategoryModalCloseBtn">✕</button>
+    </div>
+    <div class="admin-field">
+      <label for="lsCategorySection">القسم</label>
+      <select id="lsCategorySection"></select>
+    </div>
+    <div class="admin-field">
+      <label for="lsCategoryLabel">اسم التصنيف</label>
+      <input type="text" id="lsCategoryLabel" placeholder="مثال: كهربائي" maxlength="150">
+    </div>
+    <div class="admin-field">
+      <label for="lsCategorySortOrder">الترتيب <span class="opt">(رقم صحيح — الأصغر يظهر أولًا، اتركه فارغًا للافتراضي)</span></label>
+      <input type="number" id="lsCategorySortOrder" min="0" max="9999" step="1" placeholder="مثال: 1">
+    </div>
+    <label class="admin-ads-toggle-row" for="lsCategoryActive">
+      <input type="checkbox" id="lsCategoryActive" checked style="width:16px; height:16px;">
+      نشط (ظاهر)
+    </label>
+    <div class="admin-error" id="lsCategoryModalError"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="admin-btn" id="saveLsCategoryBtn" style="width:auto; padding:10px 18px;">حفظ</button>
+      <button type="button" class="admin-btn danger" id="deleteLsCategoryBtn" style="width:auto; padding:10px 18px;" hidden>حذف التصنيف</button>
+    </div>
+  </div>
+</div>
+
+<!-- LS PROVIDER MODAL — إضافة/تعديل مزود خدمة
+     (local_service_providers). Category picked via a two-step
+     section→category cascade (lsProviderSection feeds
+     lsProviderCategory), exactly like "القسم → التصنيف الفرعي →
+     إضافة مزود الخدمة" requested. -->
+<div class="admin-modal-backdrop" id="lsProviderModalBackdrop">
+  <div class="admin-modal">
+    <div class="admin-modal-head">
+      <div><h2 id="lsProviderModalTitle" style="font-size:17px;">إضافة مزود خدمة</h2></div>
+      <button type="button" class="admin-modal-close" id="lsProviderModalCloseBtn">✕</button>
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderSection">القسم</label>
+      <select id="lsProviderSection"></select>
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderCategory">التصنيف الفرعي</label>
+      <select id="lsProviderCategory"></select>
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderName">اسم مزود الخدمة</label>
+      <input type="text" id="lsProviderName" maxlength="150">
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderSortOrder">الترتيب <span class="opt">(رقم صحيح — الأصغر يظهر أولًا، اتركه فارغًا للافتراضي)</span></label>
+      <input type="number" id="lsProviderSortOrder" min="0" max="9999" step="1" placeholder="مثال: 1">
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderImageFile">صورة مزود الخدمة <span class="opt">(اختياري)</span></label>
+      <!-- Real file upload to Supabase Storage bucket "local-service-images"
+           (public read / admin-only write via is_admin()). No image_url
+           text input anymore — lsProviderImageUrl below is a hidden field
+           that only holds the resulting public URL after a successful
+           upload; saveLsProvider() still reads it exactly as before, so
+           no other code path changes. -->
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <img id="lsProviderImagePreview" alt="" style="display:none; width:64px; height:64px; border-radius:10px; object-fit:cover; border:1px solid rgba(0,0,0,0.1);">
+        <button type="button" class="admin-btn" id="lsProviderImageUploadBtn" style="width:auto; padding:8px 16px;">📷 رفع صورة</button>
+        <button type="button" class="admin-btn danger" id="lsProviderImageRemoveBtn" style="width:auto; padding:8px 16px;" hidden>إزالة الصورة</button>
+        <input type="file" id="lsProviderImageFile" accept="image/*" hidden>
+      </div>
+      <span id="lsProviderImageUploadStatus" style="font-size:12px; opacity:0.7; display:block; margin-top:4px;"></span>
+      <input type="hidden" id="lsProviderImageUrl">
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderDetails">التفاصيل <span class="opt">(اختياري)</span></label>
+      <textarea id="lsProviderDetails" rows="3" maxlength="1000" placeholder="نبذة تظهر للزبون بصفحة التفاصيل"></textarea>
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderPhone">رقم الهاتف <span class="opt">(اختياري)</span></label>
+      <input type="text" id="lsProviderPhone" placeholder="07xxxxxxxxx" maxlength="20">
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderAddress">العنوان <span class="opt">(اختياري)</span></label>
+      <input type="text" id="lsProviderAddress" placeholder="مثال: بغداد - الكرادة، قرب..." maxlength="200">
+    </div>
+    <div class="admin-ads-schedule-fields">
+      <div class="admin-field">
+        <label for="lsProviderLat">خط العرض lat <span class="opt">(اختياري)</span></label>
+        <input type="number" id="lsProviderLat" step="0.000001" min="-90" max="90">
+      </div>
+      <div class="admin-field">
+        <label for="lsProviderLng">خط الطول lng <span class="opt">(اختياري)</span></label>
+        <input type="number" id="lsProviderLng" step="0.000001" min="-180" max="180">
+      </div>
+    </div>
+    <div class="admin-field">
+      <label for="lsProviderHours">ساعات العمل <span class="opt">(اختياري)</span></label>
+      <input type="text" id="lsProviderHours" placeholder="مثال: يومياً 9ص - 11م" maxlength="100">
+    </div>
+    <label class="admin-ads-toggle-row" for="lsProviderActive">
+      <input type="checkbox" id="lsProviderActive" checked style="width:16px; height:16px;">
+      نشط (حالة الظهور)
+    </label>
+    <div class="admin-error" id="lsProviderModalError"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+      <button type="button" class="admin-btn" id="saveLsProviderBtn" style="width:auto; padding:10px 18px;">حفظ</button>
+      <button type="button" class="admin-btn danger" id="deleteLsProviderBtn" style="width:auto; padding:10px 18px;" hidden>حذف</button>
     </div>
   </div>
 </div>

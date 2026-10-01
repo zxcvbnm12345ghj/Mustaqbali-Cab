@@ -152,7 +152,7 @@
      tiles/markers/behavior are completely unaffected — only *when* this
      one stylesheet applies, not what it contains. -->
 <link rel="stylesheet" href="style.css?v=20260920">
-<link rel="stylesheet" href="app.css?v=20260920">
+<link rel="stylesheet" href="app.css?v=20261001">
 <!-- FIX (Leaflet CSS fallback): كان هناك مصدر CDN واحد فقط (unpkg) —
      إن تعذّر الوصول إليه (حظر شبكة محلي على unpkg تحديداً، أو تعطّل
      مؤقت) تبقى تنسيقات الخريطة (طبقات البلاطة/العلامات) مفقودة رغم أن
@@ -575,8 +575,12 @@
           <span class="ya-msgbar-text" id="yaMsgBarText">أهلاً فيك بيمّك — اختر خدمتك وابدأ.</span>
         </div>
 
-        <div class="home-columns">
-          <div class="home-col home-col-services">
+        <!-- الصفحة الرئيسية — 5 أقسام رئيسية (بطاقات مستطيلة). تصميم/تنقّل فقط:
+             كل بطاقة تفتح واجهتها عبر نفس الأزرار والمعالجات القائمة (المخفية
+             في .home-legacy بمعرّفاتها كما هي)، أو واجهة النقل والتوصيل
+             المستقلة (data-view="transport") التي تحوي #quickServices نفسه
+             الذي يبنيه buildQuickServiceChips() في app.js. لا بيانات جديدة. -->
+        <div class="hub" id="homeHub">
             <!-- مساعد يمّك — مدخل ذكي مختصر (نقر داخل شريط الاقتراحات
                  الجاهز في #quickServices تحته، + كتابة + صوت اختياري).
                  إضافة معزولة بالكامل: عنصر جديد واحد #yaAssist بين شريط
@@ -611,38 +615,201 @@
               </div>
             </div>
 
-            <p class="section-label">اختر خدمتك</p>
-            <div class="quick-services" id="quickServices">
-              <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards. -->
-              <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
+<!-- المساحات الست — مساحة واحدة ظاهرة في كل مرة. شريط الأيقونات (tablist) يبدّل
+               المساحة بالنقر، والسحب الأفقي يبدّلها بآلية لمس أصلية (CSS Scroll Snap داخل
+               #spacesViewport — المتصفح نفسه يحسم اتجاه الإيماءة، فيبقى التمرير العمودي داخل
+               المساحة فقط). الدخول الفعلي لكل قسم يمرّ عبر نفس الأزرار/الدوال القائمة (انظر
+               سكربت آخر الصفحة) — لا Supabase ولا RPC ولا GPS ولا بيانات جديدة. -->
+          <div class="spaces" id="spaces">
+            <div class="spaces-bar" id="spacesBar" role="tablist" aria-label="أقسام يمّك">
+              <button type="button" class="space-tab is-active" role="tab" id="spaceTab-transport" aria-controls="spacePanel-transport" aria-selected="true" data-space-tab="transport">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 16v-5l1.7-4.3A2 2 0 0 1 8.6 5.4h6.8a2 2 0 0 1 1.9 1.3L19 11v5M4 16h16v2.6a.9.9 0 0 1-.9.9h-1.7a.9.9 0 0 1-.9-.9V16M7.5 19.5H5.9a.9.9 0 0 1-.9-.9V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="13" r="1" fill="currentColor"/><circle cx="16" cy="13" r="1" fill="currentColor"/></svg></span>
+                <span class="space-tab-label">النقل والتوصيل</span>
+              </button>
+              <button type="button" class="space-tab" role="tab" id="spaceTab-restaurants" aria-controls="spacePanel-restaurants" aria-selected="false" data-space-tab="restaurants" tabindex="-1">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="space-tab-label">المطاعم</span>
+              </button>
+              <button type="button" class="space-tab" role="tab" id="spaceTab-markets" aria-controls="spacePanel-markets" aria-selected="false" data-space-tab="markets" tabindex="-1">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                <span class="space-tab-label">الأسواق</span>
+              </button>
+              <button type="button" class="space-tab" role="tab" id="spaceTab-yservices" aria-controls="spacePanel-yservices" aria-selected="false" data-space-tab="yservices" tabindex="-1">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="space-tab-label">خدمات يمّك</span>
+              </button>
+              <button type="button" class="space-tab" role="tab" id="spaceTab-futureoffice" aria-controls="spacePanel-futureoffice" aria-selected="false" data-space-tab="futureoffice" tabindex="-1">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="space-tab-label">مكتب المستقبل</span>
+              </button>
+              <button type="button" class="space-tab" role="tab" id="spaceTab-ymarket" aria-controls="spacePanel-ymarket" aria-selected="false" data-space-tab="ymarket" tabindex="-1">
+                <span class="space-tab-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3.5 12.2V4.5h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-4.7 4.7a1.5 1.5 0 0 1-2.1 0l-9.2-7.4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.3" fill="currentColor"/></svg></span>
+                <span class="space-tab-label">بيع وشراء</span>
+              </button>
+            </div>
+            <div class="spaces-viewport" id="spacesViewport">
+              <section class="space-panel hub-transport" role="tabpanel" id="spacePanel-transport" aria-labelledby="spaceTab-transport" data-space="transport">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">خدمات النقل والتوصيل</h3>
+                    <p class="space-msg">رحلتك وتوصيلك ويّاك بكل خطوة</p>
+                    <button type="button" class="space-cta" data-hub="transport"><span>اختر خدمتك</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="transport"></div>
+              </section>
+              <section class="space-panel hub-restaurants" role="tabpanel" id="spacePanel-restaurants" aria-labelledby="spaceTab-restaurants" data-space="restaurants">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">المطاعم</h3>
+                    <p class="space-msg">اطلب أكلك المفضل من مطاعم جنوب الموصل</p>
+                    <button type="button" class="space-cta" data-hub="restaurants"><span>تصفّح المطاعم</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="restaurants"></div>
+              </section>
+              <section class="space-panel hub-markets" role="tabpanel" id="spacePanel-markets" aria-labelledby="spaceTab-markets" data-space="markets">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">الأسواق</h3>
+                    <p class="space-msg">كل احتياجاتك من الأسواق والمحلات ويّاك</p>
+                    <button type="button" class="space-cta" data-hub="markets"><span>تصفّح الأسواق</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="markets"></div>
+              </section>
+              <section class="space-panel hub-yservices" role="tabpanel" id="spacePanel-yservices" aria-labelledby="spaceTab-yservices" data-space="yservices">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">خدمات يمّك</h3>
+                    <p class="space-msg">خدمات محلية متنوعة بالقرب منك</p>
+                    <button type="button" class="space-cta" data-hub="yservices"><span>تصفّح الخدمات</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="yservices"></div>
+              </section>
+              <section class="space-panel hub-futureoffice" role="tabpanel" id="spacePanel-futureoffice" aria-labelledby="spaceTab-futureoffice" data-space="futureoffice">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">مكتب المستقبل للقرطاسية والطباعة</h3>
+                    <p class="space-msg">قرطاسية وطباعة وكل احتياجات مكتبك</p>
+                    <button type="button" class="space-cta" data-hub="futureoffice"><span>ادخل المكتب</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="futureoffice"></div>
+              </section>
+              <section class="space-panel hub-ymarket" role="tabpanel" id="spacePanel-ymarket" aria-labelledby="spaceTab-ymarket" data-space="ymarket">
+                <div class="space-card">
+                  <div class="space-hero hub-media" aria-hidden="true"></div>
+                  <div class="space-body">
+                    <h3 class="space-title">بيع وشراء</h3>
+                    <p class="space-msg">تصفح المنتجات والعروض المتاحة</p>
+                    <button type="button" class="space-cta" data-hub="ymarket"><span>تصفّح العروض</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  </div>
+                </div>
+                <!-- المرحلة 2: محتوى المساحة — يُملأ من app.js (قسم «محتوى المساحات الست») ببيانات Supabase/المشروع الحقيقية فقط؛ فارغ حتى وصولها. -->
+              <div class="space-content" data-space-content="ymarket"></div>
+              </section>
             </div>
           </div>
+        </div>
 
-          <!-- "سوق يمّك" — real marketplace section entry point (own
-               listings table + RPCs, see migration_market.sql). Kept in
-               the DOM exactly as before (same id/classes, same click
-               handler in market.js — openMarket()) but no longer
-               rendered on the Home screen: Home is now the map + the
-               six service tiles only. #marketBannerBtn stays as a
-               HIDDEN FUNCTIONAL PROXY — the "السوق" bottom-nav tab
-               (#bnavMarket) still triggers it programmatically (see the
-               forwarding script near the end of <body>), so market.js's
-               existing openMarket() handler keeps firing exactly as
-               before; only its own visible placement on Home is
-               removed. See #marketBannerBtn{ display:none; } in
-               app.css for the actual hiding rule. -->
-          <button type="button" class="market-banner" id="marketBannerBtn" hidden aria-hidden="true" tabindex="-1">
-            <span class="market-banner-icon">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            </span>
-            <span class="market-banner-text">
-              <b>سوق يمّك</b>
-              <span>بيع • اشتري • تواصل</span>
-            </span>
-            <span class="market-banner-chev">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-          </button>
+
+        <div class="home-columns home-legacy" aria-hidden="true">
+          <div class="home-col home-col-services">
+          </div>
+
+          <!-- المطاعم والأسواق — back on the Home screen, directly under
+               the six services, matching the fixed map → search →
+               services → المطاعم/الأسواق/بقية الأقسام order. Same ids/
+               classes/click targets as always: #soonCardRestaurants,
+               #soonBadgeRestaurants, #soonCardMarkets, #soonBadgeMarkets,
+               #soonCardOtherServices, #soonCardFutureOffice,
+               #soonBadgeFutureOffice are still read/written by the exact
+               same loadFutureServices()/places.js code — only this
+               block's parent screen changed, from "المزيد" back to Home. -->
+          <div class="home-col home-col-more">
+            <div class="section-label-row">
+              <p class="section-label">المطاعم والأسواق</p>
+              <span class="section-label-more">عرض الكل ‹</span>
+            </div>
+            <div class="soon-grid" aria-hidden="false">
+              <button type="button" class="soon-card soon-card-clickable" id="soonCardRestaurants">
+                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="soon-label">المطاعم</span>
+                <span class="soon-badge" id="soonBadgeRestaurants">قريباً</span>
+              </button>
+              <button type="button" class="soon-card soon-card-clickable" id="soonCardMarkets">
+                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+                <span class="soon-label">الأسواق</span>
+                <span class="soon-badge" id="soonBadgeMarkets">قريباً</span>
+              </button>
+              <div class="soon-card soon-card-static" id="soonCardOtherServices" aria-disabled="true">
+                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="soon-label">خدمات أخرى</span>
+                <span class="soon-badge">قريباً</span>
+              </div>
+              <button type="button" class="soon-card soon-card-clickable" id="soonCardFutureOffice">
+                <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+                <span class="soon-label">مكتب المستقبل</span>
+                <span class="soon-badge" id="soonBadgeFutureOffice">قريباً</span>
+              </button>
+
+              <!-- "سوق يمّك" — real marketplace section entry point (own
+                   listings table + RPCs, see migration_market.sql).
+                   FIX (2026-09-23, Home Dashboard restyle): re-surfaced
+                   as a normal 5th tile inside the exact same
+                   .soon-grid used by the four cards above, so "خدمات
+                   ومحتوى" now lists all five as one consistent tile
+                   set per the approved plan. Nothing about its own
+                   behavior changed — same #marketBannerBtn id, same
+                   market.js click listener (openMarket(), bound
+                   unconditionally at load — see market.js), same
+                   #bnavMarket→#marketBannerBtn.click() forwarding
+                   script further down in this file (now just a second,
+                   harmless way to trigger the same click). Only the
+                   markup that made it invisible (hidden/aria-hidden/
+                   tabindex="-1") and the class that visually diverged
+                   from the other tiles (.market-banner, styled as a
+                   wide banner) are removed in favor of the shared
+                   .soon-card tile look — no market.js edit needed. -->
+              <button type="button" class="soon-card soon-card-clickable soon-card-market" id="marketBannerBtn">
+                <span class="soon-ic">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </span>
+                <span class="soon-label">سوق يمّك</span>
+                <span class="soon-badge soon-badge-live">بيع • اشتري</span>
+              </button>
+
+              <!-- "خدمات يمّك" — own, additive entry point for the new
+                   local-services section (local_service_sections /
+                   local_service_categories / local_service_providers —
+                   own tables, own full-screen sheet-view "yammakServices"
+                   below, own yammak-services.js file loaded after
+                   places.js). Same shared .soon-card tile look as the
+                   5 tiles above; nothing about them is touched. Badge
+                   starts as the same static "قريباً" placeholder text
+                   already used elsewhere and is swapped for the real
+                   active-section count by ysvcUpdateHomeBadge() in
+                   yammak-services.js, exactly like updatePlacesBadge()
+                   does for the tiles above — no invented data. -->
+              <button type="button" class="soon-card soon-card-clickable" id="soonCardYammakServices">
+                <span class="soon-ic">🧰</span>
+                <span class="soon-label">خدمات يمّك</span>
+                <span class="soon-badge" id="soonBadgeYammakServices">قريباً</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -656,6 +823,24 @@
         <div class="ads-track" id="adsTrack"></div>
         <div class="ads-dots" id="adsDots" hidden></div>
       </div>
+      </section>
+
+      <!-- TRANSPORT & DELIVERY view — واجهة مستقلة للخدمات الستة بالترتيب:
+           تاكسي، خصوصي، دليفري، حمل، نقل نفرات، بين المحافظات.
+           #quickServices هو نفس العنصر القديم (نفس المعرّف) ويملؤه
+           buildQuickServiceChips() من SERVICES/VEHICLE_PHOTOS في app.js —
+           نفس البيانات ونفس openBooking(service) عند النقر. -->
+      <section class="sheet-view" data-view="transport">
+        <button type="button" class="sheet-back" data-back="home">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          رجوع
+        </button>
+        <h2 class="sheet-title">خدمات النقل والتوصيل</h2>
+        <p class="sec-intro">رحلتك وتوصيلك ويّاك بكل خطوة</p>
+        <div class="quick-services" id="quickServices">
+          <!-- Skeleton placeholders shown until buildQuickServiceChips() populates real cards. -->
+              <div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div><div class="qs-skel"></div>
+            </div>
       </section>
 
       <!-- BOOKING view — presented as a 4-step wizard (الخدمة / الموقع /
@@ -1101,45 +1286,6 @@
       <!-- MORE view -->
       <section class="sheet-view" data-view="more">
         <h2 class="sheet-title">المزيد</h2>
-
-        <!-- المطاعم والأسواق — moved here from the Home screen. Home is
-             now the map + the six service tiles only (see the
-             restructure note where #marketBannerBtn used to sit,
-             above). Nothing about this block's ids, classes or click
-             behaviour changed: #soonCardRestaurants, #soonBadgeRestaurants,
-             #soonCardMarkets, #soonBadgeMarkets, #soonCardOtherServices,
-             #soonCardFutureOffice, #soonBadgeFutureOffice are read/written
-             by the exact same loadFutureServices()/places.js code as
-             before — only their parent screen changed, from Home to
-             "المزيد". -->
-        <div class="home-col home-col-more">
-          <div class="section-label-row">
-            <p class="section-label">المطاعم والأسواق</p>
-            <span class="section-label-more">عرض الكل ‹</span>
-          </div>
-          <div class="soon-grid" aria-hidden="false">
-            <button type="button" class="soon-card soon-card-clickable" id="soonCardRestaurants">
-              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="soon-label">المطاعم</span>
-              <span class="soon-badge" id="soonBadgeRestaurants">قريباً</span>
-            </button>
-            <button type="button" class="soon-card soon-card-clickable" id="soonCardMarkets">
-              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-              <span class="soon-label">الأسواق</span>
-              <span class="soon-badge" id="soonBadgeMarkets">قريباً</span>
-            </button>
-            <div class="soon-card soon-card-static" id="soonCardOtherServices" aria-disabled="true">
-              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="soon-label">خدمات أخرى</span>
-              <span class="soon-badge">قريباً</span>
-            </div>
-            <button type="button" class="soon-card soon-card-clickable" id="soonCardFutureOffice">
-              <span class="soon-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
-              <span class="soon-label">مكتب المستقبل</span>
-              <span class="soon-badge" id="soonBadgeFutureOffice">قريباً</span>
-            </button>
-          </div>
-        </div>
 
         <div class="more-list">
           <button type="button" class="more-item" id="moreInstallBtn" hidden>
@@ -1703,6 +1849,91 @@
         </div>
       </section>
 
+      <!-- خدمات يمّك — own, additive, self-contained full-screen section.
+           One sheet-view with 4 internal levels (sections → categories
+           → providers → provider detail), toggled by yammak-services.js
+           only. Backed ONLY by the existing local_service_sections /
+           local_service_categories / local_service_providers tables —
+           no new tables/migrations, no config.js/GPS/trip_requests/RPC/
+           driver logic touched. Reuses only existing globals from
+           app.js (supabaseClient, showView, backToHome, haptic,
+           escapeHtmlText, escapeHtmlAttr) exactly like places.js/
+           market.js already do — nothing here is redefined. Mobile-
+           first: a plain vertical 2-column grid at every level (no
+           bottom sheet, no swipe-up, no horizontal overflow). Starts
+           empty and only ever shows real active rows; zero real rows
+           at any level → a professional "قريباً" empty state, never
+           invented data. -->
+      <section class="sheet-view" data-view="yammakServices">
+        <button type="button" class="sheet-back" id="ysvcBackBtn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          رجوع
+        </button>
+        <h2 class="sheet-title" id="ysvcTitle">خدمات يمّك</h2>
+        <p class="sec-intro" id="ysvcIntro">تحتاج خدمة؟ يمّك يوصلك إلها.</p>
+
+        <!-- المستوى 1 — الأقسام الـ16 -->
+        <div data-ysvc-level="sections">
+          <div class="plc-grid" id="ysvcSectionsGrid"></div>
+          <div class="plc-empty" id="ysvcSectionsEmpty" hidden>
+            <span class="plc-empty-ic">🧰</span>
+            <p>قريباً — لا توجد أقسام مضافة بعد</p>
+          </div>
+        </div>
+
+        <!-- المستوى 2 — فئات القسم المختار -->
+        <div data-ysvc-level="categories" hidden>
+          <div class="plc-grid" id="ysvcCategoriesGrid"></div>
+          <div class="plc-empty" id="ysvcCategoriesEmpty" hidden>
+            <span class="plc-empty-ic">📁</span>
+            <p>قريباً — لا توجد فئات مضافة بعد لهذا القسم</p>
+          </div>
+        </div>
+
+        <!-- المستوى 3 — مزودو الخدمة الحقيقيون للفئة المختارة -->
+        <div data-ysvc-level="providers" hidden>
+          <div class="plc-grid" id="ysvcProvidersGrid"></div>
+          <div class="plc-empty" id="ysvcProvidersEmpty" hidden>
+            <span class="plc-empty-ic">🔎</span>
+            <p>قريباً — لا يوجد مزودون مضافون بعد لهذه الفئة</p>
+          </div>
+        </div>
+
+        <!-- المستوى 4 — تفاصيل مزود الخدمة -->
+        <div data-ysvc-level="providerDetail" hidden>
+          <div class="plc-detail-hero" id="ysvcDetailHero">
+            <span class="plc-detail-hero-ph" id="ysvcDetailHeroPh">🧰</span>
+          </div>
+          <div class="plc-detail-body">
+            <div class="plc-detail-top">
+              <h2 id="ysvcDetailName">—</h2>
+              <span class="plc-detail-badge" id="ysvcDetailCategory" style="background:var(--teal-dim); color:var(--teal-text);" hidden></span>
+            </div>
+            <p class="plc-detail-desc" id="ysvcDetailDesc" hidden></p>
+            <div class="plc-detail-info" id="ysvcDetailInfo">
+              <div class="plc-detail-info-row" id="ysvcDetailHoursRow" hidden>
+                <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                <span id="ysvcDetailHours">—</span>
+              </div>
+              <div class="plc-detail-info-row" id="ysvcDetailAddressRow" hidden>
+                <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>
+                <span id="ysvcDetailAddress">—</span>
+              </div>
+              <div class="plc-detail-info-row" id="ysvcDetailPhoneRow" hidden>
+                <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M6.5 4h3l1.5 4.5-2 1.5a11 11 0 0 0 5 5l1.5-2 4.5 1.5v3a2 2 0 0 1-2 2C10.6 19.5 4.5 13.4 4.5 6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                <span id="ysvcDetailPhone">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="plc-detail-actions" id="ysvcDetailActions">
+            <a href="#" class="app-btn plc-call-btn" id="ysvcCallBtn">
+              <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M6.5 4h3l1.5 4.5-2 1.5a11 11 0 0 0 5 5l1.5-2 4.5 1.5v3a2 2 0 0 1-2 2C10.6 19.5 4.5 13.4 4.5 6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              اتصال
+            </a>
+          </div>
+        </div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -1769,6 +2000,7 @@
 <script src="app.js"></script>
 <script src="market.js"></script>
 <script src="places.js"></script>
+<script src="yammak-services.js"></script>
 
 <!-- Account page (حسابي) wiring — purely additive, same spirit as the
      screen-fit-fix script at the top of this file: it only reads the
@@ -2188,6 +2420,162 @@
     } catch (e) { /* non-critical */ }
   }
   document.addEventListener('DOMContentLoaded', showInAppNoticeIfNeeded);
+})();
+</script>
+
+<!-- المساحات الست (الصفحة الرئيسية) — طبقة تنقّل فقط. (1) نقر أيقونة في الشريط يمرّر
+     #spacesViewport إلى المساحة المطلوبة؛ (2) السحب الأفقي يتولاه المتصفح عبر CSS Scroll Snap
+     (لا مستمعي لمس يدويين، فلا تعارض مع التمرير العمودي أو النقرات)، وهذا السكربت يكتفي
+     بمزامنة أيقونة الشريط مع المساحة الظاهرة؛ (3) زر الدخول في كل مساحة يُمرّر النقر إلى نفس
+     الزر/المعالج القائم أصلاً (places.js / market.js / yammak-services.js عبر معرّفاتها الثابتة
+     #soonCardRestaurants / #soonCardMarkets / #soonCardFutureOffice / #soonCardYammakServices /
+     #marketBannerBtn)، أو openTransportHub() من app.js. لا Supabase ولا RPC ولا GPS ولا منطق
+     طلبات هنا. -->
+<script>
+(function () {
+  var TARGETS = {
+    restaurants: 'soonCardRestaurants',
+    markets: 'soonCardMarkets',
+    futureoffice: 'soonCardFutureOffice',
+    yservices: 'soonCardYammakServices',
+    ymarket: 'marketBannerBtn'
+  };
+  document.querySelectorAll('.space-cta[data-hub]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-hub');
+      if (key === 'transport') {
+        if (typeof openTransportHub === 'function') openTransportHub();
+        return;
+      }
+      var legacy = document.getElementById(TARGETS[key]);
+      if (legacy) legacy.click();
+    });
+  });
+
+  var viewport = document.getElementById('spacesViewport');
+  if (!viewport) return;
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.space-tab'));
+  var panels = Array.prototype.slice.call(viewport.querySelectorAll('.space-panel'));
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var current = 0;
+  var lockUntil = 0;
+  var settleTimer = 0;
+  var raf = 0;
+
+  function nearest() {
+    var vl = viewport.getBoundingClientRect().left, best = 0, bd = Infinity;
+    panels.forEach(function (p, i) {
+      var d = Math.abs(p.getBoundingClientRect().left - vl);
+      if (d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  function paint(i) {
+    current = i;
+    tabs.forEach(function (t, k) {
+      var on = k === i;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    });
+  }
+  function settle() {
+    panels.forEach(function (p, k) {
+      if (k === current) p.removeAttribute('inert'); else p.setAttribute('inert', '');
+    });
+  }
+  function goTo(i, smooth) {
+    var delta = panels[i].getBoundingClientRect().left - viewport.getBoundingClientRect().left;
+    lockUntil = Date.now() + (smooth && !reduceMotion ? 700 : 0);
+    paint(i);
+    viewport.scrollTo({ left: viewport.scrollLeft + delta, behavior: smooth && !reduceMotion ? 'smooth' : 'auto' });
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(onSettle, smooth && !reduceMotion ? 750 : 0);
+  }
+  // يُستدعى بعد هدوء التمرير: يثبّت أيقونة الشريط على المساحة الظاهرة فعلاً، ويعطّل
+  // (inert) المساحات المخفية. إن كان تمرير برمجي (نقر أيقونة) ما زال جارياً يعيد المحاولة.
+  function onSettle() {
+    var wait = lockUntil - Date.now();
+    if (wait > 0) { clearTimeout(settleTimer); settleTimer = setTimeout(onSettle, wait + 30); return; }
+    paint(nearest());
+    settle();
+  }
+
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { goTo(i, true); });
+  });
+  document.getElementById('spacesBar').addEventListener('keydown', function (e) {
+    var step = e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0; // RTL: اليسار = التالي
+    if (e.key === 'Home') step = -current;
+    if (e.key === 'End') step = tabs.length - 1 - current;
+    if (!step) return;
+    e.preventDefault();
+    var n = Math.max(0, Math.min(tabs.length - 1, current + step));
+    goTo(n, true);
+    tabs[n].focus();
+  });
+
+  viewport.addEventListener('scroll', function () {
+    if (!raf) raf = requestAnimationFrame(function () {
+      raf = 0;
+      if (Date.now() < lockUntil) return;       // تمرير برمجي جارٍ بعد نقر أيقونة
+      var n = nearest();
+      if (n !== current) paint(n);
+    });
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(onSettle, 140);
+  }, { passive: true });
+
+  // السحب الأفقي فوق شريط الأيقونات نفسه: الشريط ليس عنصر تمرير، فيُمرَّر السحب الأفقي
+  // إلى #spacesViewport يدوياً (touch-action:pan-y على الشريط يترك العمودي للمتصفح).
+  // باقي الصفحة (صورة/عنوان/زر المساحة) يتولاه المتصفح أصلياً بلا أي مستمع.
+  var bar = document.getElementById('spacesBar');
+  var sx = 0, sy = 0, sl = 0, startIdx = 0, dragging = false, decided = false, horiz = false;
+  var lastDx = 0, lastT = 0, vel = 0, dragged = false;
+  bar.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { dragging = false; return; }
+    var t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; sl = viewport.scrollLeft; startIdx = current;
+    dragging = true; decided = false; horiz = false; lastDx = 0; lastT = Date.now(); vel = 0;
+  }, { passive: true });
+  bar.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    var t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decided = true;
+      horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
+      if (horiz) { viewport.classList.add('is-dragging'); lockUntil = Date.now() + 5000; }
+    }
+    if (!horiz) return;
+    var now = Date.now();
+    if (now > lastT) vel = (dx - lastDx) / (now - lastT);
+    lastDx = dx; lastT = now;
+    viewport.scrollLeft = sl - dx;
+  }, { passive: true });
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    if (!horiz) return;
+    viewport.classList.remove('is-dragging');
+    dragged = true; setTimeout(function () { dragged = false; }, 400);
+    var far = Math.abs(lastDx) > viewport.clientWidth * 0.18 || Math.abs(vel) > 0.4;
+    // RTL: إصبع لليمين = المساحة التالية (على يسار الحالية)
+    var step = far ? (lastDx > 0 ? 1 : -1) : 0;
+    goTo(Math.max(0, Math.min(panels.length - 1, startIdx + step)), true);
+  }
+  bar.addEventListener('touchend', endDrag);
+  bar.addEventListener('touchcancel', endDrag);
+  bar.addEventListener('click', function (e) {
+    if (dragged) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // تغيّر القياس (دوران/لوحة مفاتيح) أو العودة للرئيسية بعد شاشة أخرى (display:none يصفّر
+  // موضع التمرير): أعد المحاذاة للمساحة المختارة بلا حركة.
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { if (viewport.clientWidth) goTo(current, false); }).observe(viewport);
+  }
+  settle();
 })();
 </script>
 </body>

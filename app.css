@@ -5090,50 +5090,72 @@ html, body.app-body{ background: var(--bg-deep); }
    ========================================================================= */
 @supports selector(:has(*)){
 
-/* ---- 1) بطاقات "قريباً" الأربع في الرئيسية — صورة كبيرة بدل أيقونة ---- */
-#soonCardRestaurants .soon-ic,
-#soonCardMarkets .soon-ic,
-#soonCardOtherServices .soon-ic,
-#soonCardFutureOffice .soon-ic{
+/* ---- 1) بطاقات "قريباً" الأربع في الرئيسية — صورة كبيرة بدل أيقونة.
+   FIX: كل قاعدة هنا الآن مشروطة بفئة html.has-cat-photo-<key> التي
+   تضيفها app.js فقط بعد نجاح تحميل صورة التصنيف فعلياً (preload).
+   عند الفشل/404 لا تُضاف الفئة، فلا تُطبَّق أي من هذه القواعد، وتبقى
+   الأيقونة الملوّنة الأصلية (المعرّفة أعلى في هذا الملف) ظاهرة كما
+   كانت قبل هذه الميزة — لا دائرة فارغة بأي حالة. ---- */
+html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic,
+html.has-cat-photo-markets #soonCardMarkets .soon-ic,
+html.has-cat-photo-other-services #soonCardOtherServices .soon-ic,
+html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
   width:100%; height:60px; border-radius: 14px 14px 7px 7px;
   background-size:cover; background-position:center;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 8px 16px -10px rgba(11,32,54,.4);
 }
-#soonCardRestaurants .soon-ic svg,
-#soonCardMarkets .soon-ic svg,
-#soonCardOtherServices .soon-ic svg,
-#soonCardFutureOffice .soon-ic svg{ display:none; }
-#soonCardRestaurants .soon-ic{ background-image: url("assets/places/restaurants.jpg"); }
-#soonCardMarkets .soon-ic{ background-image: url("assets/places/markets.jpg"); }
-#soonCardOtherServices .soon-ic{ background-image: url("assets/places/other-services.jpg"); }
-#soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg"); }
+html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic svg,
+html.has-cat-photo-markets #soonCardMarkets .soon-ic svg,
+html.has-cat-photo-other-services #soonCardOtherServices .soon-ic svg,
+html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic svg{ display:none; }
+html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic{ background-image: url("assets/places/restaurants.jpg"); }
+html.has-cat-photo-markets #soonCardMarkets .soon-ic{ background-image: url("assets/places/markets.jpg"); }
+html.has-cat-photo-other-services #soonCardOtherServices .soon-ic{ background-image: url("assets/places/other-services.jpg"); }
+html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg"); }
 
 /* ---- 2) بانر شاشة المطاعم/الأسواق — صورة تصنيف محلية كبيرة بدل التدرّج،
    تتبدّل حسب التبويب النشط. الأيقونة الصغيرة تبقى كشارة زجاجية فوق
    الصورة بدل أن تكون هي المحتوى الرئيسي للبانر. ---- */
-.plc-hero-banner{
+/* FIX: كامل هذه الكتلة (الشكل الهيكلي + الصورة معاً) أصبحت مشروطة
+   بفئة html.has-cat-photo-* الخاصة بالتبويب النشط فعلياً — سابقاً كان
+   "background:none" وإعادة التموضع (align-items:flex-end، الأيقونة
+   position:absolute) غير مشروطين إطلاقاً، فحتى لو فشلت الصورة (404)
+   كان التدرّج اللوني الأصلي الجميل (المعرّف أعلى في هذا الملف) يُمحى
+   بلا أي بديل ويتحول البانر لمساحة شبه فارغة. الآن عند الفشل لا تُطبَّق
+   أي من هذه القواعد إطلاقاً، فيبقى تصميم البانر الأصلي بالكامل (تدرّج
+   + أيقونة جانبية + نص) ظاهراً كما كان قبل ميزة الصور هذه تماماً. */
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner,
+html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
   position:relative; overflow:hidden;
   background: none;
-  background-image: url("assets/places/restaurants.jpg");
   background-size:cover; background-position:center;
   min-height: 132px;
   align-items:flex-end;
 }
-.plc-hero-banner::before{
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner::before,
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner::before,
+html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner::before{
   content:''; position:absolute; inset:0;
   background: linear-gradient(180deg, rgba(20,10,40,0.12) 0%, rgba(12,6,26,0.78) 100%);
 }
-.plc-hero-banner-ic{
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner-ic,
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner-ic,
+html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner-ic{
   position:absolute; z-index:1;
   width:38px; height:38px;
   top: var(--sp-3); inset-inline-start: var(--sp-3);
 }
-.plc-hero-banner-text{ position:relative; z-index:1; }
-.sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
-.sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner-text,
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner-text,
+html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner-text{
+  position:relative; z-index:1;
+}
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
+html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
   background-image: url("assets/places/restaurants.jpg");
 }
-.sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
+html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
   background-image: url("assets/places/markets.jpg");
 }
 
@@ -5142,36 +5164,49 @@ html, body.app-body{ background: var(--bg-deep); }
    تلقائياً بالآلية الموجودة أصلاً في places.js دون أي تغيير هنا. النص/
    الإيموجي الذي يضعه places.js داخل هذا الـ span يُخفى بصرياً (font-size:0)
    طالما صورة التصنيف ظاهرة خلفه. ---- */
-#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph,
-#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph,
-#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{
+/* FIX: مشروط الآن بفئة html.has-cat-photo-* — عند فشل/404 صورة
+   التصنيف تبقى القاعدة الأصلية font-size:0 غير مُطبَّقة، فيظهر
+   إيموجي places.js (cfg.emptyIcon) بحجمه الطبيعي بدل مساحة فارغة. */
+html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph,
+html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph,
+html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{
   width:100%; height:100%;
   background-size:cover; background-position:center;
   font-size:0; line-height:0; opacity:1;
 }
-#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
-#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
-#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
-#plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("assets/places/restaurants.jpg"); }
-#plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg"); }
-#plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg"); }
+html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
+html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
+html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
+html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("assets/places/restaurants.jpg"); }
+html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg"); }
+html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg"); }
 
 /* ---- 4) صفحة تفاصيل عنصر واحد — نفس منطق البانر (تبويب نشط فعلياً)،
    ولا تظهر إلا حين لا توجد صورة حقيقية لهذا العنصر بعينه
    (#plcDetailHeroPh غير مخفي). الأيقونة الصغيرة (svg حقيقية هنا) تُخفى
    حين تظهر صورة التصنيف خلفها. مكتب المستقبل (فرع واحد يُفتح مباشرة بلا
    تبويب) يستخدم صورته كافتراضي عام — انظر ملاحظة الحد أعلاه. ---- */
-.plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+/* FIX: كل حالة (افتراضي/مطاعم/أسواق) أصبحت مستقلة تماماً — الخلفية
+   وإخفاء إيموجي الـfallback مرتبطان معاً بنفس فئة html.has-cat-photo-*
+   الخاصة بتلك الحالة تحديداً. سابقاً كان "إخفاء الإيموجي" عاماً غير
+   مشروط بأي حالة، فلو فشلت صورة مكتب المستقبل (الافتراضية) بينما
+   نجحت صورة المطاعم، كان يمكن أن يظهر إيموجي مخفي جزئياً أو تعارض
+   بصري؛ الآن كل حالة تُخفي الإيموجي فقط إذا صورتها هي تحديداً نجحت. */
+html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
   background-image: url("assets/places/future-office.jpg"); /* افتراضي: لا تبويب نشط (فرع مكتب المستقبل يُفتح مباشرة) */
   background-size:cover; background-position:center;
 }
-.plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
-#sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
+html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
   background-image: url("assets/places/restaurants.jpg");
+  background-size:cover; background-position:center;
 }
-#sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
+html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
+html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
   background-image: url("assets/places/markets.jpg");
+  background-size:cover; background-position:center;
 }
+html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
 
 } /* /:has() support */
 
@@ -5214,8 +5249,15 @@ html, body.app-body{ background: var(--bg-deep); }
    id/class is removed anywhere in this block — CSS visibility/behavior
    only, same additive pattern already used throughout this file.
    ========================================================================= */
+/* FIX: الافتراض أعلاه ("الرئيسية لا يتجاوز محتواها الشاشة") غير صحيح —
+   محتوى الرئيسية (الخارطة + الخدمات الست + الأقسام) أطول من الشاشة
+   فعلياً، ولا BottomSheet ولا أي آلية سحب تصل لما تحته (انظر تعليق
+   BottomSheet في app.js). overflow-y:hidden هنا كان يمنع الوصول لذلك
+   المحتوى نهائياً بأي وسيلة لمس. إعادته إلى auto فقط — بلا أي تغيير
+   على overflow-x أو على أي شاشة أخرى (كل شاشة غير الرئيسية تمر أصلاً
+   من قاعدة is-fullscreen-view أعلاه ولم تتأثر بهذا الخطأ). */
 .app-shell:not(.is-fullscreen-view) .sheet-scroll{
-  overflow-y: hidden;
+  overflow-y: auto;
   overflow-x: hidden;
 }
 #marketBannerBtn{
@@ -5295,10 +5337,15 @@ html, body.app-body{ background: var(--bg-deep); }
   --brand-grad-home: linear-gradient(135deg, var(--purple) 0%, #8B5CF6 45%, var(--green, #22C55E) 100%);
 }
 
-/* ---- Bigger map ---- */
-:root{ --app-map-h: clamp(340px, 50vh, 520px); }
+/* ---- Map size (tuned pass): clear and comfortable without taking an
+   exaggerated share of the screen — was clamp(340px,50vh,520px), which
+   could reach ~half the viewport height and push the services grid
+   mostly out of the first screen. Kept generous enough to read street
+   names/pins, small enough that search + services are usable without
+   scrolling on common phone heights. */
+:root{ --app-map-h: clamp(190px, 24vh, 250px); }
 @media (max-height: 700px){
-  :root{ --app-map-h: clamp(280px, 40vh, 420px); }
+  :root{ --app-map-h: clamp(160px, 20vh, 200px); }
 }
 
 /* ---- Home view: single column, normal scroll, no fixed heights ---- */
@@ -5335,57 +5382,57 @@ html, body.app-body{ background: var(--bg-deep); }
   background: var(--brand-grad-home);
 }
 
-/* ---- Service cards: one full-width, clearly separate card per
-   service, stacked top to bottom — no swipe/drag needed, everything
-   is visible by scrolling the page normally. ---- */
+/* ---- Service cards: compact 2-column grid, all six services read as
+   one balanced set instead of a tall single-column list where only one
+   card fit above the fold. Same DOM/classes/data-service attributes as
+   before (order/colors/click handlers untouched, all in app.js/HTML) —
+   layout + sizing only. ---- */
 .quick-services{
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+/* Extra-narrow phones: keep cards legible instead of squeezing 2-up. */
+@media (max-width: 340px){
+  .quick-services{ grid-template-columns: 1fr; }
 }
 .qs-row{
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: var(--sp-4);
+  justify-content: center;
+  gap: 8px;
   width: 100%;
-  padding: 14px 16px;
-  text-align: start;
-  border-radius: 20px 20px 20px 8px;
+  padding: 16px 10px 14px;
+  text-align: center;
+  border-radius: 20px;
+  min-height: 116px;
 }
-.qs-row-ic{ width: 56px; height: 56px; }
-.qs-row-ic svg{ width: 32px; height: 32px; }
-.qs-row-photo{ width: 48px; height: 48px; }
+.qs-row-ic{ width: 52px; height: 52px; }
+.qs-row-ic svg{ width: 28px; height: 28px; }
+.qs-row-photo{ width: 42px; height: 42px; }
 .qs-row-label{
   flex: 1 1 auto;
-  align-items: flex-start;
-  text-align: start;
-  gap: 3px;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
   min-width: 0;
+  width: 100%;
 }
-.qs-row-label b{ font-size: 14.5px; }
-.qs-row-label span{ font-size: 12px; }
-.qs-row-chev{
-  display: flex;
-  margin-inline-start: auto;
-}
+.qs-row-label b{ font-size: 13px; }
+.qs-row-label span{ font-size: 10.5px; }
+.qs-row-chev{ display: none; }
 .qs-row::before{
   inset-inline-start: 0;
   top: 0;
-  bottom: 0;
-  height: auto;
-  width: 4px;
+  bottom: auto;
+  height: 4px;
+  width: 100%;
   transform: none;
-  border-radius: 4px 0 0 4px;
+  border-radius: 20px 20px 0 0;
 }
 
-.qs-skel{ height: 84px; border-radius: 20px 20px 20px 8px; }
-
-/* Make sure the very last card never sits flush against the bottom
-   nav — .sheet-scroll already reserves --bnav-h in its padding-bottom
-   (unchanged, earlier in this file), this just adds a little breathing
-   room after the last card specifically. */
-.quick-services{ margin-bottom: var(--sp-5); }
+.qs-skel{ height: 116px; border-radius: 20px; }
 
 /* Home-screen accents restyled to the purple/green/orange/gold
    palette (booking wizard, profile, market and status screens are
@@ -6584,3 +6631,1935 @@ body #inAppGuideBackdrop li b{ color: var(--purple-text); }
 .ya-msgbar.ya-msg-warning .ya-msgbar-ic{ color: var(--orange-text); }
 .ya-msgbar.ya-msg-offer{ border-inline-start-color: var(--gold); }
 .ya-msgbar.ya-msg-offer .ya-msgbar-ic{ color: var(--gold-text); }
+
+/* =========================================================================
+   "المطاعم والأسواق" — استعادتها إلى الصفحة الرئيسية مباشرة تحت الخدمات
+   الست (راجع index.html)، كقسم ثابت غير قابل للسحب (grid عمودين، بلا
+   Horizontal Scroll)، بنفس لغة تصميم بطاقات .quick-services أعلاه،
+   وبنفس هوية الألوان الأربعة فقط: بنفسجي / أخضر / برتقالي / ذهبي.
+   هذه الكتلة مُلحقة في آخر الملف عمداً لتتغلّب على:
+   - .home-col-more{ display:none; } (تمرير سابق كان يخفي هذا العمود
+     لأنه لم يكن يحوي أي محتوى ظاهر على الرئيسية وقتها)
+   - .soon-grid كشريط أفقي قابل للتمرير (تمرير "مرجع-2" الأقدم)
+   ========================================================================= */
+.home-col-more{
+  display: block;
+  margin-top: var(--sp-2);
+  /* QA fix: at full scroll on the Home screen, the bottom nav (fixed,
+     ~66-76px + safe-area) still covered the last soon-grid row and
+     made "خدمات أخرى"/"مكتب المستقبل" unclickable — .sheet-scroll's
+     shared bottom padding wasn't enough once this section's own two
+     rows were added back on top of it. Scoped only to this new
+     section (not touching .sheet-scroll, which every other screen
+     also relies on) so nothing else is affected. */
+  margin-bottom: calc(var(--bnav-h, 76px) + env(safe-area-inset-bottom) + var(--sp-4));
+}
+.home-col-more .section-label::before{
+  background: linear-gradient(90deg, var(--orange), var(--gold));
+}
+.home-col-more .section-label-more{
+  color: var(--purple-text);
+  font-weight: 700;
+}
+
+.soon-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+  overflow-x: visible;
+  padding-bottom: 0;
+}
+@media (max-width: 340px){
+  .soon-grid{ grid-template-columns: 1fr; }
+}
+.soon-card{
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 104px;
+  padding: 16px 10px 13px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: 20px;
+  box-shadow: var(--elev-1);
+  position: relative;
+  overflow: hidden;
+}
+.soon-card::before{
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 4px;
+}
+#soonCardRestaurants::before{ background: var(--orange); }
+#soonCardMarkets::before{ background: var(--green); }
+#soonCardOtherServices::before{ background: var(--gold); }
+#soonCardFutureOffice::before{ background: var(--purple); }
+
+.soon-ic{
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+#soonCardRestaurants .soon-ic{ background: var(--orange-dim); color: var(--orange-text); }
+#soonCardMarkets .soon-ic{ background: var(--green-dim); color: var(--green-text); }
+#soonCardOtherServices .soon-ic{ background: var(--gold-dim); color: var(--gold-text); }
+#soonCardFutureOffice .soon-ic{ background: var(--purple-dim); color: var(--purple-text); }
+.soon-ic svg{ width: 23px; height: 23px; }
+
+.soon-label{
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.25;
+}
+.soon-badge{
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 100px;
+  background: var(--surface-hi);
+  color: var(--text-faint) !important;
+  border: 1px solid var(--surface-brd);
+  box-shadow: none;
+}
+.soon-card:active{ box-shadow: var(--elev-1); transform: scale(0.98); }
+
+/* =========================================================================
+   Home — Service Dashboard restyle (2027) + سوق يمّك tile +
+   Horizontal Paging للمطاعم/الأسواق
+   -------------------------------------------------------------------------
+   نطاق هذا البلوك بالكامل: تعديل بصري (CSS فقط) على عناصر موجودة أصلاً —
+   لا تغيير في HTML البنيوي (باستثناء نقل #marketBannerBtn داخل نفس
+   .soon-grid في index.html، بدون أي تعديل على معرّفه أو مستمع الحدث في
+   market.js)، ولا أي تعديل على app.js/places.js/config.js/GPS/Supabase/
+   RPC/منطق الطلبات. يعتمد بالكامل على ترتيب المصدر (آخر قاعدة بنفس درجة
+   التخصيص تفوز) لتجاوز الكتل الأقدم أعلاه دون حذفها — نفس الأسلوب المتبع
+   سابقاً في هذا الملف (كتلة صور assets/places أعلاه).
+   ========================================================================= */
+
+/* ---- 1) الخدمات الستة (.quick-services / .qs-row) — بطاقات أصغر وأكثر
+   إحكاماً بروح "Dashboard" بدل البطاقات الكبيرة السابقة. نفس البيانات/
+   الترتيب/معالجات النقر في app.js (buildQuickServiceChips) — قياس فقط. ---- */
+.quick-services{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: var(--sp-4);
+}
+@media (max-width: 340px){
+  .quick-services{ grid-template-columns: 1fr; }
+}
+.qs-row{
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 8px 11px;
+  text-align: center;
+  border-radius: 16px;
+  min-height: 88px;
+}
+.qs-row-ic{ width: 38px; height: 38px; }
+.qs-row-ic svg{ width: 20px; height: 20px; }
+.qs-row-photo{ width: 32px; height: 32px; }
+.qs-row-label{ font-size: 11.5px; }
+
+/* ---- 2) "خدمات ومحتوى" (.soon-grid) — نفس تصغير الحجم، وشبكة مرنة
+   تستوعب الخامسة (سوق يمّك) بأناقة (3 أعلى + 2 أسفل على الشاشات
+   الضيقة، 2×2+1 حسب المساحة) بدل تكبير الأعمدة. أيقونات/صور التصنيف
+   (assets/places) تبقى كما هي بلا أي تغيير — فقط الحاوية والحشو أصغر. ---- */
+.soon-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+.soon-card{
+  padding: 10px 7px 10px;
+  border-radius: 15px 15px 15px 7px;
+  gap: 6px;
+}
+.soon-ic{ width: 38px; height: 38px; }
+.soon-ic svg{ width: 19px; height: 19px; }
+.soon-label{ font-size: 11.5px; }
+.soon-badge{ font-size: 8.5px; padding: 1px 7px; }
+/* صور التصنيف (assets/places) — نفس الآلية القائمة (html.has-cat-photo-*)
+   لكن بارتفاع أصغر يناسب البطاقة الأكثر إحكاماً، فقط عند وجود الفئة أي
+   نجاح تحميل الصورة فعلاً — لا تغيير في منطق preloadCategoryPhotos(). */
+html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic,
+html.has-cat-photo-markets #soonCardMarkets .soon-ic,
+html.has-cat-photo-other-services #soonCardOtherServices .soon-ic,
+html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
+  width:100%; height:46px; border-radius: 11px 11px 5px 5px;
+}
+
+/* ---- 3) سوق يمّك — بطاقة خامسة بنفس شكل الأربع أعلاه بالضبط (بدل شكل
+   البانر العريض القديم .market-banner الذي لم يعد مستخدماً هنا). لون
+   مائل للتركوازي (--teal) — هوية يمّك الأساسية القائمة أصلاً في كل
+   التطبيق (شريط التنقل، تدرّج الشيت، إلخ) — بلا أي لون خارج الهوية
+   المعتمدة (بنفسجي/أخضر/برتقالي/ذهبي + التركوازي الأساسي للتطبيق). ---- */
+#marketBannerBtn{
+  display: flex;
+}
+#marketBannerBtn .soon-ic{
+  background: var(--teal-dim);
+  color: var(--teal-text);
+}
+#marketBannerBtn .soon-badge{
+  color: var(--teal-text) !important;
+  background: var(--teal-dim);
+  border-color: transparent;
+}
+
+/* ---- 4) المطاعم/الأسواق (#plcGrid) — Horizontal Paging بـ CSS Scroll
+   Snap فقط، بلا أي JS جديد وبلا لمس places.js (البطاقات نفسها تُبنى
+   بنفس renderPlaceCard()/innerHTML كما هي تماماً — هنا فقط الحاوية
+   تتحول من Grid عمودي إلى صف أفقي قابل للـ Snap). Scoped صراحة بـ
+   #plcGrid فقط — لا تأثير على .home-columns أو الصفحة نفسها (لا Nested
+   Horizontal Scroll خارج هذا العنصر تحديداً، ولا سحب أفقي على
+   الرئيسية). البطاقة التالية تظهر جزئياً (peek) كمؤشر بصري طبيعي بلا
+   أي عنصر JS إضافي — يكفي وحده لإفهام الزبون أن هناك المزيد للتصفح،
+   تماشياً مع طلب "لا تضف تعقيداً برمجياً إذا كان CSS Scroll Snap يكفي". ---- */
+/* FIX: كتلة أقدم بنفس الملف (حوالي السطر 4990، من إعادة تصميم سابقة
+   "عمود واحد ببطاقات عريضة") تضبط #plcGrid{flex-direction:column} و
+   #plcGrid .plc-card{width:100%} — بنفس درجة تخصيص "#plcGrid" هنا
+   تماماً. flex-direction لم يكن مُعرَّفاً صراحة في المحاولة الأولى من
+   هذه الكتلة فبقيت قيمة "column" القديمة سارية (لا قاعدة تنافسها على
+   نفس الخاصية = لا فوز بترتيب المصدر يحسمها). الحل: تحديد flex-direction
+   صراحة هنا + رفع درجة التخصيص فعلياً (بادئة .app-shell) بدل الاعتماد
+   فقط على ترتيب المصدر، بنفس نمط التخصيص المستخدم أصلاً في الكتلة رقم
+   10 (`.app-shell .sheet-view[data-view="places"] #plcGrid`) — يضمن
+   الفوز على كتلة 4990 دون حاجة لحذفها أو نقلها. */
+.app-shell #plcGrid{
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: var(--sp-4);
+  gap: var(--sp-3);
+  padding: 2px 2px 6px;
+  margin-bottom: var(--sp-2);
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.app-shell #plcGrid::-webkit-scrollbar{ display: none; }
+.app-shell #plcGrid .plc-card{
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  flex: 0 0 auto !important;
+  width: 43% !important;
+  min-width: 138px;
+  max-width: 190px;
+}
+.app-shell #plcGrid .plc-card-img{
+  aspect-ratio: 4/3;
+}
+/* حافة تلاشي خفيفة على يمين الحاوية (RTL: اتجاه المزيد من المحتوى)
+   كمؤشّر تصفح إضافي بلا أي JS — بلا حاجة لتتبع موضع التمرير ببرمجيات. */
+.app-shell #plcGrid{
+  -webkit-mask-image: linear-gradient(to left, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to left, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
+}
+
+/* ---- 5) تأكيد Safe Area/Responsive — لا حاجة لأي قاعدة جديدة هنا: كل
+   القواعد أعلاه نسبية (%، gap بمتغيرات --sp-*) ولا تُدخل أي عرض/ارتفاع
+   ثابت يتجاوز عرض الشاشة، فلا تُنشئ Horizontal Overflow على مستوى
+   .app-shell/body — الحاوية الوحيدة القابلة للتمرير الأفقي هي #plcGrid
+   نفسه، المحصور صراحة أعلاه. ---- */
+
+/* =========================================================================
+   Home — Vertical Services List + Mobile-App Feel (تعديل الرئيسية فقط)
+   -------------------------------------------------------------------------
+   طبقة Cascade أخيرة (CSS فقط) — نفس أسلوب كل الجولات السابقة في هذا
+   الملف: لا حذف لأي قاعدة سابقة، فقط قواعد جديدة بنفس درجة التخصيص أو
+   أعلى تفوز بترتيب المصدر (آخر تعريف يفوز). لا تعديل على index.html
+   البنيوي (نفس #quickServices/.qs-row من buildQuickServiceChips في
+   app.js بلا أي تغيير)، ولا على app.js/config.js/Supabase/GPS/منطق
+   الطلبات/نظام السائق. أسماء وترتيب الخدمات الستة (data-service) والصور
+   (.qs-row-photo / VEHICLE_PHOTOS) بلا أي تغيير — تصغير/تكبير القياس
+   ونمط التخطيط فقط.
+
+   1) الخدمات الستة: من شبكة عمودين (بطاقات مربعة) إلى قائمة عمودية
+      ثابتة — بطاقة كاملة العرض لكل خدمة، خدمة تحت خدمة، بلا أي Scroll
+      أفقي أو Swipe (لا overflow-x هنا إطلاقاً).
+   2) إخفاء شريط زخرفي متبقٍ (::before على .sheet) كان يرسم "مقبض سحب"
+      بصري رغم أن عنصر #sheetHandleArea الفعلي محذوف أصلاً من
+      index.html ولا يوجد أي منطق سحب (touch/pointer) فعلي متبقٍ في
+      app.js — إخفاؤه فقط يزيل الإيحاء البصري المتبقي بـ"شيت قابل للسحب".
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .quick-services{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-x: hidden;
+  }
+  .qs-row{
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: right;
+    width: 100%;
+    min-height: 68px;
+    padding: 12px 14px;
+    gap: 12px;
+    border-radius: var(--app-r-md, 16px);
+    background: #fff;
+    border: 1px solid var(--surface-brd);
+    box-shadow: var(--elev-1);
+  }
+  .qs-row-ic{
+    width: 44px; height: 44px;
+    border-radius: 13px;
+    flex-shrink: 0;
+  }
+  .qs-row-ic svg{ width: 22px; height: 22px; }
+  .qs-row-photo{ width: 30px; height: 30px; }
+  .qs-row-label{
+    flex: 1;
+    width: auto;
+    align-items: flex-start;
+    gap: 2px;
+    text-align: right;
+    min-width: 0;
+  }
+  .qs-row-label b{ font-size: 13.5px; }
+  .qs-row-label span{ font-size: 11px; }
+  .qs-row-chev{
+    display: flex;
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+  }
+  .qs-row-chev svg{ width: 16px; height: 16px; }
+  /* البنر المتدرّج الخاص بـ"بين المحافظات" من طبقة أقدم لم يعد مطابقاً
+     لنمط القائمة العمودية الموحّدة — إعادته لنفس قالب الصف الموحّد مع
+     بقية الخدمات (بلا تمييز لوني خاص)، دون حذف القاعدة الأقدم نفسها. */
+  .qs-row[data-service="intercity"]{
+    grid-column: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: right;
+    gap: 12px;
+    margin-top: 0;
+    padding: 12px 14px;
+    border-radius: var(--app-r-md, 16px);
+    background: #fff;
+    box-shadow: var(--elev-1);
+  }
+  .qs-row[data-service="intercity"] .qs-row-ic{
+    background: var(--svc-intercity-dim, var(--surface-hi));
+    width: 44px; height: 44px; border-radius: 13px;
+  }
+  .qs-row[data-service="intercity"] .qs-row-photo{ width:30px; height:30px; }
+  .qs-row[data-service="intercity"] .qs-row-label{
+    flex: 1; align-items: flex-start; width:auto; gap:2px;
+  }
+  .qs-row[data-service="intercity"] .qs-row-label b{ color: var(--text); font-size:13.5px; }
+  .qs-row[data-service="intercity"] .qs-row-label span{ color: var(--text-faint); font-size:11px; }
+  .qs-row[data-service="intercity"] .qs-row-chev{ display: flex; color: var(--text-faint); }
+}
+
+/* إخفاء المقبض الزخرفي المتبقي — لا تأثير وظيفي (لا منطق سحب مرتبط به
+   أصلاً)، إزالة بصرية فقط حتى لا تبقى الشاشة بمظهر "شيت قابل للسحب". */
+.sheet::before{ display: none; }
+
+/* =========================================================================
+   Home — استعادة عمودين متقابلين (يمين: الخدمات الستة / يسار: الأماكن)
+   -------------------------------------------------------------------------
+   طبقة Cascade أخيرة أخرى (CSS فقط، نفس أسلوب كل الجولات السابقة —
+   لا حذف لأي قاعدة سابقة). تُلغي فقط تكديس home-columns العمودي الذي
+   أضافته طبقة أقدم في هذا الملف، وتُرجعه لتخطيط صفّين جنبًا إلى جنب —
+   بترتيب المصدر HTML الحالي (home-col-services أولاً ثم home-col-more)
+   يظهر العمود الأول يمينًا تلقائيًا في RTL، فلا حاجة لأي تبديل ترتيب.
+   كل بطاقة تتقلّص لصف أفقي مضغوط (أيقونة + اسم) لتناسب نصف العرض على
+   360–414px، دون حذف أي id/class أو تعديل app.js/places.js/market.js/
+   yammak-services.js/config.js/GPS/Supabase/RPC/منطق الطلبات.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns{
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .home-col{
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+  .home-col-more{ margin-top: 0; }
+  .home-col .section-label{ font-size: 12.5px; margin-bottom: 8px; }
+  .home-col-more .section-label-row{ flex-wrap: wrap; row-gap: 2px; }
+  .home-col-more .section-label-more{ font-size: 10.5px; }
+
+  /* ---- يمين: الخدمات الستة — صف أفقي مضغوط (أيقونة + اسم)، بلا وصف
+     فرعي وبلا شيفرون منفصل (لا تتسع لهما مساحة نصف الشاشة) — كل الصف
+     نفسه قابل للنقر كما هو (نفس معالِج الحدث في buildQuickServiceChips
+     في app.js، بلا أي تغيير). ---- */
+  .quick-services{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .qs-row{
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: right;
+    width: 100%;
+    min-height: 56px;
+    padding: 9px 10px;
+    gap: 8px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid var(--surface-brd);
+    box-shadow: var(--elev-1);
+  }
+  .qs-row-ic{ width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; }
+  .qs-row-ic svg{ width: 17px; height: 17px; }
+  .qs-row-photo{ width: 24px; height: 24px; }
+  .qs-row-label{
+    flex: 1; width: auto; align-items: flex-start; text-align: right; min-width: 0; gap: 0;
+  }
+  .qs-row-label b{
+    font-size: 12px; display: -webkit-box; width: 100%;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; line-height: 1.25;
+  }
+  .qs-row-label span{ display: none; } /* الوصف الفرعي يُخفى هنا فقط لضيق العمود؛ العنوان + الأيقونة كافيان */
+  .qs-row-chev{ display: none; }
+
+  .qs-row[data-service="intercity"]{
+    grid-column: auto;
+    flex-direction: row; align-items: center; justify-content: flex-start;
+    text-align: right; gap: 8px; margin-top: 0; padding: 9px 10px;
+    border-radius: 14px; background: #fff; box-shadow: var(--elev-1);
+    min-height: 0; height: 100%; max-height: 62px; /* يلغي min-height:128px من طبقة أقدم (تصميم البانر السابق) */
+  }
+  .qs-row[data-service="intercity"] .qs-row-ic{ width: 32px; height: 32px; border-radius: 10px; }
+  .qs-row[data-service="intercity"] .qs-row-photo{ width: 24px; height: 24px; }
+  .qs-row[data-service="intercity"] .qs-row-label{ flex: 1; align-items: flex-start; width: auto; }
+  .qs-row[data-service="intercity"] .qs-row-label span{ display: none; }
+  .qs-row[data-service="intercity"] .qs-row-chev{ display: none; }
+
+  /* ---- يسار: المطاعم/الأسواق/مكتب المستقبل/خدمات يمّك/سوق يمّك —
+     نفس لغة الصف المضغوط، قائمة عمودية واحدة (بدل شبكة عمودين
+     الفرعية التي لن تتسع داخل نصف الشاشة). خدمات أخرى محذوفة أصلاً
+     من index.html، فالقائمة هنا 5 عناصر فقط كما هو مطلوب. ---- */
+  .soon-grid{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .soon-card{
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: right;
+    width: 100%;
+    min-height: 56px;
+    padding: 9px 10px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+  .soon-card::before{ display: none; } /* الشريط العلوي الملون كان مصمماً للبطاقة المربعة فقط */
+  .soon-ic{ width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; }
+  .soon-ic svg{ width: 16px; height: 16px; }
+  .soon-label{
+    font-size: 12px; text-align: right; flex: 1; min-width: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; line-height: 1.25;
+  }
+  .soon-badge{ font-size: 8px; padding: 1px 6px; flex-shrink: 0; }
+}
+
+/* =========================================================================
+   Home — صفوف متقابلة فعلية (Grid واحد مشترك) بدل عمودين مستقلّين
+   -------------------------------------------------------------------------
+   طبقة Cascade أخيرة ثالثة (CSS فقط، فوق كل ما سبق في هذا الملف).
+   المشكلة التي تُصلحها: عمودان منفصلان (flex) بارتفاعين مختلفين (6
+   عناصر يمين مقابل 5 يسار، وارتفاع Header مختلف) يجعلان أحدهما يبدو
+   أطول بوضوح. الحل: .home-columns يصبح CSS Grid حقيقي بعمودين، وكل
+   من #quickServices و.soon-grid يصبح display:contents (يذوب بصريًا،
+   دون حذفه من DOM) فتتحول كل بطاقة .qs-row و.soon-card إلى عنصر Grid
+   مباشر في نفس الشبكة، مع ترقيم صفّ صريح (nth-child) بحيث يتطابق صفّ i
+   يمينًا مع صفّ i يسارًا تمامًا في نفس الـ grid-row — فيتساوى ارتفاع
+   الصفّين تلقائيًا (Grid يحسب ارتفاع الصفّ من أطول عنصر فيه). الصفّ
+   السادس (خدمة "بين المحافظات") بلا مقابل حقيقي (5 أماكن فقط، ولا
+   نضيف "خدمات أخرى" كما طُلب) فتُترك خليته اليسرى فارغة طبيعيًا بدل
+   اختلاق محتوى.
+   لا تغيير على data-service/الترتيب/الأسماء/الصور للخدمات الستة (نفس
+   #quickServices تمامًا كما يبنيه buildQuickServiceChips في app.js)،
+   ولا على أي id/class/محتوى لبطاقات الأماكن، ولا على app.js/places.js/
+   market.js/yammak-services.js/config.js/GPS/Supabase/RPC/الطلبات.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 62px; /* ارتفاع موحّد قطعي لكل الصفوف — لا بطاقة تكبر بسبب التفاف نص */
+    column-gap: 10px;
+    row-gap: 8px;
+    align-items: stretch;
+  }
+  .home-col-services,
+  .home-col-more{
+    display: contents; /* الأعمدة الوسيطة تذوب بصريًا؛ عناصرها تصبح خلايا الشبكة مباشرة */
+  }
+  #quickServices,
+  .soon-grid{
+    display: contents; /* نفس الشيء لحاويتي القوائم — كل صف/بطاقة يصبح خلية Grid مباشرة */
+  }
+
+  /* يمين = خدمات يمّك الستة (عمود الشبكة الأول = أقصى اليمين في RTL) */
+  .qs-row:nth-child(1){ grid-row: 1; grid-column: 1; }
+  .qs-row:nth-child(2){ grid-row: 2; grid-column: 1; }
+  .qs-row:nth-child(3){ grid-row: 3; grid-column: 1; }
+  .qs-row:nth-child(4){ grid-row: 4; grid-column: 1; }
+  .qs-row:nth-child(5){ grid-row: 5; grid-column: 1; }
+  .qs-row:nth-child(6){ grid-row: 6; grid-column: 1; }
+
+  /* يسار = المطاعم/الأسواق/مكتب المستقبل/سوق يمّك/خدمات يمّك (عمود 2) */
+  .soon-card:nth-child(1){ grid-row: 1; grid-column: 2; }
+  .soon-card:nth-child(2){ grid-row: 2; grid-column: 2; }
+  .soon-card:nth-child(3){ grid-row: 3; grid-column: 2; }
+  .soon-card:nth-child(4){ grid-row: 4; grid-column: 2; }
+  .soon-card:nth-child(5){ grid-row: 5; grid-column: 2; }
+
+  /* كل خلية تملأ ارتفاع صفّها الثابت (62px) تمامًا — تطابق قطعي بين
+     كل البطاقات الستة، وبين كل بطاقة وصفّها المقابل يسارًا، بصرف
+     النظر عن طول الاسم (قصّ داخلي، لا نمو في حجم البطاقة). */
+  .qs-row,
+  .soon-card{
+    height: 100%;
+    max-height: 62px;
+    overflow: hidden;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  /* الفراغ الطبيعي أسفل يسار الصف السادس (بلا اختلاق محتوى) */
+  .home-columns::after{
+    content: '';
+    grid-row: 6; grid-column: 2;
+  }
+}
+
+/* =========================================================================
+   Home — توحيد الثقل البصري بين طرفَي الشبكة (مرجع: توزيع مختصر ومتقابل)
+   -------------------------------------------------------------------------
+   طبقة أخيرة (CSS فقط). المشكلة: الطرف الأيمن كان أثقل بصريًا (أيقونات
+   بحلقة مزدوجة 45px + شريط علوي ملوّن)، والأيسر بخلفيات ملوّنة لثلاث
+   بطاقات فقط وأخرى بيضاء. الحل: نفس سطح البطاقة (أبيض/حد/ظل/زوايا) لكل
+   الـ11 بطاقة، ونفس صندوق الأيقونة 40×40 بلا حلقات، ونفس حجم الصورة/
+   الأيقونة داخله. لا تغيير على الشبكة/الارتفاع 62px/الترتيب/الأسماء/
+   الصور (نفس VEHICLE_PHOTOS) ولا على أي JS/Supabase/GPS/الطلبات.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns .qs-row,
+  .home-columns .soon-card.soon-card{
+    background: #fff !important;
+    border: 1px solid var(--surface-brd) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 10px -6px rgba(16,27,45,0.16) !important;
+    padding: 9px 10px !important;
+    gap: 10px !important;
+  }
+  .home-columns .qs-row::before,
+  .home-columns .soon-card::before{ display: none !important; }
+
+  .home-columns .qs-row .qs-row-ic,
+  .home-columns .soon-card .soon-ic{
+    width: 40px !important; height: 40px !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    background: rgba(109,40,217,0.08) !important;
+    color: var(--brand, #6d28d9) !important;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; overflow: hidden;
+    font-size: 22px; line-height: 1;
+  }
+  .home-columns .qs-row .qs-row-ic::after{ display: none !important; }
+  .home-columns .qs-row .qs-row-photo{
+    width: 32px !important; height: 32px !important;
+    object-fit: contain; display: block;
+  }
+  .home-columns .soon-card .soon-ic svg{ width: 22px !important; height: 22px !important; }
+
+  .home-columns .qs-row .qs-row-label b,
+  .home-columns .soon-card .soon-label{
+    font-size: 12.5px !important; font-weight: 800; color: var(--text, #101b2d) !important;
+    line-height: 1.25;
+  }
+  .home-columns .soon-card .soon-badge{ font-size: 9px; }
+}
+
+/* الشارة (قريباً / 22 قسم / بيع • اشتري) تنزل تحت الاسم داخل بطاقة العمود
+   الأيسر بدل مزاحمته أفقيًا — يمنع كسر الكلمات على 360px؛ الارتفاع 62px
+   والحجم والأيقونة كما هي، والبطاقات اليمنى بلا تغيير. */
+@media (max-width: 899.98px){
+  .home-columns .soon-card.soon-card{
+    display: grid !important;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas: "ic label" "ic badge";
+    column-gap: 8px !important;
+    row-gap: 2px;
+    align-items: center;
+    justify-items: start;
+    align-content: center;
+    text-align: right;
+  }
+  .home-columns .soon-card .soon-ic{ grid-area: ic; }
+  .home-columns .soon-card .soon-label{
+    grid-area: label; width: 100%; min-width: 0;
+    display: block !important; -webkit-line-clamp: unset;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    align-self: end;
+  }
+  .home-columns .soon-card .soon-badge{
+    grid-area: badge; align-self: start; max-width: 100%;
+    white-space: nowrap; font-size: 9px; padding: 1px 6px;
+  }
+  .home-columns .qs-row{ gap: 8px !important; }
+}
+
+/* عروض ≤380px (360px): خط الاسم 11.5px في العمودين معًا حتى يظهر
+   «مكتب المستقبل» كاملاً بلا قصّ، مع بقاء الطرفين متماثلين. */
+@media (max-width: 380px){
+  .home-columns .qs-row .qs-row-label b,
+  .home-columns .soon-card .soon-label{ font-size: 11.5px !important; }
+}
+
+/* =========================================================================
+   صور المركبات داخل صندوق الأيقونة الموحّد (40×40) — CSS فقط
+   -------------------------------------------------------------------------
+   الصورة الحقيقية (assets/vehicles/*.jpg عبر VEHICLE_PHOTOS في app.js،
+   المسارات كما هي بلا أي تغيير) تملأ الصندوق الموحّد بالكامل
+   (100%×100%، object-fit:cover، زوايا الصندوق نفسها) بدل أن تظهر كصورة
+   منفصلة داخله. أما الـ fallback (svg يُدرجه vehiclePhotoFallback فقط عند
+   فشل تحميل الصورة) فيأخذ حجم أيقونات العمود الأيسر نفسه (22px). ارتفاع
+   البطاقة ثابت (62px) وصندوق الأيقونة ثابت (40px) في الحالتين.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns .qs-row .qs-row-ic .qs-row-photo{
+    width: 100% !important; height: 100% !important;
+    max-width: none; max-height: none;
+    object-fit: cover !important; object-position: center;
+    border-radius: inherit !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    position: static !important;
+    display: block; margin: 0;
+  }
+  .home-columns .qs-row .qs-row-ic > svg{
+    width: 22px !important; height: 22px !important;
+    filter: none; flex-shrink: 0;
+  }
+}
+
+/* =========================================================================
+   Home — هوية "يمّك" على شكل/تخطيط الصورة المرجعية (بطاقات ملوّنة مدوّرة،
+   أيقونة/صورة بارزة داخل دائرة، صف مقابل صف) — CSS فقط، نفس Grid/الترتيب/
+   الارتفاع 62px المعتمدين سابقًا؛ لا تغيير على index.html/app.js/Supabase/
+   GPS/الطلبات/config.js. بنفتي أساسي #6C3CE0 + أخضر/برتقالي/ذهبي فقط،
+   بلا وردي أو سماوي — الألوان محلية لهذه البطاقات فقط (متغيرات جديدة،
+   لا تُلمس --svc-* العامة المستخدمة في شاشات أخرى كالحجز).
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns{
+    --yk-purple: #6C3CE0; --yk-purple-tint: rgba(108,60,224,0.13); --yk-purple-bd: rgba(108,60,224,0.30);
+    --yk-green:  #1CAE72; --yk-green-tint:  rgba(28,174,114,0.13); --yk-green-bd:  rgba(28,174,114,0.30);
+    --yk-orange: #FF7A29; --yk-orange-tint: rgba(255,122,41,0.13); --yk-orange-bd: rgba(255,122,41,0.30);
+    --yk-gold:   #E5B85C; --yk-gold-tint:   rgba(229,184,92,0.16); --yk-gold-bd:   rgba(229,184,92,0.38);
+  }
+
+  /* دورة الألوان صفًا-بصف (نفس اللون لليمين ومقابله اليسار في نفس الصف) */
+  .qs-row:nth-child(1), .soon-card:nth-child(1){ --acc: var(--yk-purple); --acc-tint: var(--yk-purple-tint); --acc-bd: var(--yk-purple-bd); }
+  .qs-row:nth-child(2), .soon-card:nth-child(2){ --acc: var(--yk-green);  --acc-tint: var(--yk-green-tint);  --acc-bd: var(--yk-green-bd); }
+  .qs-row:nth-child(3), .soon-card:nth-child(3){ --acc: var(--yk-orange); --acc-tint: var(--yk-orange-tint); --acc-bd: var(--yk-orange-bd); }
+  .qs-row:nth-child(4), .soon-card:nth-child(4){ --acc: var(--yk-gold);   --acc-tint: var(--yk-gold-tint);   --acc-bd: var(--yk-gold-bd); }
+  .qs-row:nth-child(5), .soon-card:nth-child(5){ --acc: var(--yk-purple); --acc-tint: var(--yk-purple-tint); --acc-bd: var(--yk-purple-bd); }
+  .qs-row:nth-child(6){ --acc: var(--yk-green); --acc-tint: var(--yk-green-tint); --acc-bd: var(--yk-green-bd); }
+
+  .home-columns .qs-row,
+  .home-columns .soon-card.soon-card{
+    background: var(--acc-tint) !important;
+    border: 1px solid var(--acc-bd) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 3px 10px -6px rgba(16,27,45,0.18) !important;
+  }
+
+  /* صندوق الأيقونة/الصورة: دائرة مصمتة بلون الصف، أبرز من ذي قبل — يطابق
+     أسلوب "أيقونة دائرية داخل بطاقة ملوّنة" في الصورة المرجعية */
+  .home-columns .qs-row .qs-row-ic,
+  .home-columns .soon-card .soon-ic{
+    width: 42px !important; height: 42px !important;
+    border-radius: 50% !important;
+    background: var(--acc) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 6px -2px rgba(16,27,45,0.35) !important;
+  }
+  .home-columns .qs-row .qs-row-ic svg,
+  .home-columns .soon-card .soon-ic svg{ color:#fff !important; }
+  .home-columns .qs-row .qs-row-ic .qs-row-photo{
+    border-radius: 50% !important; /* الصورة الحقيقية تبقى دائرية داخل نفس الصندوق */
+  }
+
+  .home-columns .qs-row .qs-row-label b,
+  .home-columns .soon-card .soon-label{
+    color: var(--text, #1B1030) !important;
+    font-weight: 800 !important;
+  }
+  .home-columns .soon-card .soon-badge{
+    background: rgba(255,255,255,0.75) !important;
+    color: var(--acc) !important;
+    border: 1px solid var(--acc-bd) !important;
+  }
+
+  /* الخلية الفارغة يسار الصف السادس: بلا لون/حد — فراغ حقيقي، لا بطاقة وهمية */
+  .home-columns::after{ background: transparent !important; border: 0 !important; box-shadow: none !important; }
+}
+
+/* =========================================================================
+   إصلاح: إظهار صور التصنيف الحقيقية (assets/places/*.jpg) داخل نفس
+   الدائرة الموحّدة بدل أن يطمسها لون الهوية دائمًا.
+   -------------------------------------------------------------------------
+   القاعدة السابقة في هذا الملف (طبقة "هوية يمّك") تفرض على .soon-ic
+   لونًا مصمتًا بـ !important لكل البطاقات دومًا — وهذا كان يُسكت
+   background-image الحقيقية (restaurants.jpg/markets.jpg/future-
+   office.jpg) التي يُفعّلها app.js فقط بعد التأكد الفعلي من نجاح
+   تحميلها (preloadCategoryPhotos → html.has-cat-photo-*)، دون تغيير
+   أي مسار هنا. الإصلاح: عند وجود الكلاس (أي الصورة فعلاً موجودة
+   وحمّلت بنجاح) تُستبدل الدائرة الملوّنة بنفس الدائرة 42px لكن بصورة
+   التصنيف الحقيقية بدل اللون، بنفس القصّ الدائري المتناسق مع بقية
+   الدوائر. عند غياب الكلاس (لا صورة / فشل التحميل) يبقى السلوك السابق
+   (لون الهوية) كما هو بلا أي تغيير. لا تعديل على index.html/app.js.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  html.has-cat-photo-restaurants   .home-columns #soonCardRestaurants   .soon-ic,
+  html.has-cat-photo-markets       .home-columns #soonCardMarkets       .soon-ic,
+  html.has-cat-photo-future-office .home-columns #soonCardFutureOffice .soon-ic{
+    background-size: cover !important;
+    background-position: center !important;
+    background-color: transparent !important;
+  }
+  html.has-cat-photo-restaurants   .home-columns #soonCardRestaurants   .soon-ic{ background-image: url("assets/places/restaurants.jpg") !important; }
+  html.has-cat-photo-markets       .home-columns #soonCardMarkets       .soon-ic{ background-image: url("assets/places/markets.jpg") !important; }
+  html.has-cat-photo-future-office .home-columns #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg") !important; }
+
+  /* عند تفعيل الصورة الحقيقية، الـSVG الاحتياطي يُخفى (نفس آلية
+     has-cat-photo-* الأصلية أعلى الملف) حتى لا يتراكب فوق الصورة */
+  html.has-cat-photo-restaurants   .home-columns #soonCardRestaurants   .soon-ic svg,
+  html.has-cat-photo-markets       .home-columns #soonCardMarkets       .soon-ic svg,
+  html.has-cat-photo-future-office .home-columns #soonCardFutureOffice .soon-ic svg{ display: none !important; }
+}
+
+/* =========================================================================
+   Home — إعادة تصميم "خفيف ومضغوط" بأسلوب المرجع (دوائر أيقونة/صورة
+   بارزة + اسم مختصر، بلا صناديق/حدود/ظلال ثقيلة) — CSS فقط.
+   -------------------------------------------------------------------------
+   الفرق عن الطبقة السابقة ("هوية يمّك"): تلك جعلت كل عنصر بطاقة كاملة
+   (خلفية ملوّنة + حد + ظل + زوايا 20px) — وهو بالضبط شكل "قائمة صفوف
+   طويلة متراصة" الذي لا يريده العميل الآن. هذه الطبقة (الأحدث، تُطبَّق
+   فوق سابقتها بترتيب المصدر) تُسقط صندوق البطاقة نهائيًا: كل عنصر يصبح
+   دائرة أيقونة/صورة بارزة + اسم قصير بجانبها فقط، عائمين على خلفية
+   الصفحة مباشرة (بلا حدود/ظل/تلوين خلفية للعنصر نفسه) — تمامًا كطراز
+   الشريط الجانبي في الصورة المرجعية. المسافات البيضاء بين العناصر
+   زادت (row-gap/column-gap أكبر) ليبدو "نظيفًا وخفيفًا لا مزدحمًا".
+   لا تغيير على Grid/الترتيب/الأسماء/المسارات/index.html/app.js.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns{
+    grid-auto-rows: 54px !important;
+    row-gap: 14px !important;
+    column-gap: 18px !important;
+  }
+
+  .home-columns .qs-row,
+  .home-columns .soon-card.soon-card{
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    gap: 10px !important;
+  }
+  .home-columns .qs-row,
+  .home-columns .soon-card{ max-height: 54px !important; }
+
+  /* الدائرة نفسها تحمل الآن كل "الثقل البصري" (بدل صندوق الصف) — أكبر
+     قليلاً وبظل ناعم واحد يعطيها بروزًا خفيفًا فوق الخلفية مباشرة */
+  .home-columns .qs-row .qs-row-ic,
+  .home-columns .soon-card .soon-ic{
+    width: 46px !important; height: 46px !important;
+    box-shadow: 0 3px 8px -3px rgba(16,27,45,0.28) !important;
+  }
+  .home-columns .qs-row .qs-row-ic svg,
+  .home-columns .soon-card .soon-ic svg{ width: 20px !important; height: 20px !important; }
+
+  .home-columns .qs-row .qs-row-label b,
+  .home-columns .soon-card .soon-label{
+    font-weight: 700 !important;
+    font-size: 12.5px !important;
+  }
+  @media (max-width: 380px){
+    .home-columns .qs-row .qs-row-label b,
+    .home-columns .soon-card .soon-label{ font-size: 11.5px !important; }
+  }
+
+  /* الشارة (قريباً/22 قسم/بيع • اشتري) تصغر وتصبح تلميحًا خفيفًا بلا
+     خلفية ثقيلة، متوافقة مع الطابع النظيف الجديد */
+  .home-columns .soon-card .soon-badge{
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    font-size: 8.5px !important;
+    color: var(--text-faint, #8091A0) !important;
+  }
+}
+
+/* =========================================================================
+   Home — محاذاة أقرب للمرجع: الأيقونة/الصورة فوق، الاسم أسفلها مباشرة
+   (بدل جنبها)، بتقارب أكبر بين العناصر — نفس نمط الشريط الدائري في
+   الصورة المرجعية. CSS فقط، فوق كل الطبقات السابقة بترتيب المصدر.
+   لا تغيير على Grid الأساسي (يمين=خدمات/يسار=أماكن، صف مقابل صف،
+   الصف 6 فارغ يسارًا) ولا على index.html/app.js/الترتيب/الأسماء.
+   ========================================================================= */
+@media (max-width: 899.98px){
+  .home-columns{
+    grid-auto-rows: 74px !important;
+    row-gap: 10px !important;
+    column-gap: 14px !important;
+  }
+  .home-columns .qs-row,
+  .home-columns .soon-card.soon-card{
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    text-align: center !important;
+    gap: 5px !important;
+    max-height: 74px !important;
+  }
+  .home-columns .qs-row .qs-row-ic,
+  .home-columns .soon-card .soon-ic{
+    width: 48px !important; height: 48px !important;
+  }
+  .home-columns .qs-row .qs-row-label,
+  .home-columns .soon-card .soon-label{
+    align-items: center !important;
+    text-align: center !important;
+    width: 100% !important;
+  }
+  .home-columns .qs-row .qs-row-label b,
+  .home-columns .soon-card .soon-label{
+    text-align: center !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    white-space: normal !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+  }
+  .home-columns .qs-row .qs-row-chev,
+  .home-columns .soon-card .soon-badge{ display: none !important; }
+}
+
+
+/* =========================================================================
+   Home Hub — 5 أقسام رئيسية (بطاقات مستطيلة) + واجهة "خدمات النقل والتوصيل"
+   -------------------------------------------------------------------------
+   عرض وتنقّل فقط. آخر كتلة في الملف عمداً (تفوز بترتيب المصدر/التخصيص على
+   الطبقات السابقة دون حذفها). لا يمسّ أي منطق: الأزرار القديمة للمطاعم/
+   الأسواق/خدمات يمّك/سوق يمّك باقية بمعرّفاتها داخل .home-legacy (مخفية)
+   وتُستدعى بالنقر البرمجي؛ #quickServices انتقل إلى data-view="transport".
+   الألوان: بنفسجي أساسي (--purple)، والبرتقالي/الأخضر/الذهبي مساعدة فقط.
+   ========================================================================= */
+.home-legacy{ display: none !important; }
+
+.hub{ display: flex; flex-direction: column; gap: var(--sp-4); margin-top: var(--sp-3); min-width: 0; }
+.hub .ya-assist{ margin: 0; }
+
+/* ---- الصفحة الرئيسية: بطاقات مستطيلة أفقية بنفس تصميم وقياس بطاقات النقل ----
+   الترتيب: النقل والتوصيل، المطاعم، الأسواق، خدمات يمّك، بيع وشراء.
+   كل بطاقة: الصورة في جهة، والعنوان والوصف والزر في الجهة المقابلة.
+   عمود واحد + grid-auto-rows:1fr = كل البطاقات بنفس الارتفاع. التمرير طبيعي للصفحة فقط. */
+.hub-list{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hub-card{
+  --hub-accent: var(--purple);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42%;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "text media";
+  width: 100%; min-width: 0; min-height: 148px;
+  margin: 0; padding: 0; overflow: hidden;
+  text-align: right; font-family: inherit; color: var(--text);
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: 20px;
+  box-shadow: 0 14px 28px -20px rgba(76,29,149,0.38);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.hub-card::before{
+  content: ''; position: absolute; inset-block: 0; inset-inline-start: 0;
+  width: 4px; background: var(--hub-accent); z-index: 1;
+}
+.hub-card:active{ transform: scale(0.985); box-shadow: 0 6px 14px -12px rgba(76,29,149,0.35); }
+.hub-card:focus-visible{ outline: 2px solid var(--purple); outline-offset: 2px; }
+
+/* الصورة: تملأ ارتفاع البطاقة بهوامش متساوية (نفس بطاقات النقل) */
+.hub-media{
+  grid-area: media;
+  margin: 8px; min-height: 0;
+  border-radius: 14px;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+
+.hub-text{
+  grid-area: text;
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 4px; min-width: 0;
+  padding: 12px 16px 12px 12px;
+}
+.hub-title{
+  font-size: 16px; font-weight: 900; line-height: 1.3; letter-spacing: -.1px; color: var(--text);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.hub-msg{
+  font-size: 12.5px; font-weight: 600; line-height: 1.5; color: #5E6A80;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.hub-go{
+  margin-top: auto; align-self: flex-start;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--purple); color: #fff;
+  box-shadow: 0 8px 14px -8px rgba(76,29,149,0.6);
+}
+.hub-go svg{ width: 17px; height: 17px; }
+
+/* صور الأقسام: ملف المشروع الحقيقي فوق، وطبقات تصميم احتياطية تحته تظهر فقط
+   إن لم يتوفر الملف (لا صورة مكسورة ولا بطاقة فارغة). */
+.hub-transport{ --hub-accent: var(--purple); }
+.hub-transport .hub-media{
+  background-image: url("assets/vehicles/taxi.jpg?v=2026092201"), linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
+}
+.hub-restaurants{ --hub-accent: var(--orange); }
+.hub-restaurants .hub-media{
+  background-image: url("assets/places/restaurants.jpg?v=2026092301"), linear-gradient(135deg, var(--orange) 0%, var(--orange-soft) 100%);
+}
+.hub-markets{ --hub-accent: var(--green); }
+.hub-markets .hub-media{
+  background-image: url("assets/places/markets.jpg?v=2026092301"), linear-gradient(135deg, var(--green-text) 0%, var(--green) 100%);
+}
+.hub-yservices{ --hub-accent: var(--gold); }
+.hub-yservices .hub-media{
+  background-image:
+    url("assets/places/other-services.jpg?v=2026092301"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z' stroke='white' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+    linear-gradient(135deg, var(--purple-text) 0%, var(--purple) 60%, var(--gold) 140%);
+  background-size: cover, 46% auto, cover;
+  background-position: center, center, center;
+}
+.hub-ymarket{ --hub-accent: var(--orange); }
+.hub-ymarket .hub-media{
+  background-image:
+    url("assets/places/yammak-market.jpg?v=2026093001"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'><path d='M14 22h36l-3 30a4 4 0 0 1-4 3.6H21a4 4 0 0 1-4-3.6L14 22Z' fill='white' fill-opacity='.95'/><path d='M23 22v-3a9 9 0 0 1 18 0v3' stroke='white' stroke-width='3.5' stroke-linecap='round'/><circle cx='45' cy='17' r='7' fill='rgb(255,122,41)'/></svg>"),
+    linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
+  background-size: cover, 52% auto, cover;
+  background-position: center, center, center;
+}
+
+/* ---- واجهة "خدمات النقل والتوصيل": الخدمات الستة كبطاقات مستطيلة متساوية ----
+   #quickServices كان display:contents في طبقة الشبكة القديمة (Home ثنائي العمود)
+   وله nth-child يحدد grid-row/grid-column — نُعيده حاوية حقيقية هنا ونُلغي التموضع.
+   عمود واحد + grid-auto-rows:1fr = كل البطاقات بنفس الارتفاع تماماً مهما اختلف
+   طول الوصف. لا سحب أفقي؛ التمرير طبيعي للصفحة فقط. */
+.sheet-view[data-view="transport"] #quickServices,
+.sheet-view[data-view="transport"] .quick-services{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 12px;
+  margin: 0; min-width: 0; width: 100%;
+}
+.sheet-view[data-view="transport"] #quickServices .qs-row{ grid-row: auto; grid-column: auto; }
+.sheet-view[data-view="transport"] .quick-services .qs-skel{ height: 148px; border-radius: 20px; }
+.sheet-view[data-view="transport"] .quick-services .qs-row{
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) 42%;
+  grid-template-areas: "label media";
+  align-items: stretch; justify-content: stretch;
+  width: 100%; min-width: 0; min-height: 148px; max-height: none; height: auto;
+  margin: 0; padding: 0; gap: 0; overflow: hidden;
+  text-align: right;
+  background: #fff; border: 1px solid var(--surface-brd);
+  border-radius: 20px;
+  box-shadow: 0 14px 28px -20px rgba(76,29,149,0.38);
+  order: 0;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row:active{ background: #fff; transform: scale(0.985); }
+.sheet-view[data-view="transport"] .quick-services .qs-row::before{
+  display: block; content: ''; position: absolute; transform: none; z-index: 1;
+  inset-block: 0; inset-inline-start: 0; width: 4px; height: auto; border-radius: 0;
+  background: var(--purple);
+}
+/* زخرفة قديمة (قوس منقّط) لبطاقة بين المحافظات — غير مرئية على الخلفية البيضاء
+   وتسبّب تجاوزاً داخلياً 10px؛ تُعطَّل هنا فقط. */
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="intercity"]::after{ display: none; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="taxi"]{ order: 1; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="private"]{ order: 2; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="courier"]{ order: 3; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="cargo"]{ order: 4; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="starx"]{ order: 5; }
+.sheet-view[data-view="transport"] .quick-services .qs-row[data-service="intercity"]{ order: 6; }
+
+/* الصورة: تملأ ارتفاع البطاقة كاملاً بهوامش متساوية من الجهات الثلاث */
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-ic{
+  grid-area: media;
+  width: auto; height: auto; min-height: 0; flex: none;
+  margin: 8px; 
+  border-radius: 14px; overflow: hidden;
+  background: var(--purple-dim); box-shadow: none !important;
+  display: block; transform: none; position: relative;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-ic::after{ display: none; }
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-photo{
+  position: absolute; inset: 0; z-index: 0;
+  display: block; width: 100%; height: 100%; border-radius: 0;
+  object-fit: cover; box-shadow: none; background: transparent;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-ic > svg{
+  position: absolute; inset: 0; margin: auto;
+  width: 46px; height: 46px; display: block; color: var(--purple);
+}
+
+/* المعلومات والزر في الجهة المقابلة: عنوان، وصف، ثم زر ثابت الموضع أسفل البطاقة */
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-label{
+  grid-area: label;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  gap: 4px; width: auto; min-width: 0;
+  padding: 14px 16px 14px 12px; text-align: right;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-label b{
+  font-size: 16.5px; font-weight: 900; line-height: 1.3; color: var(--text);
+  display: block; text-align: right;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-label > span:not(.qs-row-cta){
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-size: 12.5px; font-weight: 600; line-height: 1.55; color: #5E6A80;
+  white-space: normal; text-overflow: unset; text-align: right;
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-cta{
+  margin-top: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 112px; min-height: 38px; padding: 0 22px; border-radius: 100px;
+  background: var(--purple); color: #fff;
+  font-size: 14px; font-weight: 800; line-height: 1;
+  box-shadow: 0 8px 14px -8px rgba(76,29,149,0.6);
+}
+.sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-chev{ display: none; }
+
+/* شاشات ضيقة جداً: تصغير طفيف فقط، بنفس الترتيب ودون overflow */
+@media (max-width: 340px){
+  .hub-card{ grid-template-columns: minmax(0, 1fr) 38%; }
+  .hub-title{ font-size: 15px; }
+  .sheet-view[data-view="transport"] .quick-services .qs-row{ grid-template-columns: minmax(0, 1fr) 38%; }
+  .sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-label b{ font-size: 15px; }
+  .sheet-view[data-view="transport"] .quick-services .qs-row .qs-row-cta{ min-width: 96px; padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .hub-card{ transition: none; }
+}
+
+
+/* =========================================================================
+   Home Hub — 6 بطاقات أفقية مستطيلة (عمود واحد) + توحيد بطاقات الأقسام الداخلية (تصميم فقط)
+   -------------------------------------------------------------------------
+   الرئيسية: الست بطاقات (النقل والتوصيل، المطاعم، الأسواق، مكتب المستقبل،
+   خدمات يمّك، بيع وشراء) تبقى أفقية مستطيلة بعمود واحد بنفس المقاس
+   (صورة في جهة والمعلومات في الجهة المقابلة) — تخطيطها من كتلة «Home Hub» أعلاه
+   دون تغيير؛ هنا فقط صورة بطاقة مكتب المستقبل.
+   الأقسام الداخلية: بطاقات .plc-card (المطاعم/الأسواق/مكتب المستقبل وكل
+   مستويات خدمات يمّك) بنفس شكل بطاقات النقل: نص + زر في جهة، صورة في الجهة
+   المقابلة، عمود واحد، نفس الارتفاع الأدنى والحواف والظل.
+   لا تغيير في HTML ولا في أي منطق/بيانات/معرّفات؛ آخر كتلة في الملف عمداً.
+   ========================================================================= */
+
+/* ---- الرئيسية: خدمة مقابل خدمة (عمودان × ثلاثة صفوف) ----
+   الترتيب من اليمين: النقل والتوصيل | المطاعم ، الأسواق | مكتب المستقبل ، خدمات يمّك | بيع وشراء.
+   كل بطاقة أفقية مستطيلة: المعلومات في جهة والصورة في الجهة المقابلة، وكلها بنفس العرض
+   والارتفاع (grid-auto-rows:1fr). لا بطاقة بعرض كامل ولا بطاقة منفردة (6 = 3×2).
+   سهم الدخول (نفس الزر/العنصر) فوق زاوية الصورة ليوفّر ارتفاعاً داخل العرض الضيق. */
+.hub-list{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 116px;
+  gap: 12px;
+}
+.hub-list .hub-card{
+  grid-template-columns: minmax(0, 1fr) 33%;
+  min-height: 0; height: 116px;
+  border-radius: 18px;
+}
+.hub-list .hub-card .hub-media{ margin: 6px; border-radius: 12px; }
+.hub-list .hub-card .hub-text{
+  position: static;
+  padding: 8px 10px 8px 2px;
+  gap: 3px; justify-content: center;
+}
+.hub-list .hub-card .hub-title{
+  font-size: 13px; line-height: 1.3;
+  -webkit-line-clamp: unset; display: block; overflow: visible; /* أسماء الخدمات كاملة دائماً */
+}
+.hub-list .hub-card .hub-msg{
+  font-size: 10.5px; line-height: 1.4;
+  -webkit-line-clamp: 3;
+}
+.hub-list .hub-card .hub-go{
+  position: absolute; z-index: 2;
+  bottom: 12px; inset-inline-end: 12px; margin: 0;
+  width: 24px; height: 24px;
+  background: rgba(255,255,255,0.95); color: var(--purple);
+  box-shadow: 0 4px 10px -4px rgba(0,0,0,0.4);
+}
+.hub-list .hub-card .hub-go svg{ width: 13px; height: 13px; }
+@media (max-width: 380px){
+  .hub-list .hub-card .hub-msg{ font-size: 10px; }
+}
+@media (max-width: 340px){
+  .hub-list{ gap: 10px; }
+  .hub-list .hub-card{ grid-template-columns: minmax(0, 1fr) 30%; }
+  .hub-list .hub-card .hub-title{ font-size: 11.5px; }
+  .hub-list .hub-card .hub-msg{ -webkit-line-clamp: 3; }
+  .hub-list .hub-card .hub-media{ margin: 5px; }
+  .hub-list .hub-card .hub-go{ bottom: 10px; inset-inline-end: 9px; }
+  .hub-list .hub-card .hub-title{ font-size: 12px; }
+  .hub-list .hub-card .hub-msg{ font-size: 10px; }
+}
+
+/* مكتب المستقبل للقرطاسية والطباعة: الصورة الحقيقية الموجودة في المشروع فوق،
+   وتحتها طبقات احتياطية (أيقونة + تدرّج) تظهر فقط إن لم يتوفر الملف. */
+.hub-futureoffice{ --hub-accent: var(--purple-soft); }
+.hub-futureoffice .hub-media{
+  background-image:
+    url("assets/places/future-office.jpg"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7v-7Z' stroke='white' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+    linear-gradient(135deg, var(--purple-text) 0%, var(--purple) 100%);
+  background-size: cover, 40% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+
+/* ---- الأقسام الداخلية: بطاقات مستطيلة متناسقة بشكل بطاقات النقل ---- */
+.plc-grid,
+#plcGrid{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  gap: 12px;
+  min-width: 0;
+}
+.plc-grid .plc-card,
+#plcGrid .plc-card{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42%;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "body img";
+  width: 100%; min-width: 0; min-height: 148px;
+  padding: 0; overflow: hidden;
+  text-align: right;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: 20px;
+  box-shadow: 0 14px 28px -20px rgba(76,29,149,0.38);
+}
+.plc-grid .plc-card:active,
+#plcGrid .plc-card:active{ transform: scale(0.985); }
+.plc-grid .plc-card::before,
+#plcGrid .plc-card::before{
+  content: ''; position: absolute; z-index: 1;
+  inset-block: 0; inset-inline-start: 0; width: 4px;
+  background: var(--purple);
+}
+.plc-grid .plc-card .plc-card-img,
+#plcGrid .plc-card .plc-card-img{
+  grid-area: img;
+  width: auto; height: auto; min-height: 0;
+  aspect-ratio: auto;
+  margin: 8px;
+  border-radius: 14px;
+}
+.plc-grid .plc-card .plc-card-body,
+#plcGrid .plc-card .plc-card-body{
+  grid-area: body;
+  min-width: 0;
+  padding: 14px 16px 14px 12px;
+  gap: 4px;
+  justify-content: flex-start;
+}
+.plc-grid .plc-card .plc-card-title,
+#plcGrid .plc-card .plc-card-title{
+  font-size: 16px; font-weight: 900; line-height: 1.3;
+  min-height: 0; -webkit-line-clamp: 2;
+}
+.plc-grid .plc-card .plc-card-meta,
+#plcGrid .plc-card .plc-card-meta{ font-size: 12.5px; font-weight: 600; }
+/* «التفاصيل ‹»: زر بنفس روح زر بطاقات النقل، ثابت أسفل البطاقة */
+.plc-grid .plc-card .plc-card-body::after,
+#plcGrid .plc-card .plc-card-body::after{
+  margin-top: auto; align-self: flex-start;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 34px; padding: 0 18px;
+  border-radius: 100px;
+  background: var(--purple); color: #fff;
+  font-size: 13px; font-weight: 800; line-height: 1;
+  box-shadow: 0 8px 14px -8px rgba(76,29,149,0.6);
+}
+
+@media (max-width: 340px){
+  .plc-grid .plc-card,
+  #plcGrid .plc-card{ grid-template-columns: minmax(0, 1fr) 38%; }
+}
+
+
+/* =========================================================================
+   Home Hub — الشكل النهائي: عمودان، بطاقات أفقية مستطيلة طويلة (تصميم فقط)
+   -------------------------------------------------------------------------
+   الصفوف (من اليمين في RTL): النقل والتوصيل | المطاعم ، الأسواق | مكتب المستقبل ،
+   خدمات يمّك | بيع وشراء. الترتيب من ترتيب عناصر HTML الحالي دون تغيير.
+   نسبة البطاقة عرض/ارتفاع = 1.9 (--hub-ratio) فهي أعرض بوضوح من ارتفاعها، وكل البطاقات
+   بنفس المقاس تماماً (عمودان 1fr، صفوف auto، نفس النسبة). على الشاشات الصغيرة يُصغَّر
+   المحتوى (الخط/الهوامش/الصورة) عبر clamp() بدل تحويل التخطيط إلى عمود واحد.
+   لا تغيير على HTML أو أي منطق/معرّفات. آخر كتلة في الملف عمداً.
+   ========================================================================= */
+.hub-list{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 12px;
+}
+.hub-list .hub-card{
+  --hub-ratio: 1.9;
+  height: auto; min-height: 0; max-height: none;
+  aspect-ratio: var(--hub-ratio);
+  grid-template-columns: minmax(0, 1fr) 34%;
+  border-radius: 14px;
+}
+.hub-list .hub-card .hub-media{
+  margin: clamp(3px, 1.1vw, 5px);
+  border-radius: clamp(8px, 2.4vw, 11px);
+}
+.hub-list .hub-card .hub-text{
+  padding: clamp(3px, 1vw, 6px) clamp(4px, 1.5vw, 9px) clamp(3px, 1vw, 6px) 2px;
+  gap: clamp(1px, .5vw, 3px);
+  justify-content: center; overflow: hidden;
+}
+.hub-list .hub-card .hub-title{
+  font-size: clamp(9.5px, 3.05vw, 13px); line-height: 1.22;
+}
+.hub-list .hub-card .hub-msg{
+  font-size: clamp(8px, 2.45vw, 10.5px); line-height: 1.3;
+  -webkit-line-clamp: 2;
+}
+.hub-list .hub-card .hub-go{
+  width: clamp(16px, 5vw, 22px); height: clamp(16px, 5vw, 22px);
+  bottom: clamp(7px, 2vw, 10px); inset-inline-end: clamp(7px, 2vw, 10px);
+}
+.hub-list .hub-card .hub-go svg{ width: 55%; height: 55%; }
+@media (max-width: 340px){
+  .hub-list{ gap: 12px; }
+  .hub-list .hub-card{ grid-template-columns: minmax(0, 1fr) 32%; }
+}
+
+
+/* =========================================================================
+   المرحلة 1 — المساحات الست (بدل شبكة .hub-list) — تصميم وتنقّل فقط
+   -------------------------------------------------------------------------
+   آخر كتلة في الملف عمداً (تفوز بترتيب المصدر دون حذف أي قاعدة سابقة).
+   1) الصفحة الرئيسية نفسها لا تتمرر: .sheet-scroll يصبح overflow:hidden وهي
+      الرئيسية فقط (.app-shell:not(.is-fullscreen-view))، وكل الشاشات الأخرى
+      تبقى بتمريرها الأصلي.
+   2) شريط أيقونات (6 أعمدة متساوية) + #spacesViewport: صف أفقي بـ
+      scroll-snap (مساحة واحدة ظاهرة). السحب الأفقي أصلي من المتصفح — لا JS لمس —
+      فيحسم المتصفح محور الإيماءة بنفسه: أفقي يبدّل المساحة، عمودي يمرّر
+      محتوى المساحة فقط (.space-panel { overflow-y:auto }).
+   3) الصور هي نفس صور المشروع الحقيقية المعرَّفة أعلاه (.hub-<key> .hub-media).
+   ========================================================================= */
+.app-shell:not(.is-fullscreen-view) .sheet-scroll{
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell:not(.is-fullscreen-view) .sheet-view[data-view="home"].active{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-shell:not(.is-fullscreen-view) .sheet-view[data-view="home"] .home-fixed{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-shell:not(.is-fullscreen-view) .sheet-view[data-view="home"] .home-fixed > .ya-msgbar{ flex: 0 0 auto; }
+.app-shell:not(.is-fullscreen-view) .sheet-view[data-view="home"] .hub{
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0;
+  gap: var(--sp-3);
+}
+.hub .ya-assist{ flex: 0 0 auto; }
+
+.spaces{
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* ---- شريط الأيقونات ---- */
+.spaces-bar{
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0;
+  touch-action: pan-y;
+}
+.space-tab{
+  --tab-accent: var(--purple);
+  --tab-fg: #fff;
+  appearance: none; -webkit-appearance: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 5px;
+  min-width: 0; min-height: 44px;
+  margin: 0; padding: 2px 0 0;
+  background: transparent; border: 0; border-radius: 14px;
+  font-family: inherit; color: #5E6A80;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.space-tab[data-space-tab="restaurants"]{ --tab-accent: var(--orange); }
+.space-tab[data-space-tab="markets"]{ --tab-accent: var(--green-text); }
+.space-tab[data-space-tab="yservices"]{ --tab-accent: var(--gold); --tab-fg: #3B2A00; }
+.space-tab[data-space-tab="futureoffice"]{ --tab-accent: var(--purple-soft); }
+.space-tab[data-space-tab="ymarket"]{ --tab-accent: var(--orange-text); }
+.space-tab-ic{
+  width: 44px; height: 44px; border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  color: var(--tab-accent);
+  box-shadow: 0 6px 12px -10px rgba(76,29,149,0.4);
+  transition: background-color .2s ease, color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.space-tab-ic svg{ width: 23px; height: 23px; }
+.space-tab-label{
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  width: 100%;
+  font-size: 10px; font-weight: 800; line-height: 1.25; text-align: center;
+  min-height: 25px;
+  overflow-wrap: anywhere;
+}
+.space-tab.is-active{ color: var(--text); }
+.space-tab.is-active .space-tab-ic{
+  background: var(--tab-accent);
+  color: var(--tab-fg);
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 16px -8px rgba(76,29,149,0.55);
+}
+.space-tab:focus-visible{ outline: 2px solid var(--purple); outline-offset: 1px; }
+
+/* ---- نافذة العرض: مساحة واحدة ظاهرة، Snap أفقي أصلي ---- */
+.spaces-viewport{
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-radius: 20px;
+}
+.spaces-viewport::-webkit-scrollbar{ display: none; }
+.spaces-viewport.is-dragging{ scroll-snap-type: none; }
+
+.space-panel{
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* التمرير العمودي داخل المساحة فقط */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 2px 6px;
+}
+.space-panel::-webkit-scrollbar{ display: none; }
+
+.space-card{
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--surface-brd);
+  border-radius: 20px;
+  box-shadow: 0 14px 28px -20px rgba(76,29,149,0.38);
+  position: relative;
+}
+.space-card::before{
+  content: ''; position: absolute; inset-block: 0; inset-inline-start: 0;
+  width: 4px; background: var(--hub-accent); z-index: 1;
+}
+/* الصورة الحقيقية + الاحتياطات تأتي من .hub-<key> .hub-media أعلاه — هنا القياس فقط */
+.space-panel .space-hero{
+  grid-area: auto;
+  flex: 0 0 auto;
+  margin: 8px 8px 0;
+  height: clamp(88px, 14vh, 124px);
+  min-height: 0;
+  border-radius: 14px;
+}
+.space-body{
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 4px; padding: 10px 16px 14px;
+  min-width: 0;
+}
+.space-title{
+  margin: 0;
+  font-size: 18px; font-weight: 900; line-height: 1.3; letter-spacing: -.1px;
+  color: var(--text); text-align: right;
+}
+.space-msg{
+  margin: 0 0 10px;
+  font-size: 13px; font-weight: 600; line-height: 1.55;
+  color: #5E6A80; text-align: right;
+}
+.space-cta{
+  appearance: none; -webkit-appearance: none;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 46px; margin: 0; padding: 0 20px;
+  border: 0; border-radius: 100px;
+  background: var(--purple); color: #fff;
+  font-family: inherit; font-size: 15px; font-weight: 800; line-height: 1;
+  box-shadow: 0 10px 18px -10px rgba(76,29,149,0.65);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.space-cta svg{ width: 18px; height: 18px; flex: 0 0 auto; }
+.space-cta:active{ transform: scale(0.985); }
+.space-cta:focus-visible{ outline: 2px solid var(--purple); outline-offset: 2px; }
+
+@media (max-width: 340px){
+  .space-tab-label{ font-size: 9px; }
+  .space-tab-ic{ width: 40px; height: 40px; border-radius: 13px; }
+  .space-tab-ic svg{ width: 21px; height: 21px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .space-tab-ic{ transition: none; }
+}
+
+/* ---- شاشات قصيرة (iPhone داخل Safari بأشرطته ≈ 664px، SE ≈ 667px): البطاقة أفقية
+   (النص يمين والصورة يسار كما كانت بطاقات الرئيسية) كي يبقى زر الدخول ظاهراً دون
+   تمرير. إن لم يتسع المحتوى يتمرر داخل المساحة نفسها فقط. ---- */
+@media (max-height: 740px){
+  .spaces{ gap: var(--sp-2); }
+  .space-tab-ic{ width: 38px; height: 38px; border-radius: 13px; }
+  .space-tab-ic svg{ width: 21px; height: 21px; }
+  .space-tab{ gap: 3px; }
+  .space-tab-label{ font-size: 9.5px; min-height: 24px; }
+  .space-card{ flex-direction: row-reverse; align-items: stretch; }
+  .space-panel .space-hero{
+    flex: 0 0 34%;
+    height: auto; min-height: 92px;
+    margin: 8px;
+  }
+  .space-body{ flex: 1 1 auto; justify-content: center; padding: 8px 14px 8px 4px; gap: 3px; }
+  .space-title{
+    font-size: 15.5px; line-height: 1.25;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+  .space-msg{
+    margin: 0 0 6px; font-size: 12px; line-height: 1.45;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+  .space-cta{ min-height: 40px; font-size: 14px; padding: 0 14px; }
+}
+
+
+/* =========================================================================
+   المرحلة 2 — محتوى المساحات الست (آخر كتلة في الملف عمداً)
+   -------------------------------------------------------------------------
+   يُنسّق ما يبنيه قسم «محتوى المساحات الست» في app.js داخل
+   .space-content (تحت بطاقة المساحة). لا تعديل على أي قاعدة سابقة.
+   الألوان: بنفسجي #6C3CE0 + أخضر + برتقالي + ذهبي فقط (بلا وردي/سماوي).
+   التمرير العمودي داخل .space-panel فقط؛ لا أي تمرير أفقي.
+   ========================================================================= */
+.space-panel{ padding-bottom: 10px; }
+
+.space-content{
+  --sp-purple: #6C3CE0; --sp-green: #1CAE72; --sp-orange: #FF7A29; --sp-gold: #E5B85C;
+  --sp-acc: var(--sp-purple);
+  --sp-acc-tint: rgba(108,60,224,0.12);
+  --sp-acc-ink: #4C1D95;
+  display: flex; flex-direction: column; gap: 12px;
+  min-width: 0; margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.hub-restaurants .space-content,
+.hub-ymarket .space-content{ --sp-acc: var(--sp-orange); --sp-acc-tint: rgba(255,122,41,0.14); --sp-acc-ink: #B94E0F; }
+.hub-markets .space-content{ --sp-acc: var(--sp-green); --sp-acc-tint: rgba(28,174,114,0.14); --sp-acc-ink: #15803D; }
+.hub-yservices .space-content{ --sp-acc: var(--sp-gold); --sp-acc-tint: rgba(229,184,92,0.20); --sp-acc-ink: #7A5A12; }
+.hub-futureoffice .space-content{ --sp-acc: var(--sp-purple); }
+
+/* ---- رأس القسم ---- */
+.sp-head{ display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px; }
+.sp-title{ margin: 0; font-size: 15px; font-weight: 900; line-height: 1.3; color: var(--text); }
+.sp-count{
+  min-width: 22px; padding: 2px 8px; border-radius: 100px;
+  background: var(--sp-acc-tint); color: var(--sp-acc-ink);
+  font-size: 11.5px; font-weight: 900; line-height: 1.4; text-align: center;
+}
+.sp-more{
+  appearance: none; -webkit-appearance: none;
+  margin: 0 auto 0 0; margin-inline-start: auto;
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 32px; padding: 0 6px; border: 0; background: transparent;
+  font-family: inherit; font-size: 12.5px; font-weight: 800; color: var(--sp-acc-ink);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.sp-more[hidden], .sp-count[hidden]{ display: none; }
+.sp-more svg{ width: 14px; height: 14px; }
+.sp-more:focus-visible, .sp-row:focus-visible, .sp-tile:focus-visible, .sp-svc:focus-visible,
+.sp-retry:focus-visible, .sp-promo:focus-visible{ outline: 2px solid var(--sp-purple); outline-offset: 2px; }
+
+/* ---- النقل والتوصيل: الخدمات الستة بصورها الحقيقية ---- */
+.sp-svc-grid{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sp-svc{
+  --svc-acc: var(--sp-purple);
+  appearance: none; -webkit-appearance: none;
+  position: relative; display: flex; flex-direction: column; min-width: 0;
+  margin: 0; padding: 0; overflow: hidden; text-align: right;
+  font-family: inherit; color: var(--text);
+  background: #fff; border: 1px solid var(--surface-brd); border-radius: 18px;
+  box-shadow: 0 12px 24px -20px rgba(76,29,149,0.4);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: transform .15s ease;
+}
+.sp-svc:active{ transform: scale(0.985); }
+.sp-svc:nth-child(4n+2){ --svc-acc: var(--sp-green); }
+.sp-svc:nth-child(4n+3){ --svc-acc: var(--sp-orange); }
+.sp-svc:nth-child(4n+4){ --svc-acc: var(--sp-gold); }
+.sp-svc::after{
+  content: ''; position: absolute; inset-inline: 0; bottom: 0; height: 3px; background: var(--svc-acc);
+}
+.sp-svc-ph{
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; aspect-ratio: 16 / 10; overflow: hidden;
+  background: var(--surface-hi);
+}
+.sp-svc-ph img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.sp-svc-ph.is-noimg{ background: linear-gradient(135deg, rgba(108,60,224,0.10), rgba(108,60,224,0.04)); color: var(--svc-acc); }
+.sp-svc-ph.is-noimg svg{ width: 46px; height: 46px; fill: none; stroke: currentColor; }
+.sp-svc-txt{ display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 9px 12px 12px; }
+.sp-svc-txt b{ font-size: 14px; font-weight: 900; line-height: 1.3; }
+.sp-svc-txt span{
+  font-size: 11.5px; font-weight: 600; line-height: 1.45; color: #5E6A80;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+
+/* ---- العروض (YA_MESSAGES.alerts + إعلانات العملاء الفعّالة) ---- */
+.sp-promos{ display: flex; flex-direction: column; gap: 8px; }
+.sp-promo{
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 10px 12px; text-decoration: none; color: var(--text);
+  background: linear-gradient(135deg, rgba(229,184,92,0.26) 0%, rgba(255,122,41,0.10) 100%);
+  border: 1px solid rgba(229,184,92,0.5); border-radius: 16px;
+}
+.sp-promo-img{ flex: 0 0 52px; width: 52px; height: 52px; border-radius: 12px; overflow: hidden; background: #fff; }
+.sp-promo-img img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.sp-promo-txt{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.sp-promo-txt b{ font-size: 13.5px; font-weight: 900; line-height: 1.35; }
+.sp-promo-txt span{
+  font-size: 12px; font-weight: 600; line-height: 1.45; color: #5E6A80;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+
+/* ---- قوائم المطاعم / الأسواق / مكتب المستقبل ---- */
+.sp-list{
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  background: #fff; border: 1px solid var(--surface-brd); border-radius: 18px;
+  box-shadow: 0 12px 24px -20px rgba(76,29,149,0.4);
+}
+.sp-row{
+  appearance: none; -webkit-appearance: none;
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 84px;
+  margin: 0; padding: 10px 12px; border: 0; background: transparent;
+  text-align: right; font-family: inherit; color: var(--text);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.sp-row + .sp-row{ border-top: 1px solid var(--surface-brd); }
+.sp-row:active{ background: var(--sp-acc-tint); }
+.sp-row-img{
+  position: relative; flex: 0 0 64px; width: 64px; height: 64px; border-radius: 14px; overflow: hidden;
+  background: var(--surface-hi);
+  display: flex; align-items: center; justify-content: center;
+}
+.sp-row-img img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+/* بلا صورة (أو فشل تحميلها): صورة التصنيف الحقيقية الموجودة في assets/places + تدرّج احتياطي */
+.sp-row-img.is-noimg{ background-size: cover, cover; background-position: center; background-repeat: no-repeat; }
+.sp-row-img.is-noimg::after{ font-size: 26px; line-height: 1; text-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+.sp-ph-restaurants.is-noimg{
+  background-image: url("assets/places/restaurants.jpg?v=2026092301"), linear-gradient(135deg, var(--sp-orange), #FFB07A);
+}
+.sp-ph-restaurants.is-noimg::after{ content: '🍔'; }
+.sp-ph-markets.is-noimg{
+  background-image: url("assets/places/markets.jpg?v=2026092301"), linear-gradient(135deg, #15803D, var(--sp-green));
+}
+.sp-ph-markets.is-noimg::after{ content: '🛒'; }
+.sp-ph-futureOffice.is-noimg{
+  background-image: url("assets/places/future-office.jpg?v=2026092301"), linear-gradient(135deg, #4C1D95, var(--sp-purple));
+}
+.sp-ph-futureOffice.is-noimg::after{ content: '🏪'; }
+.sp-row-body{ display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.sp-row-title{
+  font-size: 14.5px; font-weight: 900; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.sp-row-cat{
+  display: inline-block; max-width: 100%; padding: 2px 9px; border-radius: 100px;
+  background: var(--sp-acc-tint); color: var(--sp-acc-ink);
+  font-size: 11px; font-weight: 800; line-height: 1.5;
+}
+.sp-row-meta{ display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: 11.5px; font-weight: 600; color: #5E6A80; }
+.sp-row-meta svg{ width: 13px; height: 13px; flex: 0 0 auto; }
+.sp-row-chev{
+  flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--sp-acc-tint); color: var(--sp-acc-ink);
+}
+.sp-row-chev svg{ width: 15px; height: 15px; }
+
+/* ---- خدمات يمّك: أقسام local_service_sections ---- */
+.sp-tiles{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sp-tile{
+  appearance: none; -webkit-appearance: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
+  min-width: 0; min-height: 88px; margin: 0; padding: 10px 6px;
+  background: #fff; border: 1px solid var(--surface-brd); border-radius: 16px;
+  font-family: inherit; color: var(--text); text-align: center;
+  box-shadow: 0 10px 20px -18px rgba(76,29,149,0.4);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.sp-tile:active{ background: var(--sp-acc-tint); }
+.sp-tile-ic{
+  width: 42px; height: 42px; border-radius: 14px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--sp-acc-tint); font-size: 22px; line-height: 1;
+}
+.sp-tile-lb{
+  width: 100%; font-size: 11.5px; font-weight: 800; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+
+/* ---- بيع وشراء: نفس بطاقة .mkt-card القائمة ---- */
+.sp-listings{ margin-bottom: 0; }
+
+/* ---- حالات التحميل / الفراغ / الخطأ ---- */
+.sp-skel{
+  display: block; border-radius: 16px;
+  background: linear-gradient(90deg, #EEF0F6 25%, #F8F9FC 50%, #EEF0F6 75%);
+  background-size: 200% 100%; animation: spShimmer 1.3s linear infinite;
+}
+.sp-skel-row{ height: 84px; }
+.sp-skel-tile{ height: 88px; }
+.sp-skel-card{ height: 190px; }
+.sp-body-skel.sp-skel-places{ display: flex; flex-direction: column; gap: 8px; }
+.sp-body-skel.sp-skel-tiles{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sp-body-skel.sp-skel-listings{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@keyframes spShimmer{ from{ background-position: 200% 0; } to{ background-position: -200% 0; } }
+
+.sp-empty, .sp-error{
+  margin: 0; padding: 22px 16px; text-align: center;
+  background: #fff; border: 1px dashed var(--surface-brd); border-radius: 16px;
+  color: #5E6A80; font-size: 13px; font-weight: 700; line-height: 1.6;
+}
+.sp-error p{ margin: 0 0 10px; }
+.sp-retry{
+  appearance: none; -webkit-appearance: none;
+  min-height: 40px; padding: 0 20px; border: 0; border-radius: 100px;
+  background: var(--sp-purple); color: #fff;
+  font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+
+/* ---- بطاقة المساحة المضغوطة (المرحلة 2): الصورة الحقيقية يسار، العنوان والزر يمين —
+   حتى يظهر محتوى المساحة الحقيقي فوراً في منطقة العرض الصغيرة بدل أن تستهلكها البطاقة ---- */
+.space-card{ flex-direction: row-reverse; align-items: stretch; }
+.space-panel .space-hero{ flex: 0 0 30%; height: auto; min-height: 84px; margin: 8px; }
+.space-body{ flex: 1 1 auto; justify-content: center; padding: 8px 14px 8px 4px; gap: 2px; }
+.space-title{
+  font-size: 15.5px; line-height: 1.3;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.space-msg{
+  margin: 0 0 6px; font-size: 12px; line-height: 1.45;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.space-cta{ align-self: flex-start; width: auto; min-height: 36px; padding: 0 18px; font-size: 13.5px; gap: 6px; }
+.space-cta svg{ width: 16px; height: 16px; }
+@media (max-height: 740px){
+  .space-panel .space-hero{ flex-basis: 28%; min-height: 72px; margin: 6px 8px; }
+  .space-body{ padding: 6px 12px 6px 4px; }
+  .space-msg{ -webkit-line-clamp: 1; margin-bottom: 5px; }
+  .space-cta{ min-height: 34px; }
+}
+
+@media (max-width: 340px){
+  .sp-tiles, .sp-body-skel.sp-skel-tiles{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sp-svc-txt b{ font-size: 13px; }
+}
+@media (max-height: 740px){
+  .space-content{ gap: 10px; margin-top: 10px; }
+  .sp-svc-ph{ aspect-ratio: 2 / 1; }
+  .sp-row{ min-height: 78px; padding: 8px 12px; }
+  .sp-row-img{ flex-basis: 58px; width: 58px; height: 58px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .sp-skel{ animation: none; }
+  .sp-svc{ transition: none; }
+}
+
+
+/* =========================================================================
+   المرحلة 3 (النهائية) — الصقل البصري للمساحات الست (آخر كتلة في الملف عمداً)
+   -------------------------------------------------------------------------
+   تنسيق فقط — لا تعديل على أي قاعدة سابقة ولا على أي وظيفة/بيانات.
+   1) توحيد الزوايا والحدود والظلال والمسافات عبر متغيّرات محلية داخل .spaces.
+   2) البنفسجي الأساسي #6C3CE0 لعناصر المساحات (بدل #6D28D9 العام) + الأخضر
+      والبرتقالي والذهبي فقط — بلا وردي/سماوي/ألوان عشوائية.
+   3) أهداف لمس ≥ 44px حيث تسمح المساحة (40px كحدّ أدنى في الشاشات القصيرة).
+   4) حالات الفراغ/الخطأ/التحميل بنفس لغة البطاقات.
+   5) Safe Area: الحشو السفلي للمساحة يُضاف إليه env(safe-area-inset-bottom)،
+      والجانبي للأجهزة ذات الحواف. لا أي تمرير أفقي.
+   ========================================================================= */
+.spaces{
+  --sp3-purple: #6C3CE0;
+  --sp3-purple-ink: #4C1D95;
+  --sp3-radius: 18px;
+  --sp3-radius-sm: 14px;
+  --sp3-brd: var(--surface-brd);
+  --sp3-shadow: 0 12px 24px -20px rgba(76,29,149,0.4);
+  --sp3-muted: #5E6A80;
+  --sp3-gap: 12px;
+  max-width: 100%;
+}
+
+/* ---- شريط الأيقونات: اللون البنفسجي الموحّد ---- */
+.space-tab{ --tab-accent: var(--sp3-purple); }
+.space-tab[data-space-tab="restaurants"]{ --tab-accent: var(--orange); }
+.space-tab[data-space-tab="markets"]{ --tab-accent: var(--green-text); }
+.space-tab[data-space-tab="yservices"]{ --tab-accent: var(--gold); --tab-fg: #3B2A00; }
+.space-tab[data-space-tab="futureoffice"]{ --tab-accent: var(--sp3-purple); }
+.space-tab[data-space-tab="ymarket"]{ --tab-accent: var(--orange-text); }
+.space-tab-ic{ border-radius: var(--sp3-radius-sm); box-shadow: 0 6px 12px -10px rgba(76,29,149,0.4); }
+.space-tab.is-active .space-tab-ic{ box-shadow: 0 10px 16px -8px rgba(76,29,149,0.5); }
+.space-tab-label{ color: inherit; }
+.space-tab.is-active .space-tab-label{ color: var(--text); }
+
+/* ---- نافذة العرض واللوحة: بلا تجاوز أفقي + Safe Area ---- */
+.spaces-viewport{ max-width: 100%; border-radius: 22px; }
+.space-panel{
+  padding-inline: max(2px, env(safe-area-inset-left, 0px)) max(2px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: 14px;
+}
+
+/* ---- بطاقة المساحة: نفس الزاوية/الحدّ/الظلّ لكل البطاقات ---- */
+.space-card{ border-radius: var(--sp3-radius); border-color: var(--sp3-brd); box-shadow: var(--sp3-shadow); }
+.space-card::before{ width: 4px; }
+.space-panel .space-hero{ border-radius: var(--sp3-radius-sm); background-color: rgba(108,60,224,0.08); }
+.space-title{ color: var(--text); letter-spacing: 0; }
+.space-msg{ color: var(--sp3-muted); }
+.space-cta{
+  background: var(--sp3-purple);
+  min-height: 44px;
+  box-shadow: 0 10px 18px -10px rgba(108,60,224,0.7);
+}
+.space-cta:focus-visible{ outline-color: var(--sp3-purple); }
+
+/* ---- محتوى المساحة: إيقاع موحّد للمسافات ---- */
+.space-content{ gap: var(--sp3-gap); margin-top: var(--sp3-gap); }
+.sp-head{ padding: 0 6px; min-height: 32px; }
+.sp-title{ font-size: 15.5px; letter-spacing: 0; }
+.sp-count{ min-width: 24px; padding: 2px 9px; font-size: 12px; }
+.sp-more{ min-height: 44px; padding: 0 8px; margin-block: -6px; }
+
+/* ---- النقل والتوصيل: الخدمات الستة (بطاقات مستطيلة بنفس الارتفاع) ---- */
+.sp-svc-grid{ gap: 10px; align-items: stretch; }
+.sp-svc{ border-radius: var(--sp3-radius); border-color: var(--sp3-brd); box-shadow: var(--sp3-shadow); }
+.sp-svc-ph{ aspect-ratio: 16 / 9; background: rgba(108,60,224,0.06); }
+.sp-svc-ph.is-noimg{ background: linear-gradient(135deg, rgba(108,60,224,0.12), rgba(108,60,224,0.04)); }
+.sp-svc-txt{ flex: 1 1 auto; padding: 9px 12px 13px; gap: 3px; }
+.sp-svc-txt b{ font-size: 14.5px; }
+.sp-svc-txt span{ color: var(--sp3-muted); }
+.sp-svc:nth-child(4n+1){ --svc-acc: var(--sp3-purple); }
+
+/* ---- الترويج (يظهر فقط عند وجود بيانات حقيقية) ---- */
+.sp-promos{ gap: 8px; }
+.sp-promo{
+  border-radius: var(--sp3-radius); min-height: 64px; padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(229,184,92,0.24) 0%, rgba(255,122,41,0.08) 100%);
+  border: 1px solid rgba(229,184,92,0.55);
+  box-shadow: var(--sp3-shadow);
+}
+.sp-promo-img{ flex-basis: 48px; width: 48px; height: 48px; border-radius: var(--sp3-radius-sm); }
+.sp-promo-txt b{ color: #7A5A12; }
+
+/* ---- القوائم (مطاعم/أسواق/مكتب المستقبل) ---- */
+.sp-list{ border-radius: var(--sp3-radius); border-color: var(--sp3-brd); box-shadow: var(--sp3-shadow); }
+.sp-row{ min-height: 84px; }
+.sp-row-img{ border-radius: var(--sp3-radius-sm); }
+.sp-row-cat{ max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-meta > span{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-meta{ color: var(--sp3-muted); }
+
+/* ---- خدمات يمّك ---- */
+.sp-tile{ border-radius: var(--sp3-radius); border-color: var(--sp3-brd); min-height: 92px; box-shadow: var(--sp3-shadow); }
+.sp-tile-ic{ border-radius: var(--sp3-radius-sm); }
+
+/* ---- حالات التحميل / الفراغ / الخطأ بنفس لغة البطاقات ---- */
+.sp-skel{ border-radius: var(--sp3-radius); }
+.sp-empty, .sp-error{
+  border-radius: var(--sp3-radius); border: 1px dashed var(--sp-acc, var(--sp3-purple));
+  background: var(--sp-acc-tint, rgba(108,60,224,0.08));
+  color: var(--sp-acc-ink, var(--sp3-purple-ink));
+  padding: 24px 18px;
+}
+.sp-error p{ color: var(--text); font-weight: 700; }
+.sp-retry{ min-height: 44px; min-width: 140px; background: var(--sp3-purple); box-shadow: 0 10px 18px -12px rgba(108,60,224,0.7); }
+.sp-more:focus-visible, .sp-row:focus-visible, .sp-tile:focus-visible, .sp-svc:focus-visible,
+.sp-retry:focus-visible, .sp-promo:focus-visible{ outline-color: var(--sp3-purple); }
+
+/* ---- الشاشات القصيرة (≈ 664px): كثافة أعلى مع بقاء الأهداف ≥ 40px ---- */
+@media (max-height: 740px){
+  .space-cta{ min-height: 40px; }
+  .sp-svc-ph{ aspect-ratio: 2 / 1; }
+  .sp-svc-txt{ padding: 8px 12px 11px; }
+  .sp-row{ min-height: 78px; }
+  .sp-tile{ min-height: 84px; }
+  .sp-empty, .sp-error{ padding: 18px 16px; }
+  .space-content{ gap: 10px; margin-top: 10px; }
+}
+@media (max-width: 340px){
+  .sp-svc-txt b{ font-size: 13px; }
+}
+
+/* ---- المرحلة 3: بطاقة المساحة كشريط نحيف — العنوان والتعريف في عمود والزر بجانبهما،
+   ليبقى المحتوى الحقيقي للمساحة ظاهراً بدل أن تستهلكه البطاقة (الزر 44px ثابت) ---- */
+.space-card{ align-items: stretch; }
+.space-panel .space-hero{ flex: 0 0 24%; min-height: 64px; height: auto; margin: 8px; }
+.space-body{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "t c" "m c";
+  column-gap: 10px; row-gap: 2px;
+  align-items: center; align-content: center;
+  padding: 8px 14px 8px 6px;
+}
+.space-title{ grid-area: t; align-self: end; font-size: 15px; line-height: 1.3; -webkit-line-clamp: 2; }
+.space-msg{ grid-area: m; align-self: start; margin: 0; font-size: 12px; line-height: 1.45; -webkit-line-clamp: 1; }
+.space-cta{
+  grid-area: c; align-self: center; width: auto; min-height: 44px;
+  padding: 0 14px; font-size: 13px; gap: 6px;
+}
+.space-cta svg{ width: 15px; height: 15px; }
+.sp-head{ min-height: 28px; }
+.sp-more{ margin-block: -8px; }
+@media (max-height: 740px){
+  .space-panel .space-hero{ flex-basis: 22%; min-height: 56px; margin: 7px 8px; }
+  .space-cta{ min-height: 44px; }
+  .space-body{ padding: 6px 12px 6px 6px; }
+}
+@media (max-width: 350px){
+  .space-cta{ padding: 0 10px; font-size: 12.5px; }
+  .space-title{ font-size: 14px; }
+}
+
+/* اسم المساحة يظهر كاملاً (مثل «مكتب المستقبل للقرطاسية والطباعة») بلا اقتطاع */
+.space-title{ display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; }
+@media (min-height: 741px){
+  .space-msg{ -webkit-line-clamp: 2; }
+}
+
+/* تعديل التوزيع: العنوان بعرض كامل العمود (سطران كحد أقصى لأطول اسم)، والتعريف والزر في الصف الثاني */
+.space-body{
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "t t" "m c";
+  column-gap: 10px; row-gap: 4px;
+}
+.space-title{ align-self: end; }
+.space-msg{ align-self: center; -webkit-line-clamp: 2; font-size: 12px; }
+.space-panel .space-hero{ flex: 0 0 76px; min-height: 64px; }
+@media (max-height: 740px){
+  .space-panel .space-hero{ flex-basis: 68px; min-height: 56px; }
+  .space-body{ row-gap: 2px; }
+}
+
+/* عمود التعريف أوسع: صورة أصغر + زر أضيق (الارتفاع 44px ثابت) كي لا يُقتطع سطر التعريف */
+.space-panel .space-hero{ flex-basis: 64px; }
+.space-cta{ padding: 0 12px; gap: 5px; }
+.space-cta svg{ width: 14px; height: 14px; }
+.space-msg{ -webkit-line-clamp: 3; }
+@media (max-height: 740px){
+  .space-panel .space-hero{ flex-basis: 58px; }
+  .space-msg{ -webkit-line-clamp: 2; }
+}
+@media (max-height: 740px) and (max-width: 374px){
+  .space-msg{ -webkit-line-clamp: 3; }
+}

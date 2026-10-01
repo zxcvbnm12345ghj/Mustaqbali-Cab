@@ -163,6 +163,7 @@ async function enterDashboard() {
   await loadPlaces('restaurants');
   await loadPlaces('markets');
   await loadPlaces('futureOffice');
+  await loadLocalServicesTab();
   startRequestPolling();
 }
 
@@ -1248,7 +1249,7 @@ function openAdModal(ad) {
   document.getElementById('adModalTitle').textContent = ad ? 'تعديل إعلان' : 'إضافة إعلان';
   document.getElementById('adTitle').value = ad?.title || '';
   document.getElementById('adBody').value = ad?.body || '';
-  document.getElementById('adImageUrl').value = ad?.image_url || '';
+  adImageWidget.open(ad?.image_url || '');
   document.getElementById('adLinkUrl').value = ad?.link_url || '';
   document.getElementById('adDisplaySeconds').value = ad?.display_seconds ?? 6;
   document.getElementById('adType').value = ad?.ad_type || 'scheduled';
@@ -1275,6 +1276,7 @@ function openAdModal(ad) {
 function closeAdModal() {
   document.getElementById('adModalBackdrop').classList.remove('show');
   adsState.editingId = null;
+  adImageWidget.discard();
 }
 
 function showAdModalError(message) {
@@ -1352,6 +1354,7 @@ async function saveAd() {
     return;
   }
 
+  await adImageWidget.finalize(payload.image_url);
   await loadAds();
   closeAdModal();
 }
@@ -1359,12 +1362,14 @@ async function saveAd() {
 async function deleteAd(id) {
   if (!id) return;
   if (!confirm('حذف هذا الإعلان نهائياً؟')) return;
+  const oldImageUrl = (adsState.ads.find(a => a.id === id) || {}).image_url || '';
   const { error } = await supabaseClient.from('customer_ads').delete().eq('id', id);
   if (error) {
     console.error(error);
     alert('تعذّر حذف الإعلان: ' + error.message);
     return;
   }
+  if (oldImageUrl) await removeStoredImageIfOurs('ad-images', oldImageUrl);
   if (adsState.editingId === id) closeAdModal();
   await loadAds();
 }
@@ -1402,6 +1407,260 @@ async function sendAdPush() {
     pushMsgEl.classList.add('show');
   }
 }
+
+/* ============================================================
+   Real image upload (Supabase Storage) — المطاعم / الأسواق / مكتب
+   المستقبل (bucket "place-images": restaurants/, markets/,
+   future-office/) والإعلانات (bucket "ad-images": ads/).
+   Additive only. Public read / admin-only write (policies in
+   migration_admin_image_uploads.sql — prepared for review, not run
+   from here). The manual image-URL text field stays next to the
+   uploader so old/external links keep working; both write the same
+   image_url column, nothing else about saving changes.
+   Cleanup rules:
+     - replace / remove / delete record -> the OLD file is removed from
+       Storage only after the DB write succeeded, only if the URL
+       points into our own bucket, and only if no other row still
+       references the same URL. External links are never touched.
+     - uploaded but never saved (modal closed, another file chosen,
+       "إزالة الصورة") -> the temporary file is removed right away.
+   Does not touch local-service-images / the providers image system.
+   ============================================================ */
+const IMG_MAX_BYTES = 5 * 1024 * 1024;
+const IMG_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const IMG_REFERENCING_TABLES = ['restaurants', 'markets', 'future_office', 'customer_ads', 'local_service_providers'];
+
+// Public URL -> object path inside `bucket`, or null if the URL is not ours.
+function storagePathFromPublicUrl(bucket, url) {
+  if (!url || typeof url !== 'string') return null;
+  const marker = '/storage/v1/object/public/' + bucket + '/';
+  const i = url.indexOf(marker);
+  if (i === -1) return null;
+  let path = url.slice(i + marker.length).split('?')[0].split('#')[0];
+  try { path = decodeURIComponent(path); } catch (_) { return null; }
+  return path || null;
+}
+
+async function isImageUrlStillReferenced(url) {
+  for (const table of IMG_REFERENCING_TABLES) {
+    const { count, error } = await supabaseClient
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq('image_url', url);
+    if (error) {
+      // Can't prove it's unused -> keep the file (safe side).
+      console.warn('image reference check failed for', table, error);
+      return true;
+    }
+    if (count > 0) return true;
+  }
+  return false;
+}
+
+async function removeObjectFromBucket(bucket, path) {
+  const { error } = await supabaseClient.storage.from(bucket).remove([path]);
+  if (error) {
+    console.warn('تعذّر حذف الصورة من التخزين:', bucket, path, error);
+    return false;
+  }
+  return true;
+}
+
+// Old saved image -> delete from Storage if (and only if) it is ours and unused.
+async function removeStoredImageIfOurs(bucket, url) {
+  const path = storagePathFromPublicUrl(bucket, url);
+  if (!path) return false;
+  if (await isImageUrlStillReferenced(url)) return false;
+  return removeObjectFromBucket(bucket, path);
+}
+
+// Reads an optional integer sort_order input. value === undefined means "left empty".
+function readSortOrderInput(inputId) {
+  const el = document.getElementById(inputId);
+  const raw = el ? String(el.value).trim() : '';
+  if (raw === '') return { ok: true, value: undefined };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 9999) return { ok: false, value: undefined };
+  return { ok: true, value: n };
+}
+
+function createImageWidget(cfg) {
+  // cfg: { prefix, bucket, folder: () => string, saveBtnId }
+  const el = (suffix) => document.getElementById(cfg.prefix + suffix);
+  const w = { originalUrl: '', sessionUrl: null, sessionId: 0 };
+
+  function setStatus(text) {
+    const s = el('ImageUploadStatus');
+    if (s) s.textContent = text || '';
+  }
+
+  w.refresh = function () {
+    const urlEl = el('ImageUrl');
+    const img = el('ImagePreview');
+    const removeBtn = el('ImageRemoveBtn');
+    const url = urlEl ? urlEl.value.trim() : '';
+    if (img) {
+      if (/^https?:\/\//i.test(url)) {
+        img.src = url;
+        img.style.display = 'block';
+      } else {
+        img.removeAttribute('src');
+        img.style.display = 'none';
+      }
+    }
+    if (removeBtn) removeBtn.hidden = !url;
+  };
+
+  w.open = function (url) {
+    w.sessionId += 1;
+    w.originalUrl = url || '';
+    w.sessionUrl = null;
+    const urlEl = el('ImageUrl');
+    if (urlEl) urlEl.value = w.originalUrl;
+    const fileEl = el('ImageFile');
+    if (fileEl) fileEl.value = '';
+    setStatus('الحد الأقصى 5MB — JPG / PNG / WebP / GIF');
+    w.refresh();
+  };
+
+  async function dropSessionUpload() {
+    const url = w.sessionUrl;
+    w.sessionUrl = null;
+    if (!url) return;
+    const path = storagePathFromPublicUrl(cfg.bucket, url);
+    if (path) await removeObjectFromBucket(cfg.bucket, path);
+  }
+
+  w.upload = async function (file) {
+    if (!file) return;
+    const fileEl = el('ImageFile');
+    if (!IMG_ALLOWED_TYPES.includes(file.type)) {
+      setStatus('الملف المختار ليس صورة مدعومة (JPG / PNG / WebP / GIF).');
+      if (fileEl) fileEl.value = '';
+      return;
+    }
+    if (file.size > IMG_MAX_BYTES) {
+      setStatus('حجم الصورة يجب ألا يتجاوز 5MB.');
+      if (fileEl) fileEl.value = '';
+      return;
+    }
+
+    const myOpen = w.sessionId;
+    const uploadBtn = el('ImageUploadBtn');
+    const saveBtn = cfg.saveBtnId ? document.getElementById(cfg.saveBtnId) : null;
+    setStatus('جارٍ رفع الصورة...');
+    if (uploadBtn) uploadBtn.disabled = true;
+    if (saveBtn) saveBtn.disabled = true;
+
+    const extFromName = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const ext = extFromName || { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }[file.type];
+    const path = `${cfg.folder()}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from(cfg.bucket)
+      .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+
+    if (uploadBtn) uploadBtn.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
+    if (fileEl) fileEl.value = '';
+
+    if (uploadError) {
+      console.error(uploadError);
+      setStatus('تعذّر رفع الصورة: ' + uploadError.message);
+      return;
+    }
+
+    const { data: publicUrlData } = supabaseClient.storage.from(cfg.bucket).getPublicUrl(path);
+    const publicUrl = publicUrlData && publicUrlData.publicUrl;
+    if (!publicUrl) {
+      await removeObjectFromBucket(cfg.bucket, path);
+      setStatus('تعذّر الحصول على رابط الصورة.');
+      return;
+    }
+
+    // Modal was closed / reopened while uploading -> this file belongs to nobody.
+    if (myOpen !== w.sessionId) {
+      await removeObjectFromBucket(cfg.bucket, path);
+      return;
+    }
+
+    // A previous unsaved upload from this same session is now replaced.
+    await dropSessionUpload();
+    w.sessionUrl = publicUrl;
+    el('ImageUrl').value = publicUrl;
+    w.refresh();
+    setStatus('تم رفع الصورة ✓ — اضغط حفظ لتثبيتها');
+  };
+
+  // Manual URL typed/pasted over an unsaved upload -> that upload is orphaned.
+  w.onUrlEdited = async function () {
+    const urlEl = el('ImageUrl');
+    const value = urlEl ? urlEl.value.trim() : '';
+    if (w.sessionUrl && value !== w.sessionUrl) await dropSessionUpload();
+    w.refresh();
+  };
+
+  w.remove = async function () {
+    const urlEl = el('ImageUrl');
+    if (urlEl) urlEl.value = '';
+    const fileEl = el('ImageFile');
+    if (fileEl) fileEl.value = '';
+    await dropSessionUpload();
+    w.refresh();
+    setStatus(w.originalUrl ? 'ستُزال الصورة عند الحفظ.' : '');
+  };
+
+  // Call after the DB write succeeded. savedUrl = the image_url that was saved (or null).
+  w.finalize = async function (savedUrl) {
+    const old = w.originalUrl;
+    w.sessionUrl = null;
+    w.originalUrl = savedUrl || '';
+    if (old && old !== (savedUrl || '')) {
+      await removeStoredImageIfOurs(cfg.bucket, old);
+    }
+  };
+
+  // Modal closed without saving -> remove any temporary upload.
+  w.discard = function () {
+    w.sessionId += 1;
+    const pending = dropSessionUpload();
+    w.originalUrl = '';
+    return pending;
+  };
+
+  w.bind = function () {
+    el('ImageUploadBtn')?.addEventListener('click', () => el('ImageFile')?.click());
+    el('ImageFile')?.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) w.upload(file);
+    });
+    el('ImageRemoveBtn')?.addEventListener('click', () => w.remove());
+    el('ImageUrl')?.addEventListener('input', () => w.refresh());
+    el('ImageUrl')?.addEventListener('change', () => w.onUrlEdited());
+    el('ImagePreview')?.addEventListener('error', () => {
+      const url = el('ImageUrl') ? el('ImageUrl').value.trim() : '';
+      if (url) setStatus('تعذّر عرض معاينة الصورة — تأكد أن الرابط مباشر لصورة.');
+    });
+  };
+
+  return w;
+}
+
+const PLACE_IMAGE_FOLDERS = { restaurants: 'restaurants', markets: 'markets', futureOffice: 'future-office' };
+
+const placeImageWidget = createImageWidget({
+  prefix: 'place',
+  bucket: 'place-images',
+  folder: () => PLACE_IMAGE_FOLDERS[placesState.editingKind] || 'restaurants',
+  saveBtnId: 'savePlaceBtn',
+});
+
+const adImageWidget = createImageWidget({
+  prefix: 'ad',
+  bucket: 'ad-images',
+  folder: () => 'ads',
+  saveBtnId: 'saveAdBtn',
+});
 
 /* ============================================================
    Restaurants / Markets / مكتب المستقبل ("المطاعم والأسواق ومكتب
@@ -1464,6 +1723,7 @@ function renderPlacesTable(kind) {
       <td>${row.image_url ? `<img src="${escapeAttr(row.image_url)}" alt="" style="width:40px; height:40px; border-radius:8px; object-fit:cover; display:block;">` : '<span style="opacity:0.4;">—</span>'}</td>
       <td>${escapeHtml(row.name)}</td>
       <td>${row.category ? escapeHtml(row.category) : '<span style="opacity:0.4;">—</span>'}</td>
+      <td>${row.sort_order ?? '<span style="opacity:0.4;">—</span>'}</td>
       <td><span class="ads-active-badge ${row.active ? '' : 'off'}" data-place-toggle="${escapeAttr(row.id)}" style="cursor:pointer;">${row.active ? 'نشط' : 'موقوف'}</span></td>
       <td class="ads-row-actions">
         <button type="button" data-place-edit="${escapeAttr(row.id)}">تعديل</button>
@@ -1502,12 +1762,14 @@ async function deletePlace(kind, id) {
   if (!id) return;
   const cfg = PLACE_TABLES[kind];
   if (!confirm(`حذف ${cfg.label} نهائياً؟`)) return;
+  const oldImageUrl = ((placesState[kind] || []).find(r => r.id === id) || {}).image_url || '';
   const { error } = await supabaseClient.from(cfg.table).delete().eq('id', id);
   if (error) {
     console.error(error);
     alert('تعذّر الحذف: ' + error.message);
     return;
   }
+  if (oldImageUrl) await removeStoredImageIfOurs('place-images', oldImageUrl);
   closePlaceModal();
   await loadPlaces(kind);
 }
@@ -1522,8 +1784,14 @@ function openPlaceModal(kind, row) {
   const nameEl = document.getElementById('placeName');
   nameEl.placeholder = cfg.namePlaceholder;
   nameEl.value = row?.name || '';
-  document.getElementById('placeCategory').value = row?.category || '';
-  document.getElementById('placeImageUrl').value = row?.image_url || '';
+  const categoryEl = document.getElementById('placeCategory');
+  categoryEl.value = row?.category || '';
+  // Suggested category values (سكائر وتبغ، أركيلة...) only offered for
+  // الأسواق — free-text field, no schema change, just a datalist hint.
+  if (kind === 'markets') categoryEl.setAttribute('list', 'marketCategorySuggestions');
+  else categoryEl.removeAttribute('list');
+  placeImageWidget.open(row?.image_url || '');
+  document.getElementById('placeSortOrder').value = row?.sort_order ?? '';
   document.getElementById('placePhone').value = row?.phone || '';
   document.getElementById('placeAddress').value = row?.address || '';
   document.getElementById('placeHours').value = row?.hours_text || '';
@@ -1543,6 +1811,7 @@ function closePlaceModal() {
   document.getElementById('placeModalBackdrop').classList.remove('show');
   placesState.editingKind = null;
   placesState.editingId = null;
+  placeImageWidget.discard();
 }
 
 function showPlaceModalError(message) {
@@ -1576,6 +1845,15 @@ async function savePlace() {
     showPlaceModalError('الاسم مطلوب.');
     return;
   }
+  if (image_url && !/^https?:\/\//i.test(image_url)) {
+    showPlaceModalError('رابط الصورة يجب أن يبدأ بـ https:// وأن يكون رابطاً مباشراً للصورة.');
+    return;
+  }
+  const sortOrder = readSortOrderInput('placeSortOrder');
+  if (!sortOrder.ok) {
+    showPlaceModalError('الترتيب يجب أن يكون رقمًا صحيحًا بين 0 و9999.');
+    return;
+  }
 
   const payload = {
     name,
@@ -1587,6 +1865,7 @@ async function savePlace() {
     description: description || null,
     active,
   };
+  if (sortOrder.value !== undefined) payload.sort_order = sortOrder.value;
 
   const btn = document.getElementById('savePlaceBtn');
   if (btn) btn.disabled = true;
@@ -1603,8 +1882,623 @@ async function savePlace() {
     return;
   }
 
+  await placeImageWidget.finalize(payload.image_url);
   closePlaceModal();
   await loadPlaces(kind);
+}
+
+/* ============================================================
+   يمّك للخدمات المحلية — additive only. Manages the three
+   pre-existing tables local_service_sections / local_service_categories /
+   local_service_providers (already created and seeded with the 16
+   agreed sections + their sub-categories; providers table starts
+   empty and is filled here with real data only). No migration, no
+   new tables — same schema used as-is:
+     local_service_sections:   id, key, label, icon, sort_order, active, created_at
+     local_service_categories: id, section_id, label, sort_order, active, created_at
+     local_service_providers:  id, category_id, image_url, name, details,
+                                phone, address, lat, lng, hours_text,
+                                active, sort_order, created_at
+   Does not touch restaurants/markets/future_office, ads, drivers,
+   pricing, GPS, RPCs, or the requests table/modal in any way.
+   ============================================================ */
+const localServicesState = {
+  sections: [],
+  categories: [],
+  providers: [],
+  expandedSectionId: null,
+  editingSectionId: null,
+  editingCategoryId: null,
+  editingProviderId: null,
+};
+
+async function loadLocalServiceSections() {
+  const { data, error } = await supabaseClient
+    .from('local_service_sections')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('label', { ascending: true });
+  if (error) { console.error(error); return; }
+  localServicesState.sections = data || [];
+}
+
+async function loadLocalServiceCategories() {
+  const { data, error } = await supabaseClient
+    .from('local_service_categories')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('label', { ascending: true });
+  if (error) { console.error(error); return; }
+  localServicesState.categories = data || [];
+}
+
+async function loadLocalServiceProviders() {
+  const { data, error } = await supabaseClient
+    .from('local_service_providers')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  localServicesState.providers = data || [];
+}
+
+async function loadLocalServicesTab() {
+  const loadingEl = document.getElementById('lsSectionsLoading');
+  if (loadingEl) loadingEl.style.display = 'block';
+  await Promise.all([loadLocalServiceSections(), loadLocalServiceCategories(), loadLocalServiceProviders()]);
+  if (loadingEl) loadingEl.style.display = 'none';
+  renderLsSections();
+  populateLsSectionSelects();
+  populateLsProviderCategorySelect(null, 'lsProviderCategoryFilter');
+  renderLsProviders();
+}
+
+function categoriesForSection(sectionId) {
+  return localServicesState.categories.filter(c => c.section_id === sectionId);
+}
+function sectionLabel(sectionId) {
+  const s = localServicesState.sections.find(sec => sec.id === sectionId);
+  return s ? s.label : '—';
+}
+function categoryLabel(categoryId) {
+  const c = localServicesState.categories.find(cat => cat.id === categoryId);
+  return c ? c.label : '—';
+}
+function categorySectionId(categoryId) {
+  const c = localServicesState.categories.find(cat => cat.id === categoryId);
+  return c ? c.section_id : null;
+}
+
+/* ---------- الأقسام + التصنيفات (جدول قابل للطي) ---------- */
+function renderLsSections() {
+  const body = document.getElementById('lsSectionsBody');
+  const empty = document.getElementById('lsSectionsEmpty');
+  if (!body) return;
+
+  const rows = localServicesState.sections;
+  if (!rows.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = rows.map(sec => {
+    const cats = categoriesForSection(sec.id);
+    const isOpen = localServicesState.expandedSectionId === sec.id;
+    const catsHtml = cats.map(cat => `
+      <tr>
+        <td style="padding-inline-start:28px;">${escapeHtml(cat.label)}</td>
+        <td>${cat.sort_order ?? '<span style="opacity:0.4;">—</span>'}</td>
+        <td><span class="ads-active-badge ${cat.active ? '' : 'off'}" data-ls-cat-toggle="${cat.id}" style="cursor:pointer;">${cat.active ? 'نشط' : 'موقوف'}</span></td>
+        <td class="ads-row-actions">
+          <button type="button" data-ls-cat-edit="${cat.id}">تعديل</button>
+          <button type="button" class="danger" data-ls-cat-delete="${cat.id}">حذف</button>
+        </td>
+      </tr>
+    `).join('');
+
+    return `
+      <tr class="driver-row${isOpen ? ' open' : ''}" data-ls-section-toggle="${sec.id}">
+        <td>${isOpen ? '▾' : '◂'}</td>
+        <td>${sec.icon ? escapeHtml(sec.icon) + ' ' : ''}<b>${escapeHtml(sec.label)}</b></td>
+        <td>${sec.sort_order ?? '<span style="opacity:0.4;">—</span>'}</td>
+        <td>${cats.length}</td>
+        <td><span class="ads-active-badge ${sec.active ? '' : 'off'}" data-ls-sec-active-toggle="${sec.id}" style="cursor:pointer;">${sec.active ? 'نشط' : 'موقوف'}</span></td>
+        <td class="ads-row-actions">
+          <button type="button" data-ls-sec-add-cat="${sec.id}">+ تصنيف</button>
+          <button type="button" data-ls-sec-edit="${sec.id}">تعديل</button>
+          <button type="button" class="danger" data-ls-sec-delete="${sec.id}">حذف</button>
+        </td>
+      </tr>
+      <tr class="driver-requests-row" ${isOpen ? '' : 'hidden'}>
+        <td colspan="6">
+          <div class="driver-requests-wrap">
+            ${cats.length ? `
+              <table class="driver-requests-table admin-table">
+                <thead><tr><th>التصنيف</th><th>الترتيب</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+                <tbody>${catsHtml}</tbody>
+              </table>
+            ` : `<div class="driver-requests-empty">لا توجد تصنيفات بعد تحت هذا القسم.</div>`}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  body.querySelectorAll('[data-ls-section-toggle]').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('button, span[data-ls-sec-active-toggle]')) return;
+      const id = Number(tr.dataset.lsSectionToggle);
+      localServicesState.expandedSectionId = localServicesState.expandedSectionId === id ? null : id;
+      renderLsSections();
+    });
+  });
+  body.querySelectorAll('[data-ls-sec-active-toggle]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); toggleLsSectionActive(el.dataset.lsSecActiveToggle); });
+  });
+  body.querySelectorAll('[data-ls-sec-add-cat]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openLsCategoryModal(btn.dataset.lsSecAddCat, null); });
+  });
+  body.querySelectorAll('[data-ls-sec-edit]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = localServicesState.sections.find(s => s.id === Number(btn.dataset.lsSecEdit));
+      if (row) openLsSectionModal(row);
+    });
+  });
+  body.querySelectorAll('[data-ls-sec-delete]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteLsSection(btn.dataset.lsSecDelete); });
+  });
+  body.querySelectorAll('[data-ls-cat-toggle]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); toggleLsCategoryActive(el.dataset.lsCatToggle); });
+  });
+  body.querySelectorAll('[data-ls-cat-edit]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = localServicesState.categories.find(c => c.id === Number(btn.dataset.lsCatEdit));
+      if (row) openLsCategoryModal(row.section_id, row);
+    });
+  });
+  body.querySelectorAll('[data-ls-cat-delete]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteLsCategory(btn.dataset.lsCatDelete); });
+  });
+}
+
+async function toggleLsSectionActive(id) {
+  id = Number(id);
+  const row = localServicesState.sections.find(s => s.id === id);
+  if (!row) return;
+  const { error } = await supabaseClient.from('local_service_sections').update({ active: !row.active }).eq('id', id);
+  if (error) { console.error(error); return; }
+  await loadLocalServiceSections();
+  renderLsSections();
+}
+
+async function toggleLsCategoryActive(id) {
+  id = Number(id);
+  const row = localServicesState.categories.find(c => c.id === id);
+  if (!row) return;
+  const { error } = await supabaseClient.from('local_service_categories').update({ active: !row.active }).eq('id', id);
+  if (error) { console.error(error); return; }
+  await loadLocalServiceCategories();
+  renderLsSections();
+}
+
+async function deleteLsSection(id) {
+  id = Number(id);
+  if (categoriesForSection(id).length) {
+    alert('لا يمكن حذف قسم يحتوي على تصنيفات فرعية. احذف تصنيفاته أولاً.');
+    return;
+  }
+  if (!confirm('حذف هذا القسم نهائياً؟')) return;
+  const { error } = await supabaseClient.from('local_service_sections').delete().eq('id', id);
+  if (error) { console.error(error); alert('تعذّر الحذف: ' + error.message); return; }
+  await loadLocalServiceSections();
+  renderLsSections();
+  populateLsSectionSelects();
+}
+
+async function deleteLsCategory(id) {
+  id = Number(id);
+  if (localServicesState.providers.some(p => p.category_id === id)) {
+    alert('لا يمكن حذف تصنيف يحتوي على مزودي خدمة. احذف مزوديه أولاً.');
+    return;
+  }
+  if (!confirm('حذف هذا التصنيف نهائياً؟')) return;
+  const { error } = await supabaseClient.from('local_service_categories').delete().eq('id', id);
+  if (error) { console.error(error); alert('تعذّر الحذف: ' + error.message); return; }
+  await loadLocalServiceCategories();
+  renderLsSections();
+  populateLsProviderCategorySelect(null, 'lsProviderCategoryFilter');
+}
+
+/* ---------- مودال القسم ---------- */
+function openLsSectionModal(row) {
+  localServicesState.editingSectionId = row ? row.id : null;
+  document.getElementById('lsSectionModalTitle').textContent = row ? 'تعديل قسم' : 'إضافة قسم';
+  const keyEl = document.getElementById('lsSectionKey');
+  keyEl.value = row ? row.key : '';
+  keyEl.disabled = !!row;
+  document.getElementById('lsSectionLabel').value = row?.label || '';
+  document.getElementById('lsSectionIcon').value = row?.icon || '';
+  document.getElementById('lsSectionSortOrder').value = row?.sort_order ?? '';
+  document.getElementById('lsSectionActive').checked = row ? !!row.active : true;
+  document.getElementById('deleteLsSectionBtn').hidden = !row;
+  showLsSectionModalError(null);
+  document.getElementById('lsSectionModalBackdrop').classList.add('show');
+}
+function closeLsSectionModal() {
+  document.getElementById('lsSectionModalBackdrop').classList.remove('show');
+  document.getElementById('lsSectionKey').disabled = false;
+  localServicesState.editingSectionId = null;
+}
+function showLsSectionModalError(message) {
+  const el = document.getElementById('lsSectionModalError');
+  if (!el) return;
+  if (message) { el.textContent = message; el.classList.add('show'); }
+  else { el.textContent = ''; el.classList.remove('show'); }
+}
+async function saveLsSection() {
+  showLsSectionModalError(null);
+  const key = document.getElementById('lsSectionKey').value.trim();
+  const label = document.getElementById('lsSectionLabel').value.trim();
+  const icon = document.getElementById('lsSectionIcon').value.trim();
+  const active = document.getElementById('lsSectionActive').checked;
+  const editingId = localServicesState.editingSectionId;
+
+  if (!label) { showLsSectionModalError('اسم القسم مطلوب.'); return; }
+  if (!editingId && !key) { showLsSectionModalError('المعرّف (key) مطلوب عند إضافة قسم جديد.'); return; }
+  const sortOrder = readSortOrderInput('lsSectionSortOrder');
+  if (!sortOrder.ok) { showLsSectionModalError('الترتيب يجب أن يكون رقمًا صحيحًا بين 0 و9999.'); return; }
+
+  // icon: on edit an empty field clears it (customer app falls back to its
+  // default tile icon); on insert an empty field is simply not sent.
+  const sectionPayload = editingId ? { label, active, icon: icon || null } : { key, label, active };
+  if (!editingId && icon) sectionPayload.icon = icon;
+  if (sortOrder.value !== undefined) sectionPayload.sort_order = sortOrder.value;
+
+  const btn = document.getElementById('saveLsSectionBtn');
+  if (btn) btn.disabled = true;
+
+  const { error } = editingId
+    ? await supabaseClient.from('local_service_sections').update(sectionPayload).eq('id', editingId)
+    : await supabaseClient.from('local_service_sections').insert(sectionPayload);
+
+  if (btn) btn.disabled = false;
+  if (error) {
+    console.error(error);
+    showLsSectionModalError('تعذّر الحفظ: ' + error.message);
+    return;
+  }
+  closeLsSectionModal();
+  await loadLocalServiceSections();
+  renderLsSections();
+  populateLsSectionSelects();
+}
+
+/* ---------- مودال التصنيف ---------- */
+function populateLsCategorySectionSelect(selectedSectionId) {
+  const sel = document.getElementById('lsCategorySection');
+  if (!sel) return;
+  sel.innerHTML = localServicesState.sections.map(s => `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+  if (selectedSectionId != null) sel.value = String(selectedSectionId);
+}
+function openLsCategoryModal(sectionId, row) {
+  localServicesState.editingCategoryId = row ? row.id : null;
+  document.getElementById('lsCategoryModalTitle').textContent = row ? 'تعديل تصنيف' : 'إضافة تصنيف';
+  populateLsCategorySectionSelect(row ? row.section_id : sectionId);
+  document.getElementById('lsCategoryLabel').value = row?.label || '';
+  document.getElementById('lsCategorySortOrder').value = row?.sort_order ?? '';
+  document.getElementById('lsCategoryActive').checked = row ? !!row.active : true;
+  document.getElementById('deleteLsCategoryBtn').hidden = !row;
+  showLsCategoryModalError(null);
+  document.getElementById('lsCategoryModalBackdrop').classList.add('show');
+}
+function closeLsCategoryModal() {
+  document.getElementById('lsCategoryModalBackdrop').classList.remove('show');
+  localServicesState.editingCategoryId = null;
+}
+function showLsCategoryModalError(message) {
+  const el = document.getElementById('lsCategoryModalError');
+  if (!el) return;
+  if (message) { el.textContent = message; el.classList.add('show'); }
+  else { el.textContent = ''; el.classList.remove('show'); }
+}
+async function saveLsCategory() {
+  showLsCategoryModalError(null);
+  const sectionId = Number(document.getElementById('lsCategorySection').value);
+  const label = document.getElementById('lsCategoryLabel').value.trim();
+  const active = document.getElementById('lsCategoryActive').checked;
+  const editingId = localServicesState.editingCategoryId;
+
+  if (!sectionId) { showLsCategoryModalError('اختر القسم.'); return; }
+  if (!label) { showLsCategoryModalError('اسم التصنيف مطلوب.'); return; }
+  const sortOrder = readSortOrderInput('lsCategorySortOrder');
+  if (!sortOrder.ok) { showLsCategoryModalError('الترتيب يجب أن يكون رقمًا صحيحًا بين 0 و9999.'); return; }
+  const categoryPayload = { section_id: sectionId, label, active };
+  if (sortOrder.value !== undefined) categoryPayload.sort_order = sortOrder.value;
+
+  const btn = document.getElementById('saveLsCategoryBtn');
+  if (btn) btn.disabled = true;
+
+  const { error } = editingId
+    ? await supabaseClient.from('local_service_categories').update(categoryPayload).eq('id', editingId)
+    : await supabaseClient.from('local_service_categories').insert(categoryPayload);
+
+  if (btn) btn.disabled = false;
+  if (error) {
+    console.error(error);
+    showLsCategoryModalError('تعذّر الحفظ: ' + error.message);
+    return;
+  }
+  closeLsCategoryModal();
+  await loadLocalServiceCategories();
+  renderLsSections();
+  populateLsProviderCategorySelect(null, 'lsProviderCategoryFilter');
+}
+
+/* ---------- مزودو الخدمة ---------- */
+function populateLsSectionSelects() {
+  const filterSel = document.getElementById('lsProviderSectionFilter');
+  if (filterSel) {
+    const current = filterSel.value;
+    filterSel.innerHTML = '<option value="">كل الأقسام</option>' +
+      localServicesState.sections.map(s => `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+    filterSel.value = current;
+  }
+  const modalSel = document.getElementById('lsProviderSection');
+  if (modalSel) {
+    modalSel.innerHTML = localServicesState.sections.map(s => `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+  }
+}
+
+function populateLsProviderCategorySelect(filteredSectionId, targetSelectId, selectedCategoryId) {
+  targetSelectId = targetSelectId || 'lsProviderCategory';
+  const sel = document.getElementById(targetSelectId);
+  if (!sel) return;
+  let cats = localServicesState.categories;
+  if (filteredSectionId) cats = cats.filter(c => c.section_id === Number(filteredSectionId));
+  const isFilter = targetSelectId === 'lsProviderCategoryFilter';
+  sel.innerHTML = (isFilter ? '<option value="">كل التصنيفات</option>' : '') +
+    cats.map(c => `<option value="${c.id}">${escapeHtml(c.label)}</option>`).join('');
+  if (selectedCategoryId != null) sel.value = String(selectedCategoryId);
+}
+
+function renderLsProviders() {
+  const body = document.getElementById('lsProvidersBody');
+  const empty = document.getElementById('lsProvidersEmpty');
+  if (!body) return;
+
+  const sectionFilter = document.getElementById('lsProviderSectionFilter')?.value;
+  const categoryFilter = document.getElementById('lsProviderCategoryFilter')?.value;
+
+  let rows = localServicesState.providers;
+  if (categoryFilter) {
+    rows = rows.filter(p => p.category_id === Number(categoryFilter));
+  } else if (sectionFilter) {
+    rows = rows.filter(p => categorySectionId(p.category_id) === Number(sectionFilter));
+  }
+
+  if (!rows.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = rows.map(row => `
+    <tr>
+      <td>${row.image_url ? `<img src="${escapeAttr(row.image_url)}" alt="" style="width:40px; height:40px; border-radius:8px; object-fit:cover; display:block;">` : '<span style="opacity:0.4;">—</span>'}</td>
+      <td>${escapeHtml(row.name)}</td>
+      <td>${escapeHtml(sectionLabel(categorySectionId(row.category_id)))} / ${escapeHtml(categoryLabel(row.category_id))}</td>
+      <td>${row.sort_order ?? '<span style="opacity:0.4;">—</span>'}</td>
+      <td>${row.phone ? escapeHtml(row.phone) : '<span style="opacity:0.4;">—</span>'}</td>
+      <td><span class="ads-active-badge ${row.active ? '' : 'off'}" data-ls-provider-toggle="${row.id}" style="cursor:pointer;">${row.active ? 'نشط' : 'موقوف'}</span></td>
+      <td class="ads-row-actions">
+        <button type="button" data-ls-provider-edit="${row.id}">تعديل</button>
+        <button type="button" class="danger" data-ls-provider-delete="${row.id}">حذف</button>
+      </td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-ls-provider-toggle]').forEach(el => {
+    el.addEventListener('click', () => toggleLsProviderActive(el.dataset.lsProviderToggle));
+  });
+  body.querySelectorAll('[data-ls-provider-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = localServicesState.providers.find(p => p.id === Number(btn.dataset.lsProviderEdit));
+      if (row) openLsProviderModal(row);
+    });
+  });
+  body.querySelectorAll('[data-ls-provider-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteLsProvider(btn.dataset.lsProviderDelete));
+  });
+}
+
+async function toggleLsProviderActive(id) {
+  id = Number(id);
+  const row = localServicesState.providers.find(p => p.id === id);
+  if (!row) return;
+  const { error } = await supabaseClient.from('local_service_providers').update({ active: !row.active }).eq('id', id);
+  if (error) { console.error(error); return; }
+  await loadLocalServiceProviders();
+  renderLsProviders();
+}
+
+async function deleteLsProvider(id) {
+  id = Number(id);
+  if (!confirm('حذف مزود الخدمة هذا نهائياً؟')) return;
+  const { error } = await supabaseClient.from('local_service_providers').delete().eq('id', id);
+  if (error) { console.error(error); alert('تعذّر الحذف: ' + error.message); return; }
+  closeLsProviderModal();
+  await loadLocalServiceProviders();
+  renderLsProviders();
+}
+
+/* ---------- رفع صورة مزود الخدمة — Supabase Storage bucket
+   "local-service-images" (public read / admin-only write via
+   is_admin(), same gate used everywhere else). Only writes the
+   resulting public URL into the existing lsProviderImageUrl hidden
+   field — local_service_providers.image_url column is untouched. ---------- */
+function setLsProviderImagePreview(url) {
+  const img = document.getElementById('lsProviderImagePreview');
+  const removeBtn = document.getElementById('lsProviderImageRemoveBtn');
+  if (!img) return;
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    if (removeBtn) removeBtn.hidden = false;
+  } else {
+    img.removeAttribute('src');
+    img.style.display = 'none';
+    if (removeBtn) removeBtn.hidden = true;
+  }
+}
+
+async function handleLsProviderImageUpload(file) {
+  const statusEl = document.getElementById('lsProviderImageUploadStatus');
+  const uploadBtn = document.getElementById('lsProviderImageUploadBtn');
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    if (statusEl) statusEl.textContent = 'الملف المختار ليس صورة.';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    if (statusEl) statusEl.textContent = 'حجم الصورة يجب ألا يتجاوز 5MB.';
+    return;
+  }
+
+  if (statusEl) statusEl.textContent = 'جارٍ رفع الصورة...';
+  if (uploadBtn) uploadBtn.disabled = true;
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `providers/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+
+  const { error: uploadError } = await supabaseClient.storage
+    .from('local-service-images')
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+
+  if (uploadBtn) uploadBtn.disabled = false;
+
+  if (uploadError) {
+    console.error(uploadError);
+    if (statusEl) statusEl.textContent = 'تعذّر رفع الصورة: ' + uploadError.message;
+    return;
+  }
+
+  const { data: publicUrlData } = supabaseClient.storage.from('local-service-images').getPublicUrl(path);
+  const publicUrl = publicUrlData?.publicUrl;
+  if (!publicUrl) {
+    if (statusEl) statusEl.textContent = 'تعذّر الحصول على رابط الصورة.';
+    return;
+  }
+
+  document.getElementById('lsProviderImageUrl').value = publicUrl;
+  setLsProviderImagePreview(publicUrl);
+  if (statusEl) statusEl.textContent = 'تم رفع الصورة ✓';
+}
+
+function openLsProviderModal(row) {
+  localServicesState.editingProviderId = row ? row.id : null;
+  document.getElementById('lsProviderModalTitle').textContent = row ? 'تعديل مزود خدمة' : 'إضافة مزود خدمة';
+
+  const sectionFilterVal = document.getElementById('lsProviderSectionFilter')?.value;
+  const categoryFilterVal = document.getElementById('lsProviderCategoryFilter')?.value;
+  const initialSectionId = row
+    ? categorySectionId(row.category_id)
+    : (sectionFilterVal ? Number(sectionFilterVal) : (localServicesState.sections[0]?.id ?? null));
+
+  const sectionSel = document.getElementById('lsProviderSection');
+  if (initialSectionId != null) sectionSel.value = String(initialSectionId);
+
+  const initialCategoryId = row ? row.category_id : (categoryFilterVal ? Number(categoryFilterVal) : null);
+  populateLsProviderCategorySelect(initialSectionId, 'lsProviderCategory', initialCategoryId);
+
+  document.getElementById('lsProviderName').value = row?.name || '';
+  document.getElementById('lsProviderSortOrder').value = row?.sort_order ?? '';
+  document.getElementById('lsProviderImageUrl').value = row?.image_url || '';
+  setLsProviderImagePreview(row?.image_url || '');
+  const fileEl = document.getElementById('lsProviderImageFile');
+  if (fileEl) fileEl.value = '';
+  const uploadStatusEl = document.getElementById('lsProviderImageUploadStatus');
+  if (uploadStatusEl) uploadStatusEl.textContent = '';
+  document.getElementById('lsProviderDetails').value = row?.details || '';
+  document.getElementById('lsProviderPhone').value = row?.phone || '';
+  document.getElementById('lsProviderAddress').value = row?.address || '';
+  document.getElementById('lsProviderLat').value = row?.lat ?? '';
+  document.getElementById('lsProviderLng').value = row?.lng ?? '';
+  document.getElementById('lsProviderHours').value = row?.hours_text || '';
+  document.getElementById('lsProviderActive').checked = row ? !!row.active : true;
+
+  document.getElementById('deleteLsProviderBtn').hidden = !row;
+  showLsProviderModalError(null);
+  document.getElementById('lsProviderModalBackdrop').classList.add('show');
+}
+function closeLsProviderModal() {
+  document.getElementById('lsProviderModalBackdrop').classList.remove('show');
+  localServicesState.editingProviderId = null;
+}
+function showLsProviderModalError(message) {
+  const el = document.getElementById('lsProviderModalError');
+  if (!el) return;
+  if (message) { el.textContent = message; el.classList.add('show'); }
+  else { el.textContent = ''; el.classList.remove('show'); }
+}
+async function saveLsProvider() {
+  showLsProviderModalError(null);
+  const categoryId = Number(document.getElementById('lsProviderCategory').value);
+  const name = document.getElementById('lsProviderName').value.trim();
+  const image_url = document.getElementById('lsProviderImageUrl').value.trim();
+  const details = document.getElementById('lsProviderDetails').value.trim();
+  const phone = document.getElementById('lsProviderPhone').value.trim();
+  const address = document.getElementById('lsProviderAddress').value.trim();
+  const latRaw = document.getElementById('lsProviderLat').value.trim();
+  const lngRaw = document.getElementById('lsProviderLng').value.trim();
+  const hours_text = document.getElementById('lsProviderHours').value.trim();
+  const active = document.getElementById('lsProviderActive').checked;
+
+  if (!categoryId) { showLsProviderModalError('اختر التصنيف الفرعي.'); return; }
+  if (!name) { showLsProviderModalError('اسم مزود الخدمة مطلوب.'); return; }
+  const sortOrder = readSortOrderInput('lsProviderSortOrder');
+  if (!sortOrder.ok) { showLsProviderModalError('الترتيب يجب أن يكون رقمًا صحيحًا بين 0 و9999.'); return; }
+  if (image_url && !/^https?:\/\//i.test(image_url)) {
+    showLsProviderModalError('رابط الصورة يجب أن يبدأ بـ https:// وأن يكون رابطاً مباشراً للصورة.');
+    return;
+  }
+
+  const payload = {
+    category_id: categoryId,
+    name,
+    image_url: image_url || null,
+    details: details || null,
+    phone: phone || null,
+    address: address || null,
+    lat: latRaw ? Number(latRaw) : null,
+    lng: lngRaw ? Number(lngRaw) : null,
+    hours_text: hours_text || null,
+    active,
+  };
+  if (sortOrder.value !== undefined) payload.sort_order = sortOrder.value;
+
+  const editingId = localServicesState.editingProviderId;
+  const btn = document.getElementById('saveLsProviderBtn');
+  if (btn) btn.disabled = true;
+
+  const { error } = editingId
+    ? await supabaseClient.from('local_service_providers').update(payload).eq('id', editingId)
+    : await supabaseClient.from('local_service_providers').insert(payload);
+
+  if (btn) btn.disabled = false;
+  if (error) {
+    console.error(error);
+    showLsProviderModalError('تعذّر الحفظ: ' + error.message);
+    return;
+  }
+  closeLsProviderModal();
+  await loadLocalServiceProviders();
+  renderLsProviders();
 }
 
 /* ============================================================
@@ -2067,6 +2961,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('savePlaceBtn')?.addEventListener('click', savePlace);
   document.getElementById('deletePlaceBtn')?.addEventListener('click', () => deletePlace(placesState.editingKind, placesState.editingId));
+  placeImageWidget.bind();
+  adImageWidget.bind();
+
+  document.getElementById('addLsSectionBtn')?.addEventListener('click', () => openLsSectionModal(null));
+  document.getElementById('lsSectionModalCloseBtn')?.addEventListener('click', closeLsSectionModal);
+  document.getElementById('lsSectionModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target.id === 'lsSectionModalBackdrop') closeLsSectionModal();
+  });
+  document.getElementById('saveLsSectionBtn')?.addEventListener('click', saveLsSection);
+  document.getElementById('deleteLsSectionBtn')?.addEventListener('click', () => deleteLsSection(localServicesState.editingSectionId));
+
+  document.getElementById('lsCategoryModalCloseBtn')?.addEventListener('click', closeLsCategoryModal);
+  document.getElementById('lsCategoryModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target.id === 'lsCategoryModalBackdrop') closeLsCategoryModal();
+  });
+  document.getElementById('saveLsCategoryBtn')?.addEventListener('click', saveLsCategory);
+  document.getElementById('deleteLsCategoryBtn')?.addEventListener('click', () => deleteLsCategory(localServicesState.editingCategoryId));
+
+  document.getElementById('addLsProviderBtn')?.addEventListener('click', () => openLsProviderModal(null));
+  document.getElementById('lsProviderModalCloseBtn')?.addEventListener('click', closeLsProviderModal);
+  document.getElementById('lsProviderModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target.id === 'lsProviderModalBackdrop') closeLsProviderModal();
+  });
+  document.getElementById('saveLsProviderBtn')?.addEventListener('click', saveLsProvider);
+  document.getElementById('deleteLsProviderBtn')?.addEventListener('click', () => deleteLsProvider(localServicesState.editingProviderId));
+  document.getElementById('lsProviderImageUploadBtn')?.addEventListener('click', () => {
+    document.getElementById('lsProviderImageFile')?.click();
+  });
+  document.getElementById('lsProviderImageFile')?.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) handleLsProviderImageUpload(file);
+  });
+  document.getElementById('lsProviderImageRemoveBtn')?.addEventListener('click', () => {
+    document.getElementById('lsProviderImageUrl').value = '';
+    setLsProviderImagePreview('');
+    const fileEl = document.getElementById('lsProviderImageFile');
+    if (fileEl) fileEl.value = '';
+    const statusEl = document.getElementById('lsProviderImageUploadStatus');
+    if (statusEl) statusEl.textContent = '';
+  });
+  document.getElementById('lsProviderSection')?.addEventListener('change', (e) => {
+    populateLsProviderCategorySelect(e.target.value, 'lsProviderCategory', null);
+  });
+  document.getElementById('lsProviderSectionFilter')?.addEventListener('change', () => {
+    populateLsProviderCategorySelect(document.getElementById('lsProviderSectionFilter').value, 'lsProviderCategoryFilter', '');
+    renderLsProviders();
+  });
+  document.getElementById('lsProviderCategoryFilter')?.addEventListener('change', renderLsProviders);
   document.getElementById('driverStatsDate').addEventListener('change', (e) => {
     if (e.target.value) loadDriverStats(e.target.value);
   });

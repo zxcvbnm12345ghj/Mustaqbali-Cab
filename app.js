@@ -60,7 +60,7 @@ function roleBadgeHtml(serviceType) {
 // make correctly-uploaded images silently keep showing the SVG
 // fallback. The tag forces every client to treat this as a brand-new
 // URL and re-fetch it for real.
-const VEHICLE_PHOTOS_VERSION = 'v=2026090401';
+const VEHICLE_PHOTOS_VERSION = 'v=2026092201';
 const VEHICLE_PHOTOS = {
   taxi:      `assets/vehicles/taxi.jpg?${VEHICLE_PHOTOS_VERSION}`,       // سيارة تكسي (سيدان صفراء/عادية)
   private:   `assets/vehicles/private.jpg?${VEHICLE_PHOTOS_VERSION}`,    // سيارة خصوصي (سيدان فاخرة)
@@ -69,6 +69,44 @@ const VEHICLE_PHOTOS = {
   cargo:     `assets/vehicles/cargo.jpg?${VEHICLE_PHOTOS_VERSION}`,      // بيك أب / سيارة حمل
   starx:     `assets/vehicles/starx.jpg?${VEHICLE_PHOTOS_VERSION}`,      // فان نقل نفرات
 };
+
+// ============================================================
+// صور تصنيف عامة — المطاعم/الأسواق/خدمات أخرى/مكتب المستقبل
+// (assets/places/*.jpg، مستخدمة فقط في app.css كـ background-image
+// لأربعة مواضع: بطاقات "قريباً" بالرئيسية، بانر شاشة المطاعم/الأسواق،
+// الحالة الفارغة داخل #plcGrid، وصفحة تفاصيل عنصر واحد — لا علاقة لها
+// بـ image_url الفردي لكل مطعم/سوق الذي يديره places.js وحده كما هو،
+// بلا أي تغيير هنا).
+// FIX (الصورة لا تظهر ولا أي بديل عند 404): background-image في CSS
+// الخالص لا يملك onerror، وكانت app.css تُخفي أيقونة SVG البديلة بشكل
+// دائم (svg{display:none}) بصرف النظر عن نجاح تحميل الصورة من عدمه —
+// فإن فشلت الصورة كانت الدائرة تبقى فارغة تماماً. الحل هنا: نفس أسلوب
+// الـ preload بـ Image() المستخدم أصلاً في places.js (renderPlaceDetail)
+// لكن على مستوى الصفحة كلها ومرة واحدة فقط لكل صورة تصنيف: عند نجاح
+// التحميل نضيف كلاساً على <html> (مثل has-cat-photo-restaurants)،
+// وapp.css يشترط هذا الكلاس قبل تفعيل background-image/إخفاء SVG —
+// فشل التحميل = لا كلاس يُضاف = تبقى الأيقونة الأصلية ظاهرة تلقائياً
+// تماماً كحالها قبل إضافة صور التصنيف هذه بالكامل (لا دائرة فارغة بأي
+// حالة). لا تغيير على places.js/market.js ولا على أي بيانات Supabase.
+const CATEGORY_PHOTOS_VERSION = 'v=2026092301';
+const CATEGORY_PHOTOS = {
+  'restaurants':     `assets/places/restaurants.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'markets':         `assets/places/markets.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'other-services':  `assets/places/other-services.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'future-office':   `assets/places/future-office.jpg?${CATEGORY_PHOTOS_VERSION}`,
+};
+function preloadCategoryPhotos() {
+  Object.keys(CATEGORY_PHOTOS).forEach((key) => {
+    const probe = new Image();
+    probe.onload = () => {
+      document.documentElement.classList.add(`has-cat-photo-${key}`);
+    };
+    // onerror: عمداً بلا أي فعل — عدم إضافة الكلاس كافٍ ليبقى SVG
+    // الأصلي هو المعروض (نفس فكرة vehiclePhotoFallback أعلاه، لكن
+    // كلاس عام بدل استبدال عنصر واحد لأن الهدف هنا background-image).
+    probe.src = CATEGORY_PHOTOS[key];
+  });
+}
 
 // Stage — realistic, multi-color vehicle icons (replaces the previous
 // flat single-stroke outlines). Each is a small self-contained flat
@@ -790,6 +828,15 @@ function openBooking(serviceKey) {
   }
 }
 
+// الصفحة الرئيسية → واجهة "خدمات النقل والتوصيل" المستقلة (عرض/تنقّل فقط):
+// تعرض #quickServices نفسه (الخدمات الستة كما يبنيها buildQuickServiceChips)،
+// ونقر أي خدمة يبقى openBooking(service) كما هو — لا منطق طلبات جديد هنا.
+function openTransportHub() {
+  showView('transport');
+  sheet.setSnap('full');
+  haptic();
+}
+
 function backToHome() {
   stopStatusPolling();
   showView('home');
@@ -1111,6 +1158,7 @@ async function loadCustomerAds() {
     if (error || !data) return;
     adsState.ads = data;
     renderAdsCarousel();
+    if (typeof window.ySpacesRenderPromos === 'function') window.ySpacesRenderPromos();
   } catch (err) {
     console.error('failed to load customer ads', err);
   }
@@ -1351,11 +1399,12 @@ function clearMsg() {
   document.getElementById('appMsg').classList.remove('show');
 }
 
-function toast(msg) {
+function toast(msg, ms) {
   const t = document.getElementById('appToast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2400);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), ms || 2400);
 }
 
 function saveRecentLocation(pickup, dropoff) {
@@ -1985,6 +2034,7 @@ function buildQuickServiceChips() {
       <span class="qs-row-label">
         <b>${svc.label}</b>
         <span>${SERVICE_TAGLINES[key] || ''}</span>
+        <span class="qs-row-cta">طلب الآن</span>
       </span>
       <span class="qs-row-chev"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     </button>
@@ -2782,7 +2832,7 @@ function initHelpAccordion() {
    past requests, by phone, same trust model as get_trip_request_status.
    ============================================================ */
 function setActiveNavTab(view) {
-  const map = { home: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
+  const map = { home: 'home', transport: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
   const activeKey = map[view] || null;
   document.querySelectorAll('.bnav-item[data-nav]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.nav === activeKey);
@@ -3220,6 +3270,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadServicePrices();
   loadCustomerAds();
   loadFutureServices();
+  preloadCategoryPhotos();
   document.getElementById('enableCustomerPushBtn')?.addEventListener('click', setupCustomerPushNotifications);
   // "Recent locations" feature removed — clear any stale data from
   // earlier sessions so nothing lingers unused.
@@ -3572,6 +3623,8 @@ document.addEventListener('DOMContentLoaded', () => {
       allBtn.textContent = 'اعرض كل الخدمات';
       allBtn.addEventListener('click', function () {
         yaResetUI(false);
+        // #quickServices صار داخل واجهة "خدمات النقل والتوصيل" — افتحها بدل التمرير.
+        if (typeof openTransportHub === 'function') { openTransportHub(); return; }
         var qs = document.getElementById('quickServices');
         if (qs && qs.scrollIntoView) qs.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -3613,50 +3666,182 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Enter') { e.preventDefault(); yaRunFullMatch(); }
     });
 
-    // -------- الصوت (اختياري بالكامل) --------
-    // يظهر زر المايك فقط إن كان المتصفح يدعم SpeechRecognition فعلياً؛
-    // غير ذلك يبقى hidden كما هو افتراضياً في index.html، والتجربة
-    // تعمل بالكتابة فقط دون أي كسر.
+    // -------- الصوت (تحويل الكلام إلى نص) --------
+    // زر المايك يبقى مخفياً (hidden في index.html) ولا يظهر إلا بعد التحقق
+    // من دعم Web Speech فعلياً في هذا المتصفح/الوضع: وجود الـ API + HTTPS،
+    // وعلى iPhone: Safari العادي فقط (Chrome/Firefox/متصفحات التطبيقات
+    // الداخلية مبنية على WKWebView حيث الـ API غير مفعّلة). في PWA على
+    // iPhone يظهر الزر فقط إن وُجد الـ API، وإن فشل فعلياً بـ
+    // service-not-allowed يُخفى ويظهر تلميح الإملاء من لوحة المفاتيح.
+    // النص المحوَّل يُكتب داخل نفس حقل الكتابة للمراجعة — لا إرسال تلقائي.
+    // رسائل الخطأ تعرض السبب الحقيقي (ev.error) وتُسجَّل في console.
+    // onend ليست فشلاً بحد ذاتها: الفشل فقط ما يصل عبر onerror.
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-    if (SpeechRecognitionCtor && micBtn) {
+    var yaUA = navigator.userAgent || '';
+    var yaIsIOS = /iPad|iPhone|iPod/.test(yaUA) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var yaIsStandalone = (navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    var yaInAppOrThirdParty = /CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|MicroMessenger|Telegram|; wv\)/i.test(yaUA);
+    // Safari الحقيقي على iOS يحمل Version/ وSafari/ معاً؛ WKWebView داخل
+    // التطبيقات لا يحمل Safari/. (PWA على iOS لا يحمل Safari/ أيضاً، لذلك
+    // يُستثنى منه: يُحكم عليه بوجود الـ API فقط.)
+    var yaIsRealSafariTab = /Version\//.test(yaUA) && /Safari\//.test(yaUA);
+    function yaSpeechSupported() {
+      if (!SpeechRecognitionCtor) return false;
+      if (window.isSecureContext === false) return false;
+      if (yaInAppOrThirdParty) return false;
+      if (yaIsIOS && !yaIsStandalone && !yaIsRealSafariTab) return false;
+      return true;
+    }
+    var yaKeyboardHint = null;
+    function yaShowKeyboardHint() {
+      if (yaKeyboardHint || !yaIsIOS || !yaIsStandalone) return;
+      yaKeyboardHint = document.createElement('p');
+      yaKeyboardHint.id = 'yaMicHint';
+      yaKeyboardHint.textContent = 'للإملاء الصوتي استخدم مايك لوحة المفاتيح';
+      yaKeyboardHint.style.cssText = 'margin:4px 8px 0;font-size:12px;line-height:1.4;opacity:.7;text-align:center;';
+      field.parentNode.insertBefore(yaKeyboardHint, field.nextSibling);
+      // يتبع إخفاء الحقل (بطاقة التأكيد تحل محله)
+      var sync = function () { yaKeyboardHint.hidden = !!field.hidden; };
+      sync();
+      try { new MutationObserver(sync).observe(field, { attributes: true, attributeFilter: ['hidden'] }); } catch (e) {}
+    }
+    if (micBtn && !yaSpeechSupported()) {
+      micBtn.hidden = true;
+      yaShowKeyboardHint(); // يظهر فقط في PWA على iPhone
+    }
+    if (micBtn && yaSpeechSupported()) {
+      // العربية العراقية أولاً، ثم العربية (السعودية)، ثم العربية العامة.
+      // يُنتقل للتالية تلقائياً فقط عند language-not-supported، ويُحفظ
+      // آخر خيار اشتغل طوال الجلسة.
+      var YA_SPEECH_LANGS = ['ar-IQ', 'ar-SA', 'ar'];
+      var YA_SPEECH_ERRORS = {
+        'not-allowed': 'المايكروفون غير مسموح — اسمح له من إعدادات المتصفح/الموقع ثم أعد المحاولة',
+        'service-not-allowed': 'خدمة التعرف على الصوت غير مفعّلة — فعّل الإملاء (Dictation) في إعدادات الجهاز، أو افتح الموقع في Safari/Chrome مباشرة بدل الشاشة الرئيسية',
+        'no-speech': 'لم يُسمع أي كلام — اضغط المايك وتحدّث بوضوح',
+        'audio-capture': 'لم يُعثر على مايكروفون يعمل على هذا الجهاز',
+        'network': 'التعرف على الصوت يحتاج اتصالاً بالإنترنت',
+        'language-not-supported': 'اللغة العربية غير مدعومة للتعرف على الصوت في هذا المتصفح',
+        'bad-grammar': 'خطأ في إعداد التعرف على الصوت'
+      };
       var recognition = null;
-      var listening = false;
+      var active = false;        // بين الضغط ونهاية الجلسة
+      var stoppedByUser = false;
+      var gotText = false;
+      var finalHandled = false;
+      var lastText = '';
+      var pendingLangRetry = false;
+      var sessionError = false;
+      var langIndex = 0;
       micBtn.hidden = false;
-      micBtn.addEventListener('click', function () {
-        if (listening) return;
-        try {
-          recognition = new SpeechRecognitionCtor();
-          recognition.lang = 'ar-IQ';
-          recognition.interimResults = false;
-          recognition.maxAlternatives = 1;
-          recognition.onstart = function () {
-            listening = true;
-            micBtn.classList.add('ya-listening');
-          };
-          recognition.onresult = function (ev) {
-            var transcript = (ev.results && ev.results[0] && ev.results[0][0]) ? ev.results[0][0].transcript : '';
-            if (transcript) {
-              // النص المحوَّل يُكتب داخل نفس حقل الكتابة للمراجعة —
-              // لا إرسال تلقائي من الصوت أبداً؛ يُعامَل كأنه مكتوب يدوياً.
-              input.value = transcript;
-              input.focus();
-              yaRenderSuggestChips(yaMatchRoutes(transcript), transcript.trim());
+      micBtn.setAttribute('aria-pressed', 'false');
+      function yaSpeechDisable() { // إخفاء نهائي بعد اكتشاف عدم الدعم فعلياً
+        micBtn.hidden = true;
+        yaSpeechIdle();
+        yaShowKeyboardHint();
+      }
+
+      function yaSpeechNotify(msg) {
+        try { if (typeof toast === 'function') toast(msg, 5000); } catch (e) {}
+      }
+      function yaSpeechIdle() {
+        active = false;
+        micBtn.classList.remove('ya-listening');
+        micBtn.setAttribute('aria-pressed', 'false');
+      }
+      function yaSpeechFinish(text) {
+        if (finalHandled || !text) return;
+        finalHandled = true;
+        input.value = text;
+        input.focus();
+        yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
+      }
+
+      function yaSpeechStart() {
+        var rec = new SpeechRecognitionCtor();
+        recognition = rec;
+        rec.lang = YA_SPEECH_LANGS[langIndex];
+        rec.continuous = false;
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = function () {
+          micBtn.classList.add('ya-listening');
+          micBtn.setAttribute('aria-pressed', 'true');
+        };
+        rec.onresult = function (ev) {
+          var text = '';
+          var isFinal = false;
+          for (var i = 0; i < ev.results.length; i++) {
+            var r = ev.results[i];
+            if (r && r[0]) text += r[0].transcript;
+            if (r && r.isFinal) isFinal = true;
+          }
+          text = text.trim();
+          if (!text) return;
+          gotText = true;
+          lastText = text;
+          if (isFinal) {
+            yaSpeechFinish(text);
+          } else {
+            input.value = text; // نص مؤقت أثناء الكلام
+          }
+        };
+        rec.onerror = function (ev) {
+          var code = (ev && ev.error) ? ev.error : 'unknown';
+          try { console.error('[Yammak speech] error=' + code, 'lang=' + rec.lang, (ev && ev.message) || ''); } catch (e) {}
+          if (code === 'aborted' && stoppedByUser) return;
+          sessionError = true;
+          if (code === 'language-not-supported' && langIndex < YA_SPEECH_LANGS.length - 1) {
+            sessionError = false;
+            langIndex++;
+            pendingLangRetry = true; // يُعاد التشغيل في onend باللغة التالية
+            return;
+          }
+          var msg = YA_SPEECH_ERRORS[code] || 'تعذّر التعرف على الصوت';
+          yaSpeechNotify(msg + ' [' + code + ']');
+          // PWA على iPhone: الخدمة غير متاحة فعلياً → أخفِ الزر وأظهر التلميح
+          if (code === 'service-not-allowed' && yaIsIOS && yaIsStandalone) yaSpeechDisable();
+        };
+        rec.onend = function () {
+          if (rec !== recognition) return;
+          if (pendingLangRetry) {
+            pendingLangRetry = false;
+            try { yaSpeechStart(); return; } catch (e) {
+              try { console.error('[Yammak speech] retry failed', e); } catch (e2) {}
+              yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((e && e.name) || 'start-failed') + ']');
             }
-          };
-          recognition.onerror = function () {
-            listening = false;
-            micBtn.classList.remove('ya-listening');
-            if (typeof toast === 'function') toast('تعذّر التعرف على الصوت — جرّب الكتابة');
-          };
-          recognition.onend = function () {
-            listening = false;
-            micBtn.classList.remove('ya-listening');
-          };
-          recognition.start();
+          }
+          // انتهت الجلسة دون onresult نهائي لكن وصل نص مؤقت: اعتمده
+          if (lastText && !finalHandled) yaSpeechFinish(lastText);
+          // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
+          if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
+          yaSpeechIdle();
+        };
+        rec.start();
+      }
+
+      micBtn.addEventListener('click', function () {
+        if (active) { // ضغطة ثانية = إيقاف التسجيل (يُسلِّم ما التقطه)
+          stoppedByUser = true;
+          try { recognition.stop(); } catch (e) {}
+          return;
+        }
+        active = true;
+        stoppedByUser = false;
+        gotText = false;
+        finalHandled = false;
+        lastText = '';
+        pendingLangRetry = false;
+        sessionError = false;
+        try {
+          yaSpeechStart();
           doHaptic();
         } catch (err) {
-          listening = false;
-          micBtn.classList.remove('ya-listening');
+          yaSpeechIdle();
+          try { console.error('[Yammak speech] start() threw', err); } catch (e) {}
+          yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((err && err.name) || 'start-failed') + ']');
         }
       });
     }
@@ -3717,6 +3902,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // مثال: { text: 'عرض اليوم: توصيل مجاني داخل المدينة', type: 'offer' }
     alerts: [],
   };
+
+  // المرحلة 2: إتاحة الكائن للقراءة فقط لمحتوى المساحات (alerts = تنبيهات/عروض حقيقية تُضاف هنا).
+  window.YA_MESSAGES = YA_MESSAGES;
 
   var yaMsgRotate = { appOpen: 0, returnHome: 0 };
 
@@ -3802,4 +3990,354 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
   });
+})();
+
+
+/* =========================================================================
+   المرحلة 2 — محتوى المساحات الست (الصفحة الرئيسية)
+   -------------------------------------------------------------------------
+   يملأ عناصر .space-content[data-space-content] داخل كل مساحة في index.html.
+   المصادر حقيقية فقط — لا Mock ولا Demo ولا أسعار/أرقام/أسماء مكتوبة هنا:
+     • النقل والتوصيل : SERVICES + VEHICLE_PHOTOS + SERVICE_TAGLINES (الموجودة أعلاه)،
+                        والعروض من YA_MESSAGES.alerts و adsState.ads (get_active_customer_ads).
+     • المطاعم/الأسواق/مكتب المستقبل : نفس استعلام places.js (قراءة فقط) على
+                        restaurants / markets / future_office.
+     • خدمات يمّك     : local_service_sections (كما في yammak-services.js).
+     • بيع وشراء      : market_listings الفعّالة (كما في loadMarketLatest في market.js).
+   كل قسم فارغ/يفشل تحميله يعرض حالة صريحة (قريباً / تعذّر التحميل + إعادة المحاولة)
+   — لا تُخترع أي بيانات بديلة. لا كتابة على أي جدول، ولا RPC جديد، ولا GPS، ولا طلبات.
+   الدخول لكل قسم يمرّ عبر نفس الدوال/الأزرار القائمة (openPlaces, openFutureOffice,
+   openPlaceDetail, openMarket, openMarketProduct, openYammakServices, openBooking).
+   التحميل كسول: عند ظهور المساحة لأول مرة (IntersectionObserver)، وتُحدَّث بصمت إن
+   مرّت 5 دقائق عند العودة إليها.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  var LIMIT = 6;            // أقصى عدد عناصر في مساحة (الباقي عبر «عرض الكل»)
+  var TILE_LIMIT = 12;      // أقسام خدمات يمّك المعروضة
+  var PROMO_LIMIT = 3;
+  var STALE_MS = 5 * 60 * 1000;
+
+  // مسار الدخول الكامل لكل مساحة: نفس الأزرار القائمة (تبقى رسائل #yaMsgBar تعمل)
+  var LEGACY_TARGET = {
+    restaurants: 'soonCardRestaurants',
+    markets: 'soonCardMarkets',
+    futureoffice: 'soonCardFutureOffice',
+    yservices: 'soonCardYammakServices',
+    ymarket: 'marketBannerBtn'
+  };
+
+  var SPACES = {
+    transport:    { title: 'اختر خدمتك' },
+    restaurants:  { title: 'المطاعم المتاحة',   kind: 'places', placeKind: 'restaurants',  table: 'restaurants',   noun: 'مطاعم' },
+    markets:      { title: 'الأسواق المتاحة',   kind: 'places', placeKind: 'markets',      table: 'markets',       noun: 'أسواق' },
+    yservices:    { title: 'أقسام الخدمات',     kind: 'tiles' },
+    futureoffice: { title: 'فروع مكتب المستقبل', kind: 'places', placeKind: 'futureOffice', table: 'future_office', noun: 'فروع' },
+    ymarket:      { title: 'أحدث الإعلانات',    kind: 'listings' }
+  };
+
+  var CHEV = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CLOCK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var PIN = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="2"/></svg>';
+
+  var cache = {};       // key -> rows
+  var loadedAt = {};    // key -> timestamp
+  var inflight = {};    // key -> true
+  var hosts = {};       // key -> .space-content element
+  var built = {};       // key -> skeleton الجاهز
+
+  function esc(t) { return escapeHtmlText(t); }
+  function attr(t) { return escapeHtmlAttr(t); }
+
+  /* ---------- هيكل القسم: عنوان + عدّاد حقيقي + «عرض الكل» + منطقة القائمة ---------- */
+  function buildSection(key) {
+    var host = hosts[key];
+    if (!host || built[key]) return;
+    var cfg = SPACES[key];
+    host.innerHTML =
+      '<div class="sp-head">' +
+        '<h4 class="sp-title">' + esc(cfg.title) + '</h4>' +
+        '<span class="sp-count" data-sp-count hidden></span>' +
+        (key === 'transport' ? '' : '<button type="button" class="sp-more" data-sp-more="' + key + '" hidden><span>عرض الكل</span>' + CHEV + '</button>') +
+      '</div>' +
+      '<div class="sp-body" data-sp-body></div>';
+    built[key] = true;
+  }
+  function bodyOf(key) { return hosts[key] && hosts[key].querySelector('[data-sp-body]'); }
+  function setCount(key, n) {
+    var el = hosts[key] && hosts[key].querySelector('[data-sp-count]');
+    if (!el) return;
+    if (n > 0) { el.textContent = String(n); el.hidden = false; } else { el.hidden = true; }
+  }
+  function setMore(key, show) {
+    var b = hosts[key] && hosts[key].querySelector('[data-sp-more]');
+    if (b) b.hidden = !show;
+  }
+  function skeleton(key) {
+    var body = bodyOf(key);
+    if (!body) return;
+    var n = SPACES[key].kind === 'tiles' ? 6 : 3;
+    var cls = SPACES[key].kind === 'tiles' ? 'sp-skel sp-skel-tile' : (SPACES[key].kind === 'listings' ? 'sp-skel sp-skel-card' : 'sp-skel sp-skel-row');
+    var h = '';
+    for (var i = 0; i < n; i++) h += '<span class="' + cls + '"></span>';
+    body.className = 'sp-body sp-body-skel sp-skel-' + SPACES[key].kind;
+    body.innerHTML = h;
+  }
+  function showEmpty(key, text) {
+    var body = bodyOf(key);
+    if (!body) return;
+    body.className = 'sp-body';
+    body.innerHTML = '<p class="sp-empty">' + esc(text) + '</p>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function showError(key) {
+    var body = bodyOf(key);
+    if (!body) return;
+    body.className = 'sp-body';
+    body.innerHTML =
+      '<div class="sp-error" role="alert"><p>تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>' +
+      '<button type="button" class="sp-retry" data-sp-retry="' + key + '">إعادة المحاولة</button></div>';
+    setCount(key, 0); setMore(key, false);
+  }
+
+  /* ---------- النقل والتوصيل: الخدمات الستة (بدون أي سعر) + العروض ---------- */
+  function svcPhoto(key) {
+    var src = (typeof VEHICLE_PHOTOS !== 'undefined' && VEHICLE_PHOTOS[key]) || '';
+    var svg = (typeof ICONS !== 'undefined' && SERVICES[key] && ICONS[SERVICES[key].icon]) || '';
+    return '<span class="sp-svc-ph" data-sp-svg="' + attr(svg) + '">' +
+      (src ? '<img src="' + attr(src) + '" alt="' + attr(SERVICES[key].label) + '" loading="lazy">' : '') + '</span>';
+  }
+  function renderTransport() {
+    buildSection('transport');
+    var body = bodyOf('transport');
+    if (!body || typeof SERVICES === 'undefined') return;
+    body.className = 'sp-body sp-svc-grid';
+    body.innerHTML = Object.keys(SERVICES).map(function (key) {
+      var tag = (typeof SERVICE_TAGLINES !== 'undefined' && SERVICE_TAGLINES[key]) || '';
+      return '<button type="button" class="sp-svc" data-sp-service="' + attr(key) + '">' +
+        svcPhoto(key) +
+        '<span class="sp-svc-txt"><b>' + esc(SERVICES[key].label) + '</b>' + (tag ? '<span>' + esc(tag) + '</span>' : '') + '</span>' +
+      '</button>';
+    }).join('');
+    renderPromos();
+  }
+
+  // العروض: YA_MESSAGES.alerts + إعلانات العملاء الفعّالة (adsState.ads) فقط
+  function renderPromos() {
+    var host = hosts.transport;
+    if (!host) return;
+    var box = host.querySelector('[data-sp-promos]');
+    var items = [];
+    var alerts = (window.YA_MESSAGES && window.YA_MESSAGES.alerts) || [];
+    alerts.forEach(function (a) { if (a && a.text) items.push({ title: '', body: a.text }); });
+    var ads = (typeof adsState !== 'undefined' && adsState.ads) || [];
+    ads.forEach(function (ad) { if (ad && (ad.title || ad.body || ad.image_url)) items.push(ad); });
+    items = items.slice(0, PROMO_LIMIT);
+    if (!items.length) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'sp-promos';
+      box.setAttribute('data-sp-promos', '');
+      host.insertBefore(box, host.firstChild);
+    }
+    box.innerHTML = items.map(function (ad) {
+      var tag = ad.link_url ? 'a' : 'div';
+      var href = ad.link_url ? ' href="' + attr(ad.link_url) + '" target="_blank" rel="noopener noreferrer"' : '';
+      return '<' + tag + ' class="sp-promo"' + href + '>' +
+        (ad.image_url ? '<span class="sp-promo-img"><img src="' + attr(ad.image_url) + '" alt="" loading="lazy"></span>' : '') +
+        '<span class="sp-promo-txt">' +
+          (ad.title ? '<b>' + esc(ad.title) + '</b>' : '') +
+          (ad.body ? '<span>' + esc(ad.body) + '</span>' : '') +
+        '</span>' +
+      '</' + tag + '>';
+    }).join('');
+  }
+  window.ySpacesRenderPromos = renderPromos;
+
+  /* ---------- المطاعم / الأسواق / مكتب المستقبل ---------- */
+  function placeRow(cfg, row) {
+    var img = row.image_url
+      ? '<img src="' + attr(row.image_url) + '" alt="" loading="lazy">' : '';
+    return '<button type="button" class="sp-row" data-sp-id="' + attr(row.id) + '">' +
+      '<span class="sp-row-img sp-ph-' + cfg.placeKind + (img ? '' : ' is-noimg') + '">' + img + '</span>' +
+      '<span class="sp-row-body">' +
+        '<b class="sp-row-title">' + esc(row.name) + '</b>' +
+        (row.category ? '<span class="sp-row-cat">' + esc(row.category) + '</span>' : '') +
+        (row.hours_text ? '<span class="sp-row-meta">' + CLOCK + '<span>' + esc(row.hours_text) + '</span></span>' : '') +
+      '</span>' +
+      '<span class="sp-row-chev">' + CHEV + '</span>' +
+    '</button>';
+  }
+  async function loadPlaces(key) {
+    var cfg = SPACES[key];
+    var res = await supabaseClient
+      .from(cfg.table)
+      .select('*', { count: 'exact' })
+      .eq('active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(LIMIT);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'قريباً — لا توجد ' + cfg.noun + ' مضافة بعد'); return; }
+    body.className = 'sp-body sp-list';
+    body.innerHTML = rows.map(function (r) { return placeRow(cfg, r); }).join('');
+    var total = typeof res.count === 'number' ? res.count : rows.length;
+    setCount(key, total);
+    setMore(key, key !== 'futureoffice' ? total > rows.length : total > 1);
+  }
+
+  /* ---------- خدمات يمّك: أقسام local_service_sections ---------- */
+  async function loadTiles(key) {
+    var res = await supabaseClient
+      .from('local_service_sections')
+      .select('id, key, label, icon')
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'قريباً — لا توجد خدمات مضافة بعد'); return; }
+    body.className = 'sp-body sp-tiles';
+    body.innerHTML = rows.slice(0, TILE_LIMIT).map(function (r) {
+      return '<button type="button" class="sp-tile" data-sp-id="' + attr(r.id) + '">' +
+        '<span class="sp-tile-ic">' + esc(r.icon || '🧰') + '</span>' +
+        '<span class="sp-tile-lb">' + esc(r.label) + '</span></button>';
+    }).join('');
+    setCount(key, rows.length);
+    setMore(key, rows.length > TILE_LIMIT);
+  }
+
+  /* ---------- بيع وشراء: أحدث إعلانات market_listings ---------- */
+  async function loadListings(key) {
+    var res = await supabaseClient
+      .from('market_listings')
+      .select('*', { count: 'exact' })
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(LIMIT);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'لا توجد إعلانات بعد — كن أول من يضيف إعلاناً'); return; }
+    body.className = 'sp-body mkt-grid sp-listings';
+    body.innerHTML = rows.map(renderListingCard).join('');   // نفس بطاقة market.js (السعر بـ formatIQD)
+    if (typeof wireListingCards === 'function') wireListingCards(body, rows);
+    var total = typeof res.count === 'number' ? res.count : rows.length;
+    setCount(key, total);
+    setMore(key, total > rows.length);
+  }
+
+  var LOADERS = { places: loadPlaces, tiles: loadTiles, listings: loadListings };
+
+  async function load(key, silent) {
+    var cfg = SPACES[key];
+    if (!cfg || key === 'transport' || inflight[key]) return;
+    buildSection(key);
+    inflight[key] = true;
+    if (!silent || !cache[key]) skeleton(key);
+    try {
+      if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('supabaseClient unavailable');
+      await LOADERS[cfg.kind](key);
+      loadedAt[key] = Date.now();
+    } catch (err) {
+      console.error('space content failed: ' + key, err);
+      if (!silent || !cache[key]) { delete cache[key]; showError(key); }
+    } finally {
+      inflight[key] = false;
+    }
+  }
+
+  function onVisible(key) {
+    if (key === 'transport') return;
+    var t = loadedAt[key];
+    if (!t) load(key, false);
+    else if (Date.now() - t > STALE_MS) load(key, true);
+  }
+
+  /* ---------- النقرات (تفويض واحد) ---------- */
+  function openPlace(key, row) {
+    var cfg = SPACES[key];
+    // التفاصيل تفتح من الرئيسية وترجع لها (نفس آلية openFutureOffice للفرع الوحيد)
+    placesState.detailBackTarget = 'home';
+    document.querySelectorAll('#plcTabs [data-plc-kind]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.plcKind === cfg.placeKind);
+    });
+    openPlaceDetail(cfg.placeKind, row);
+  }
+
+  function wire() {
+    document.getElementById('spacesViewport').addEventListener('click', function (e) {
+      var t = e.target.closest('[data-sp-service],[data-sp-more],[data-sp-retry],.sp-row,.sp-tile');
+      if (!t || !e.currentTarget.contains(t)) return;
+      var host = t.closest('[data-space-content]');
+      var key = host && host.getAttribute('data-space-content');
+
+      if (t.hasAttribute('data-sp-service')) { openBooking(t.getAttribute('data-sp-service')); return; }
+      if (t.hasAttribute('data-sp-retry')) { load(t.getAttribute('data-sp-retry'), false); return; }
+      if (t.hasAttribute('data-sp-more')) {
+        var legacy = document.getElementById(LEGACY_TARGET[t.getAttribute('data-sp-more')]);
+        if (legacy) legacy.click();
+        return;
+      }
+      if (!key) return;
+      var id = t.getAttribute('data-sp-id');
+      var row = (cache[key] || []).find(function (r) { return String(r.id) === String(id); });
+      if (!row) return;
+      if (t.classList.contains('sp-row')) { openPlace(key, row); if (typeof haptic === 'function') haptic(); return; }
+      if (t.classList.contains('sp-tile')) {
+        openYammakServices();
+        ysvcState.section = row; ysvcState.category = null;
+        ysvcShowLevel('categories');
+        ysvcLoadCategories(row.id);
+      }
+    });
+
+    // صور فاشلة (الحدث لا يفور فنلتقطه بالـ capture): الصورة تُزال ويظهر البديل المعرَّف في CSS
+    document.getElementById('spacesViewport').addEventListener('error', function (e) {
+      var img = e.target;
+      if (!img || img.tagName !== 'IMG') return;
+      var ph = img.closest('.sp-row-img');
+      if (ph) { ph.classList.add('is-noimg'); img.remove(); return; }
+      var svc = img.closest('.sp-svc-ph');
+      if (svc) {
+        var svg = svc.getAttribute('data-sp-svg');
+        svc.classList.add('is-noimg');
+        svc.innerHTML = svg ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + svg + '</svg>' : '';
+        return;
+      }
+      var pr = img.closest('.sp-promo-img');
+      if (pr) pr.remove();
+    }, true);
+  }
+
+  function init() {
+    var viewport = document.getElementById('spacesViewport');
+    if (!viewport) return;
+    viewport.querySelectorAll('[data-space-content]').forEach(function (el) {
+      hosts[el.getAttribute('data-space-content')] = el;
+    });
+    wire();
+    renderTransport();
+
+    var panels = Array.prototype.slice.call(viewport.querySelectorAll('.space-panel'));
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) onVisible(en.target.getAttribute('data-space'));
+        });
+      }, { root: viewport, threshold: 0.55 });
+      panels.forEach(function (p) { io.observe(p); });
+    } else {
+      panels.forEach(function (p) { onVisible(p.getAttribute('data-space')); });
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();

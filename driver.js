@@ -573,7 +573,7 @@ async function respondToTrip(action) {
     }
   } catch (err) {
     console.error('driver_respond_to_trip failed', err);
-    setRespondMsg('تعذّر تنفيذ العملية — تحقق من الاتصال وحاول مجدداً', true);
+    setRespondMsg('تعذّر تنفيذ العملية' + (err.message ? ': ' + err.message : ''), true);
     // Re-enable so the driver can retry immediately; the next poll will
     // also recompute this correctly regardless.
     if (acceptBtn) acceptBtn.disabled = false;
@@ -639,7 +639,7 @@ async function updateTripStatus(targetStatus) {
     }
   } catch (err) {
     console.error('driver_update_trip_status failed', err);
-    setProgressMsg('تعذّر تنفيذ العملية — تحقق من الاتصال وحاول مجدداً', true);
+    setProgressMsg('تعذّر تنفيذ العملية' + (err.message ? ': ' + err.message : ''), true);
     if (progressBtn) progressBtn.disabled = false;
   } finally {
     isResponding = false;
