@@ -5108,10 +5108,10 @@ html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic svg,
 html.has-cat-photo-markets #soonCardMarkets .soon-ic svg,
 html.has-cat-photo-other-services #soonCardOtherServices .soon-ic svg,
 html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic svg{ display:none; }
-html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic{ background-image: url("assets/places/restaurants.jpg"); }
-html.has-cat-photo-markets #soonCardMarkets .soon-ic{ background-image: url("assets/places/markets.jpg"); }
-html.has-cat-photo-other-services #soonCardOtherServices .soon-ic{ background-image: url("assets/places/other-services.jpg"); }
-html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg"); }
+html.has-cat-photo-restaurants #soonCardRestaurants .soon-ic{ background-image: url("assets/places/restaurants.jpg?v=2026100201"); }
+html.has-cat-photo-markets #soonCardMarkets .soon-ic{ background-image: url("assets/places/markets.jpg?v=2026100201"); }
+html.has-cat-photo-other-services #soonCardOtherServices .soon-ic{ background-image: url("assets/places/other-services.jpg?v=2026100201"); }
+html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg?v=2026100201"); }
 
 /* ---- 2) بانر شاشة المطاعم/الأسواق — صورة تصنيف محلية كبيرة بدل التدرّج،
    تتبدّل حسب التبويب النشط. الأيقونة الصغيرة تبقى كشارة زجاجية فوق
@@ -5153,10 +5153,10 @@ html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc
 }
 html.has-cat-photo-restaurants .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-hero-banner,
 html.has-cat-photo-restaurants .sheet-view[data-view="places"]:not(:has(.plc-tab.active)) .plc-hero-banner{
-  background-image: url("assets/places/restaurants.jpg");
+  background-image: url("assets/places/restaurants.jpg?v=2026100201");
 }
 html.has-cat-photo-markets .sheet-view[data-view="places"]:has(.plc-tab[data-plc-kind="markets"].active) .plc-hero-banner{
-  background-image: url("assets/places/markets.jpg");
+  background-image: url("assets/places/markets.jpg?v=2026100201");
 }
 
 /* ---- 3) الحالة الفارغة لصورة البطاقة (لا صورة حقيقية بعد لهذا العنصر
@@ -5177,9 +5177,9 @@ html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffi
 html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph svg,
 html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph svg,
 html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph svg{ display:none; }
-html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("assets/places/restaurants.jpg"); }
-html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg"); }
-html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg"); }
+html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants) .plc-card-img-ph{ background-image: url("assets/places/restaurants.jpg?v=2026100201"); }
+html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg?v=2026100201"); }
+html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg?v=2026100201"); }
 
 /* ---- 4) صفحة تفاصيل عنصر واحد — نفس منطق البانر (تبويب نشط فعلياً)،
    ولا تظهر إلا حين لا توجد صورة حقيقية لهذا العنصر بعينه
@@ -5193,17 +5193,17 @@ html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffi
    نجحت صورة المطاعم، كان يمكن أن يظهر إيموجي مخفي جزئياً أو تعارض
    بصري؛ الآن كل حالة تُخفي الإيموجي فقط إذا صورتها هي تحديداً نجحت. */
 html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/future-office.jpg"); /* افتراضي: لا تبويب نشط (فرع مكتب المستقبل يُفتح مباشرة) */
+  background-image: url("assets/places/future-office.jpg?v=2026100201"); /* افتراضي: لا تبويب نشط (فرع مكتب المستقبل يُفتح مباشرة) */
   background-size:cover; background-position:center;
 }
 html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
 html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/restaurants.jpg");
+  background-image: url("assets/places/restaurants.jpg?v=2026100201");
   background-size:cover; background-position:center;
 }
 html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
 html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/markets.jpg");
+  background-image: url("assets/places/markets.jpg?v=2026100201");
   background-size:cover; background-position:center;
 }
 html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
@@ -7363,9 +7363,9 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
     background-position: center !important;
     background-color: transparent !important;
   }
-  html.has-cat-photo-restaurants   .home-columns #soonCardRestaurants   .soon-ic{ background-image: url("assets/places/restaurants.jpg") !important; }
-  html.has-cat-photo-markets       .home-columns #soonCardMarkets       .soon-ic{ background-image: url("assets/places/markets.jpg") !important; }
-  html.has-cat-photo-future-office .home-columns #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg") !important; }
+  html.has-cat-photo-restaurants   .home-columns #soonCardRestaurants   .soon-ic{ background-image: url("assets/places/restaurants.jpg?v=2026100201") !important; }
+  html.has-cat-photo-markets       .home-columns #soonCardMarkets       .soon-ic{ background-image: url("assets/places/markets.jpg?v=2026100201") !important; }
+  html.has-cat-photo-future-office .home-columns #soonCardFutureOffice .soon-ic{ background-image: url("assets/places/future-office.jpg?v=2026100201") !important; }
 
   /* عند تفعيل الصورة الحقيقية، الـSVG الاحتياطي يُخفى (نفس آلية
      has-cat-photo-* الأصلية أعلى الملف) حتى لا يتراكب فوق الصورة */
@@ -7572,20 +7572,20 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
    إن لم يتوفر الملف (لا صورة مكسورة ولا بطاقة فارغة). */
 .hub-transport{ --hub-accent: var(--purple); }
 .hub-transport .hub-media{
-  background-image: url("assets/vehicles/taxi.jpg?v=2026092201"), linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
+  background-image: url("assets/vehicles/taxi.jpg?v=2026100201"), linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
 }
 .hub-restaurants{ --hub-accent: var(--orange); }
 .hub-restaurants .hub-media{
-  background-image: url("assets/places/restaurants.jpg?v=2026092301"), linear-gradient(135deg, var(--orange) 0%, var(--orange-soft) 100%);
+  background-image: url("assets/places/restaurants.jpg?v=2026100201"), linear-gradient(135deg, var(--orange) 0%, var(--orange-soft) 100%);
 }
 .hub-markets{ --hub-accent: var(--green); }
 .hub-markets .hub-media{
-  background-image: url("assets/places/markets.jpg?v=2026092301"), linear-gradient(135deg, var(--green-text) 0%, var(--green) 100%);
+  background-image: url("assets/places/markets.jpg?v=2026100201"), linear-gradient(135deg, var(--green-text) 0%, var(--green) 100%);
 }
 .hub-yservices{ --hub-accent: var(--gold); }
 .hub-yservices .hub-media{
   background-image:
-    url("assets/places/other-services.jpg?v=2026092301"),
+    url("assets/places/other-services.jpg?v=2026100201"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z' stroke='white' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
     linear-gradient(135deg, var(--purple-text) 0%, var(--purple) 60%, var(--gold) 140%);
   background-size: cover, 46% auto, cover;
@@ -7594,7 +7594,7 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
 .hub-ymarket{ --hub-accent: var(--orange); }
 .hub-ymarket .hub-media{
   background-image:
-    url("assets/places/yammak-market.jpg?v=2026093001"),
+    url("assets/places/yammak-market.jpg?v=2026100201"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'><path d='M14 22h36l-3 30a4 4 0 0 1-4 3.6H21a4 4 0 0 1-4-3.6L14 22Z' fill='white' fill-opacity='.95'/><path d='M23 22v-3a9 9 0 0 1 18 0v3' stroke='white' stroke-width='3.5' stroke-linecap='round'/><circle cx='45' cy='17' r='7' fill='rgb(255,122,41)'/></svg>"),
     linear-gradient(135deg, var(--purple) 0%, var(--purple-soft) 100%);
   background-size: cover, 52% auto, cover;
@@ -7773,7 +7773,7 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
 .hub-futureoffice{ --hub-accent: var(--purple-soft); }
 .hub-futureoffice .hub-media{
   background-image:
-    url("assets/places/future-office.jpg"),
+    url("assets/places/future-office.jpg?v=2026100201"),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7v-7Z' stroke='white' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
     linear-gradient(135deg, var(--purple-text) 0%, var(--purple) 100%);
   background-size: cover, 40% auto, cover;
@@ -8255,15 +8255,15 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
 .sp-row-img.is-noimg{ background-size: cover, cover; background-position: center; background-repeat: no-repeat; }
 .sp-row-img.is-noimg::after{ font-size: 26px; line-height: 1; text-shadow: 0 2px 6px rgba(0,0,0,0.25); }
 .sp-ph-restaurants.is-noimg{
-  background-image: url("assets/places/restaurants.jpg?v=2026092301"), linear-gradient(135deg, var(--sp-orange), #FFB07A);
+  background-image: url("assets/places/restaurants.jpg?v=2026100201"), linear-gradient(135deg, var(--sp-orange), #FFB07A);
 }
 .sp-ph-restaurants.is-noimg::after{ content: '🍔'; }
 .sp-ph-markets.is-noimg{
-  background-image: url("assets/places/markets.jpg?v=2026092301"), linear-gradient(135deg, #15803D, var(--sp-green));
+  background-image: url("assets/places/markets.jpg?v=2026100201"), linear-gradient(135deg, #15803D, var(--sp-green));
 }
 .sp-ph-markets.is-noimg::after{ content: '🛒'; }
 .sp-ph-futureOffice.is-noimg{
-  background-image: url("assets/places/future-office.jpg?v=2026092301"), linear-gradient(135deg, #4C1D95, var(--sp-purple));
+  background-image: url("assets/places/future-office.jpg?v=2026100201"), linear-gradient(135deg, #4C1D95, var(--sp-purple));
 }
 .sp-ph-futureOffice.is-noimg::after{ content: '🏪'; }
 .sp-row-body{ display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1 1 auto; min-width: 0; }
@@ -8563,3 +8563,248 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
 @media (max-height: 740px) and (max-width: 374px){
   .space-msg{ -webkit-line-clamp: 3; }
 }
+
+/* =========================================================================
+   خارطة يمّك — صفحة الخريطة المستقلة (المرحلة 2: الخارطة)
+   تعمل فوق نفس #map/Leaflet الموجود (لا خريطة ثانية). بنفسجي #6C3CE0 + أخضر/برتقالي.
+   ========================================================================= */
+.app-shell.ymap-on #map{position:fixed;inset:0;margin:0;width:100%;height:100%;flex:none;border-radius:0;border:0;box-shadow:none;z-index:1}
+.app-shell.ymap-on .map-skeleton{top:0;inset-inline:0;height:100%;border-radius:0}
+.app-shell.ymap-on .sheet,.app-shell.ymap-on .map-location-bar,.app-shell.ymap-on .map-avatar-btn,
+.app-shell.ymap-on .map-search-pill,.app-shell.ymap-on .recenter-fab{display:none!important}
+.app-shell.ymap-on ~ .bottom-nav{display:none!important}
+#yMap{position:fixed;inset:0;z-index:30;direction:rtl;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .25s ease,visibility .25s}
+#yMap.on{opacity:1;visibility:visible}
+#yMap *{box-sizing:border-box}
+#yMap button{font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ym-top,.ym-bot{position:absolute;inset-inline:0;pointer-events:none}
+.ym-top>*,.ym-bot>*{pointer-events:auto}
+.ym-top{top:calc(env(safe-area-inset-top,0px) + 10px);padding:0 12px;display:flex;flex-direction:column;gap:8px}
+.ym-bar{display:flex;align-items:center;gap:8px}
+.ym-round{width:44px;height:44px;flex:none;border:0;border-radius:50%;background:#fff;color:#101B2D;display:grid;place-items:center;box-shadow:0 4px 14px rgba(16,27,45,.2);transition:transform .15s}
+.ym-round:active{transform:scale(.9)}
+.ym-round svg{width:20px;height:20px}
+.ym-brand{flex:1;min-width:0;height:44px;display:flex;align-items:center;gap:8px;padding:0 7px;border-radius:22px;background:#fff;box-shadow:0 4px 14px rgba(16,27,45,.2);font-weight:900;font-size:15px;color:#6C3CE0}
+.ym-brand img{width:30px;height:30px;border-radius:9px;object-fit:contain;flex:none}
+.ym-card{background:#fff;border-radius:22px;padding:10px 12px 12px;box-shadow:0 12px 32px rgba(16,27,45,.2)}
+.ym-q{margin:0 4px 8px;font-size:15px;font-weight:900;color:#101B2D}
+.ym-row{width:100%;min-height:46px;display:flex;align-items:center;gap:10px;padding:0 12px;border:1.5px solid transparent;border-radius:14px;background:#F3F4FA;color:#101B2D;text-align:right;font-size:14px;transition:border-color .2s,background .2s}
+.ym-row+.ym-row{margin-top:7px}
+.ym-row.act{border-color:#6C3CE0;background:#fff}
+.ym-dot{width:12px;height:12px;flex:none;border-radius:50%;background:#6C3CE0}
+.ym-dot.b{background:#FF7A29;border-radius:3px}
+.ym-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ym-row input{flex:1;min-width:0;height:44px;border:0;outline:0;background:transparent;color:inherit;font:inherit;font-size:16px}
+.ym-sbtn{width:34px;height:34px;flex:none;border:0;border-radius:50%;background:#6C3CE0;color:#fff;display:grid;place-items:center}
+.ym-sbtn svg{width:17px;height:17px}
+.ym-res{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}
+.ym-res:not(:empty){margin-top:8px;border-top:1px solid #EEF0F6}
+.ym-res button{display:block;width:100%;padding:12px 4px;border:0;border-bottom:1px solid #EEF0F6;background:none;color:#101B2D;text-align:right;font-size:14px;line-height:1.5}
+.ym-note{padding:12px 4px;font-size:13px;color:#6B7690}
+.ym-bot{bottom:0;display:flex;flex-direction:column;gap:10px}
+.ym-fabs{padding:0 12px;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.ym-fabs .ym-round.loc{color:#6C3CE0}
+.ym-fabs .ym-round.locating svg{animation:spin 1s linear infinite}
+.ym-sheet{background:#fff;border-radius:26px 26px 0 0;padding:8px 14px calc(env(safe-area-inset-bottom,0px) + 14px);box-shadow:0 -10px 34px rgba(16,27,45,.2);transform:translateY(105%);transition:transform .42s cubic-bezier(.19,1,.22,1)}
+#yMap.on .ym-sheet{transform:none}
+.ym-grab{width:40px;height:4px;margin:0 auto 10px;border-radius:2px;background:#D9DCE8}
+.ym-loc{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ym-pin{width:38px;height:38px;flex:none;border-radius:12px;background:rgba(108,60,224,.12);color:#6C3CE0;display:grid;place-items:center}
+.ym-pin svg{width:20px;height:20px}
+.ym-loc div{min-width:0}
+.ym-loc small{display:block;font-size:12px;color:#6B7690}
+.ym-loc b{display:block;font-size:14px;color:#101B2D;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ym-svcs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:2px 14px 4px;-webkit-overflow-scrolling:touch}
+.ym-svcs::-webkit-scrollbar{display:none}
+.ym-svc{flex:0 0 82px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid #E7E9F2;border-radius:16px;background:#fff;color:#101B2D;font-size:12px;font-weight:800;transition:border-color .2s,background .2s,transform .15s}
+.ym-svc:active{transform:scale(.95)}
+.ym-svc.act{border-color:#6C3CE0;background:rgba(108,60,224,.08);color:#6C3CE0}
+.ym-svc img,.ym-svc svg{width:40px;height:30px;object-fit:contain}
+.ym-svc span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ym-stats{display:flex;gap:10px;margin-top:12px}
+.ym-stats[hidden]{display:none}
+.ym-stats div{flex:1;min-width:0;padding:10px 12px;border-radius:14px;background:#F3F4FA}
+.ym-stats small{display:block;font-size:11px;color:#6B7690}
+.ym-stats b{display:block;font-size:16px;color:#101B2D;white-space:nowrap}
+.ym-stats .p b{color:#1CAE72}
+.ym-hint{margin:6px 2px 0;font-size:11px;color:#8A93A8}
+.ym-cta{width:100%;min-height:50px;margin-top:12px;border:0;border-radius:16px;background:#6C3CE0;color:#fff;font-size:16px;font-weight:900;transition:transform .15s,opacity .2s}
+.ym-cta:active{transform:scale(.98)}
+.ym-cta.off{background:#E7E9F2;color:#6B7690}
+@media (max-width:340px){.ym-svc{flex-basis:74px}.ym-q{font-size:14px}}
+@media (prefers-reduced-motion:reduce){#yMap,.ym-sheet{transition:none}}
+/* إصلاحات اختبار: الحاوية لا تعترض اللمس، وأثناء البحث تُخفى البطاقة السفلية لتفسح مكاناً للنتائج */
+.ym-bot>.ym-fabs{pointer-events:none}
+.ym-bot>.ym-fabs>*{pointer-events:auto}
+.ym-bot{transition:opacity .2s ease,transform .3s ease}
+#yMap.srch .ym-bot{opacity:0;transform:translateY(40px);pointer-events:none}
+#yMap.srch .ym-bot *{pointer-events:none!important}
+#yMap.srch .ym-res{max-height:46vh}
+/* شاشات قصيرة (مثل 320×568): نختصر البطاقة السفلية ليبقى للخريطة مساحة ظاهرة */
+@media (max-height:660px){
+  .ym-loc,.ym-hint,.ym-grab,#ymZoomIn,#ymZoomOut{display:none!important}
+  .ym-svc{padding:5px 4px}.ym-svc img,.ym-svc svg{height:24px}
+  .ym-stats{margin-top:8px}.ym-stats div{padding:7px 10px}
+  .ym-cta{min-height:46px;margin-top:8px}
+  .ym-sheet{padding-top:12px}
+}
+
+
+/* =========================================================================
+   المرحلة 3 — صفحات الخدمات المستقلة (طبقة Cascade نهائية، إضافة فقط)
+   -------------------------------------------------------------------------
+   تغطي: svc-restaurants / svc-markets / svc-futureoffice (جديدة) + هيرو موحّد على
+   transport / market / yammakServices (صفحات مستقلة قائمة). لا حذف ولا تعديل
+   لأي قاعدة سابقة. الصور: صور المشروع الحقيقية عبر .hub-media (assets/…) مع التدرّج
+   الاحتياطي الموجود أصلاً — لا صورة مكسورة. Mobile First + Safe Area بلا تجاوز أفقي.
+   ========================================================================= */
+.svc-page{
+  --svc-acc: var(--purple, #6D28D9);
+  --svc-tint: rgba(109,40,217,0.10);
+  --svc-ink: var(--ui-ink, #1B1240);
+  --svc-muted: var(--text-muted, #5C6B84);
+  --svc-brd: var(--surface-brd, #D9E8E3);
+  --svc-r: 18px;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.svc-page[data-svc="restaurants"], .svc-page[data-view="svc-restaurants"]{ --svc-acc: var(--orange-text, #B94E0F); --svc-tint: rgba(255,122,41,0.12); }
+.svc-page[data-svc="markets"], .svc-page[data-view="svc-markets"]{ --svc-acc: var(--green-text, #15803D); --svc-tint: rgba(34,197,94,0.12); }
+.svc-page[data-svc="futureoffice"], .svc-page[data-view="svc-futureoffice"]{ --svc-acc: var(--purple, #6D28D9); --svc-tint: rgba(109,40,217,0.10); }
+
+/* زر الرجوع: حبّة واضحة بحجم لمس مريح */
+.app-shell .sheet-view.svc-page > .sheet-back{
+  min-height: 44px;
+  padding-inline: 14px 16px;
+  gap: 7px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.app-shell .sheet-view.svc-page > .sheet-back:focus-visible,
+.svc-card:focus-visible, .svc-more:focus-visible, .svc-retry:focus-visible{
+  outline: 2px solid var(--svc-acc); outline-offset: 2px;
+}
+
+/* الهيرو: صورة القسم الحقيقية (hub-media) بعرض كامل الصفحة */
+.app-shell .sheet-view.svc-page > .svc-hero{
+  grid-area: auto; grid-column: 1 / -1;
+  position: relative; overflow: hidden;
+  margin: 0 0 14px; min-height: 0;
+  height: clamp(116px, 34vw, 172px);
+  border-radius: 20px;
+  background-color: var(--svc-tint);
+  box-shadow: 0 14px 26px -20px rgba(76,29,149,0.55);
+}
+.svc-hero-shade{
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(27,18,64,0) 50%, rgba(27,18,64,0.34) 100%);
+}
+
+/* العنوان + العدّاد الحقيقي */
+.svc-headline{
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+.svc-title{
+  margin: 0; min-width: 0;
+  font-size: clamp(19px, 5.4vw, 22px); font-weight: 900; line-height: 1.3;
+  color: var(--svc-ink); letter-spacing: 0; overflow-wrap: anywhere;
+}
+.svc-count{
+  flex: none; min-width: 26px; padding: 2px 10px; text-align: center;
+  border-radius: 999px; font-size: 12.5px; font-weight: 900; line-height: 1.6;
+  color: var(--svc-acc); background: var(--svc-tint);
+}
+.svc-sub{
+  margin: 4px 0 14px; font-size: 13.5px; line-height: 1.6; color: var(--svc-muted);
+  overflow-wrap: anywhere;
+}
+/* الصفحات القائمة: العنوان تحت الهيرو بدل أن يشاركه صف الرجوع */
+.app-shell .sheet-view.svc-page-existing.active > .svc-hero + .sheet-title{
+  grid-column: 1 / -1; grid-row: auto; margin: 2px 0 8px;
+}
+
+/* القائمة: بطاقات عمودية، عمود واحد على الشاشات الضيّقة وعمودان حين يتّسع المكان */
+.svc-body{ display: block; min-width: 0; }
+.svc-list, .svc-body-skel{
+  display: grid; gap: 12px; min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 156px), 1fr));
+}
+.svc-card{
+  display: flex; flex-direction: column; align-items: stretch;
+  width: 100%; min-width: 0; margin: 0; padding: 0;
+  text-align: start; font: inherit; color: var(--svc-ink);
+  background: #fff; border: 1px solid var(--svc-brd); border-radius: var(--svc-r);
+  overflow: hidden; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 12px 24px -20px rgba(76,29,149,0.42);
+  transition: transform .15s, box-shadow .15s;
+}
+.svc-card:active{ transform: scale(0.985); box-shadow: none; }
+.svc-card-img{
+  position: relative; display: block; width: 100%; aspect-ratio: 16 / 10;
+  overflow: hidden; background: var(--svc-tint);
+}
+.svc-card-img img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.svc-card-img.is-noimg{
+  display: flex; align-items: center; justify-content: center;
+  background-size: cover, cover; background-position: center; background-repeat: no-repeat;
+}
+.svc-card-img.is-noimg::after{ font-size: 34px; line-height: 1; text-shadow: 0 2px 8px rgba(0,0,0,0.28); }
+.svc-card-body{
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  padding: 10px 12px 13px; min-width: 0;
+}
+.svc-card-title{
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  max-width: 100%; font-size: 14.5px; font-weight: 900; line-height: 1.4; overflow-wrap: anywhere;
+}
+.svc-card-cat{
+  display: inline-block; max-width: 100%; padding: 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 800; line-height: 1.6;
+  color: var(--svc-acc); background: var(--svc-tint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.svc-card-meta{
+  display: flex; align-items: center; gap: 5px; max-width: 100%;
+  font-size: 12px; color: var(--svc-muted);
+}
+.svc-card-meta svg{ flex: none; width: 14px; height: 14px; }
+.svc-card-meta > span{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-card-chev{ display: none; }
+
+/* هيكل التحميل / فارغ / خطأ — حالات صريحة بلا بيانات بديلة */
+.svc-skel{
+  display: block; height: 196px; border-radius: var(--svc-r);
+  border: 1px solid var(--svc-brd);
+  background: linear-gradient(100deg, #F3F0FB 30%, #FFFFFF 50%, #F3F0FB 70%);
+  background-size: 220% 100%;
+  animation: svc-shimmer 1.3s linear infinite;
+}
+@keyframes svc-shimmer{ from{ background-position: 120% 0; } to{ background-position: -120% 0; } }
+.svc-empty, .svc-error{
+  margin: 0; padding: 22px 16px; text-align: center; border-radius: var(--svc-r);
+  background: #fff; border: 1.5px dashed var(--svc-acc);
+  color: var(--svc-muted); font-size: 14px; font-weight: 700; line-height: 1.7;
+}
+.svc-error p{ margin: 0 0 12px; color: var(--svc-ink); }
+.svc-retry{
+  min-height: 44px; min-width: 150px; padding: 0 20px; border: 0; border-radius: 14px;
+  background: var(--svc-acc); color: #fff; font: inherit; font-size: 14px; font-weight: 900; cursor: pointer;
+}
+.svc-more{
+  display: block; width: 100%; min-height: 48px; margin: 14px 0 0; padding: 0 16px;
+  border-radius: 16px; font: inherit; font-size: 14.5px; font-weight: 900; cursor: pointer;
+  color: var(--svc-acc); background: #fff; border: 1.5px solid var(--svc-acc);
+}
+.svc-more:active{ background: var(--svc-tint); }
+.svc-more:disabled{ opacity: .6; cursor: default; }
+
+@media (max-width: 340px){
+  .svc-list, .svc-body-skel{ grid-template-columns: minmax(0, 1fr); }
+  .svc-card-title{ font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .svc-skel{ animation: none; }
+  .svc-card{ transition: none; }
+}
+

@@ -62,6 +62,7 @@ let driverToken = null;
 // account keeps working exactly as before, off their token link).
 let authMode = false;
 let driverProfile = null; // { id, name } from get_driver_profile_auth()
+let driverSelf = null;    // { id, name } from get_driver_by_token() (token flow)
 
 let reportTimer = null;
 let paused = false;
@@ -386,6 +387,7 @@ function renderTrip(trip) {
     emptyEl.hidden = false;
     detailsEl.hidden = true;
     if (mapBtn) mapBtn.hidden = true;
+    renderTripExtras(null);
     renderTripActions(null);
     return;
   }
@@ -400,7 +402,7 @@ function renderTrip(trip) {
   setText('driverTripRequestNumber', trip.request_number || '');
   setText('driverTripStatus', TRIP_STATUS_LABELS[trip.status] || trip.status || '');
   setText('driverTripCustomer', trip.customer_name || '—');
-  setText('driverTripServiceType', trip.service_type || '—');
+  setText('driverTripServiceType', DRIVER_SERVICE_LABELS[trip.service_type] || trip.service_type || '—');
   setText('driverTripPickupLocation', trip.pickup_location || '—');
 
   if (mapBtn) {
@@ -418,6 +420,7 @@ function renderTrip(trip) {
     }
   }
 
+  renderTripExtras(trip);
   renderTripActions(trip);
 }
 
@@ -517,16 +520,10 @@ function renderTripActions(trip) {
   }
 }
 
-// get_driver_current_trip's exact column name for the trip's own
-// primary key was not directly confirmed against the live schema
-// (schema.sql was not made available in this task) — `id` is the
-// conventional name and is used first, with a defensive fallback to
-// `request_id` in case the RPC exposes it under that name instead.
-// If a driver ever sees "تعذّر تحديد رقم الطلب", this is the first
-// thing to check against the real RPC definition.
+// get_driver_current_trip / _auth return the trip's primary key as `id`
+// (confirmed against the live RPC definitions) — no other name is used.
 function getTripRequestId(trip) {
-  if (!trip) return null;
-  return trip.id || trip.request_id || null;
+  return trip && trip.id ? trip.id : null;
 }
 
 async function respondToTrip(action) {
@@ -718,7 +715,7 @@ function getOrCreateNewTripToast() {
     boxShadow: 'var(--elev-2, 0 12px 24px rgba(76,29,149,0.3))',
     cursor: 'pointer',
   });
-  el.textContent = '🔔 طلب جديد — اضغط للفتح';
+  el.textContent = 'طلب جديد — اضغط للفتح';
   // "Opens the request directly": the driver app has no separate
   // notification list to navigate into — the assigned trip is always
   // already rendered inline in #driverTripBox by renderTrip() above,
@@ -761,7 +758,20 @@ async function fetchCurrentTrip() {
           p_token: driverToken,
         });
     if (error) throw error;
-    const trip = Array.isArray(data) ? (data[0] || null) : (data || null);
+    // A mutation (accept/reject/progress) is in flight — its own result
+    // is about to set the state; a poll that started earlier must not
+    // overwrite it with a stale status.
+    if (isResponding) return;
+    let trip = Array.isArray(data) ? (data[0] || null) : (data || null);
+    // The real RPCs (get_driver_current_trip / _auth) only return trips in
+    // ('assigned','en_route','arrived') — an 'accepted' trip is NOT
+    // returned. So right after accept the poll comes back empty even
+    // though the trip is still active. Keep the locally-held accepted
+    // trip (real data from the earlier RPC result) until the driver
+    // moves it to en_route, at which point the RPC returns it again.
+    if (!trip && currentTrip && currentTrip.status === 'accepted') {
+      trip = currentTrip;
+    }
     const tripId = getTripRequestId(trip);
 
     // Fire the in-app alert only for a trip id that wasn't showing a
@@ -777,6 +787,7 @@ async function fetchCurrentTrip() {
     lastSeenTripId = tripId;
 
     renderTrip(trip);
+    refreshDriverCard(); // real availability follows the trip state
   } catch (err) {
     console.error('get_driver_current_trip failed', err);
     // Non-fatal: leave whatever trip info was last shown in place
@@ -881,7 +892,7 @@ function setPushMsg(text, kind, detail) {
 }
 
 function showPushUnsupported(support) {
-  setPushBtn('🔔 تفعيل إشعارات الطلبات', { disabled: true });
+  setPushBtn('تفعيل إشعارات الطلبات', { disabled: true });
   const missing = [];
   if (!support.hasSW) missing.push('Service Worker');
   if (!support.hasPush) missing.push('PushManager');
@@ -894,7 +905,7 @@ function showPushUnsupported(support) {
 }
 
 function showPushDenied() {
-  setPushBtn('🔔 تفعيل إشعارات الطلبات');
+  setPushBtn('تفعيل إشعارات الطلبات');
   setPushMsg('الإذن مرفوض — فعّل الإشعارات لهذا الموقع من إعدادات المتصفح أو الجهاز ثم اضغط الزر مجدداً.', 'error');
 }
 
@@ -1024,7 +1035,7 @@ async function setupPushNotifications(options) {
     }
     if (permission === 'denied') { showPushDenied(); return; }
     if (permission !== 'granted') {
-      setPushBtn('🔔 تفعيل إشعارات الطلبات');
+      setPushBtn('تفعيل إشعارات الطلبات');
       setPushMsg('لم يتم منح الإذن بعد — اضغط الزر ثم اختر «سماح».', 'warn');
       return;
     }
@@ -1044,15 +1055,15 @@ async function setupPushNotifications(options) {
     stage = 'save';
     await saveDriverPushSubscription(subscription);
 
-    setPushBtn('🔔 إشعارات الطلبات مفعّلة', { disabled: true, on: true });
+    setPushBtn('إشعارات الطلبات مفعّلة', { disabled: true, on: true });
     if (foreignWorker) {
-      setPushMsg('تم تفعيل الإشعارات ✅ — لكن عامل خدمة آخر نشط حالياً على هذا الجهاز. أعد فتح الصفحة إن لم تصلك الإشعارات.', 'warn', activeScript);
+      setPushMsg('تم تفعيل الإشعارات — لكن عامل خدمة آخر نشط حالياً على هذا الجهاز. أعد فتح الصفحة إن لم تصلك الإشعارات.', 'warn', activeScript);
     } else {
-      setPushMsg('تم تفعيل الإشعارات ✅', 'ok');
+      setPushMsg('تم تفعيل الإشعارات', 'ok');
     }
   } catch (err) {
     console.error('push setup failed at stage "' + stage + '"', err);
-    setPushBtn('🔔 تفعيل إشعارات الطلبات');
+    setPushBtn('تفعيل إشعارات الطلبات');
     setPushMsg(
       'فشل تفعيل الإشعارات (' + (PUSH_STAGE_LABELS[stage] || stage) + '). اضغط الزر للمحاولة مجدداً.',
       'error',
@@ -1083,7 +1094,7 @@ function initPushNotificationsUI() {
   if (permission === 'denied') { showPushDenied(); return; }
   if (permission === 'granted') { setupPushNotifications({ userInitiated: false }); return; }
 
-  setPushBtn('🔔 تفعيل إشعارات الطلبات');
+  setPushBtn('تفعيل إشعارات الطلبات');
   setPushMsg('اضغط الزر لتصلك إشعارات الطلبات حتى والتطبيق مغلق.');
 }
 
@@ -1183,6 +1194,7 @@ function startDriverApp() {
 
   startReporting();
   startTripPolling();
+  refreshDriverCard();
   initPushNotificationsUI();
 }
 
@@ -1248,6 +1260,7 @@ async function initDriverPage() {
     return;
   }
 
+  driverSelf = driver;
   setScreenVisible(mainScreen, true);
   setScreenVisible(invalidScreen, false);
   setScreenVisible(loginScreen, false);
@@ -1261,6 +1274,217 @@ function startReporting() {
   reportOnce();
   if (reportTimer) clearInterval(reportTimer);
   reportTimer = setInterval(reportOnce, REPORT_INTERVAL_MS);
+}
+
+
+// ======================================================================
+// Phase 4 — driver UI: real profile card + extra trip fields.
+// Matched to the REAL RPC return columns:
+//   get_driver_by_token / get_driver_profile_auth -> id, name
+//   get_driver_public_profile -> name, vehicle_type, service_type, active
+//   get_service_driver_roster -> id, phone, vehicle_type, status
+//        ('active' | 'busy' | 'offline'), driver_lat, driver_lng,
+//        location_updated_at
+//   get_driver_current_trip(_auth) -> id, request_number, status,
+//        service_type, customer_name, pickup_location, pickup_lat,
+//        pickup_lng, dropoff_location, created_at, notes, dropoff_lat,
+//        dropoff_lng
+// Anything not in those lists (price, photo, plate, customer phone,
+// notes, scheduled time) is NOT returned by any RPC and is not shown.
+// ======================================================================
+const DRIVER_SERVICE_LABELS = {
+  taxi: 'تكسي', private: 'خصوصي', courier: 'دليفري',
+  intercity: 'بين المحافظات', cargo: 'حمل', starx: 'ستاركس',
+};
+const DRIVER_SERVICE_KEYS = Object.keys(DRIVER_SERVICE_LABELS);
+let driverServiceKey = null; // learned from real RPC data, never assumed
+let driverPublic = null;     // get_driver_public_profile row (token flow)
+let cardBusy = false;
+
+function firstOf(obj, keys) {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v != null && String(v).trim() !== '') return v;
+  }
+  return null;
+}
+const DRIVER_ROW_ICONS = {
+  badge: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.3 6.8 19.1l1-5.8L3.5 9.2l5.9-.9L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  service: '<path d="M4 16v-3.4a2 2 0 0 1 .18-.83l1.4-3.1A2.2 2.2 0 0 1 7.6 7.4h8.8a2.2 2.2 0 0 1 2.02 1.27l1.4 3.1c.12.26.18.55.18.83V16" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="3.2" y="13.4" width="17.6" height="5.6" rx="1.6" stroke="currentColor" stroke-width="1.6"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  note: '<path d="M6 3h9l4 4v14H6z M14 3v5h5 M9 13h7 M9 17h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  pin: '<path d="M12 21.2s6.6-5.8 6.6-11a6.6 6.6 0 1 0-13.2 0c0 5.2 6.6 11 6.6 11Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="10.1" r="2.3" stroke="currentColor" stroke-width="1.6"/>',
+};
+function buildInfoRow(icon, key, value, ltr) {
+  const li = document.createElement('li');
+  const ico = document.createElement('span');
+  ico.className = 'driver-trip-ico';
+  ico.setAttribute('aria-hidden', 'true');
+  ico.innerHTML = '<svg viewBox="0 0 24 24" fill="none">' + (DRIVER_ROW_ICONS[icon] || '') + '</svg>'; // static icon markup only
+  const k = document.createElement('span');
+  k.className = 'driver-trip-key';
+  k.textContent = key;
+  const b = document.createElement('b');
+  b.textContent = value;
+  if (ltr) b.dir = 'ltr';
+  li.append(ico, k, b);
+  return li;
+}
+// get_service_driver_roster.status is exactly one of:
+// 'active' (free), 'busy' (has an open trip), 'offline' (drivers.active = false).
+function rosterAvailability(status) {
+  const s = String(status || '').trim().toLowerCase();
+  if (s === 'active') return 'free';
+  if (s === 'busy') return 'busy';
+  if (s === 'offline') return 'off';
+  return null;
+}
+
+async function resolveDriverPublic() {
+  if (authMode || !driverToken || driverPublic) return;
+  try {
+    const { data, error } = await supabaseClient.rpc('get_driver_public_profile', { p_driver_token: driverToken });
+    if (error) throw error;
+    driverPublic = Array.isArray(data) ? (data[0] || null) : (data || null);
+    if (driverPublic && driverPublic.service_type) driverServiceKey = driverPublic.service_type;
+  } catch (err) {
+    console.error('get_driver_public_profile failed (non-fatal)', err);
+  }
+}
+async function fetchOwnRosterRow(selfId) {
+  const keys = driverServiceKey ? [driverServiceKey] : DRIVER_SERVICE_KEYS;
+  for (const key of keys) {
+    try {
+      const { data, error } = await supabaseClient.rpc('get_service_driver_roster', { p_service_type: key });
+      if (error) throw error;
+      const row = (data || []).find((r) => String(r.id) === String(selfId));
+      if (row) { driverServiceKey = key; return row; }
+    } catch (err) {
+      console.error('get_service_driver_roster failed (non-fatal)', err);
+      return null;
+    }
+  }
+  return null;
+}
+
+function renderDriverCard(self, row) {
+  const card = document.getElementById('driverProfileCard');
+  const list = document.getElementById('driverProfileList');
+  if (!card || !list) return;
+  setText('driverProfileName', self.name || '—');
+
+  // No RPC returns a driver photo — always the default avatar.
+  const img = document.getElementById('driverAvatarImg');
+  const svg = document.getElementById('driverAvatarSvg');
+  if (img) img.hidden = true;
+  if (svg) svg.hidden = false;
+
+  // availability: the real roster status (the driver is matched to the
+  // roster by drivers.id); otherwise the real `active` flag from
+  // get_driver_public_profile; otherwise nothing is shown.
+  const avail = document.getElementById('driverAvail');
+  if (avail) {
+    let state = row ? rosterAvailability(row.status) : null;
+    if (!state && driverPublic && driverPublic.active === false) state = 'off';
+    avail.hidden = !state;
+    avail.className = 'driver-avail' + (state ? ' is-' + state : '');
+    setText('driverAvailText', state === 'free' ? 'متاح' : state === 'busy' ? 'مشغول' : state === 'off' ? 'غير نشط' : '');
+  }
+
+  list.textContent = '';
+  const svcKey = driverServiceKey;
+  if (svcKey) list.appendChild(buildInfoRow('badge', 'الخدمة', DRIVER_SERVICE_LABELS[svcKey] || svcKey));
+  const vehicle = firstOf(row, ['vehicle_type']) || firstOf(driverPublic, ['vehicle_type']);
+  if (vehicle) list.appendChild(buildInfoRow('service', 'السيارة', vehicle));
+  const phone = firstOf(row, ['phone']);
+  if (phone) list.appendChild(buildInfoRow('phone', 'الهاتف', phone, true));
+  list.hidden = !list.children.length;
+
+  // Call button: shown only when a real phone number came back from the
+  // roster RPC. href keeps digits and a leading + only.
+  const callBtn = document.getElementById('driverProfileCall');
+  if (callBtn) {
+    const dial = phone ? String(phone).trim().replace(/(?!^\+)[^\d]/g, '') : '';
+    if (/\d{5,}/.test(dial)) {
+      callBtn.href = 'tel:' + dial;
+      callBtn.hidden = false;
+    } else {
+      callBtn.removeAttribute('href');
+      callBtn.hidden = true;
+    }
+  }
+  card.hidden = false;
+}
+
+async function refreshDriverCard() {
+  if (cardBusy) return;
+  const self = authMode ? driverProfile : driverSelf;
+  if (!self) return;
+  cardBusy = true;
+  try {
+    await resolveDriverPublic();
+    const row = self.id != null ? await fetchOwnRosterRow(self.id) : null;
+    renderDriverCard(self, row);
+  } finally { cardBusy = false; }
+}
+
+const DRIVER_STEPS = [['accepted', 'قبول'], ['en_route', 'بالطريق'], ['arrived', 'وصل'], ['completed', 'مكتمل']];
+function renderTripSteps(status) {
+  const ol = document.getElementById('driverTripSteps');
+  if (!ol) return;
+  const idx = DRIVER_STEPS.findIndex((s) => s[0] === status);
+  ol.textContent = '';
+  DRIVER_STEPS.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.className = i < idx ? 'is-done' : i === idx ? 'is-now' : '';
+    li.textContent = s[1];
+    ol.appendChild(li);
+  });
+  ol.hidden = status === 'assigned' || idx < 0;
+}
+
+function renderTripExtras(trip) {
+  const extra = document.getElementById('driverTripExtra');
+  const contact = document.getElementById('driverTripContact');
+  if (extra) extra.textContent = '';
+  if (!trip) {
+    renderTripSteps(null);
+    if (extra) extra.hidden = true;
+    if (contact) contact.hidden = true;
+    return;
+  }
+  renderTripSteps(trip.status);
+  if (extra) {
+    const drop = firstOf(trip, ['dropoff_location']);
+    if (drop) extra.appendChild(buildInfoRow('pin', 'الوجهة', drop));
+
+    // Real drop-off point (dropoff_lat/dropoff_lng from the RPC) — opened
+    // in the external maps app exactly like the pickup button does.
+    // Shown only when both coordinates were actually saved with the trip.
+    const dLat = trip.dropoff_lat != null ? Number(trip.dropoff_lat) : NaN;
+    const dLng = trip.dropoff_lng != null ? Number(trip.dropoff_lng) : NaN;
+    if (Number.isFinite(dLat) && Number.isFinite(dLng)) {
+      const row = buildInfoRow('pin', 'نقطة التسليم', '');
+      const b = row.querySelector('b');
+      const a = document.createElement('a');
+      a.href = 'https://www.google.com/maps/search/?api=1&query=' + dLat + ',' + dLng;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'فتح في الخرائط';
+      b.appendChild(a);
+      extra.appendChild(row);
+    }
+
+    // The order note written when the request was created (e.g. which
+    // restaurant/market the delivery is from) — shown as returned.
+    const note = firstOf(trip, ['notes']);
+    if (note) extra.appendChild(buildInfoRow('note', 'ملاحظة الطلب', note));
+    extra.hidden = !extra.children.length;
+  }
+  // The trip RPCs do not return the customer's phone — no call/WhatsApp
+  // buttons are ever shown.
+  if (contact) contact.hidden = true;
 }
 
 document.addEventListener('DOMContentLoaded', initDriverPage);

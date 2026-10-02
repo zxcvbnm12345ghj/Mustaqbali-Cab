@@ -95,6 +95,30 @@
 
       <div class="driver-sheet">
 
+        <!-- Driver profile card: every value comes from real RPC data
+             (get_driver_by_token / get_driver_public_profile /
+             get_service_driver_roster); a row stays hidden when its field
+             is not returned. driver.js (renderDriverCard) fills it.
+             The call button (#driverProfileCall) stays [hidden] unless a
+             real phone number came back from the roster RPC. -->
+        <section class="driver-profile" id="driverProfileCard" aria-label="بيانات السائق" hidden>
+          <div class="driver-profile-top">
+            <div class="driver-avatar" id="driverAvatar" aria-hidden="true">
+              <img id="driverAvatarImg" alt="" hidden>
+              <svg id="driverAvatarSvg" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="driver-profile-id">
+              <strong id="driverProfileName"></strong>
+              <span class="driver-avail" id="driverAvail" hidden><i></i><span id="driverAvailText"></span></span>
+            </div>
+          </div>
+          <ul class="driver-profile-list" id="driverProfileList"></ul>
+          <a class="driver-profile-call" id="driverProfileCall" href="#" hidden>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            <span>اتصال</span>
+          </a>
+        </section>
+
         <!-- Connection / GPS status + on-off action.
              #driverStatusDot / #driverStatusText / #driverLastSent /
              #driverToggleBtn are the exact ids driver.js already uses —
@@ -115,7 +139,7 @@
              text/disabled state and fills #driverPushMsg with the
              current status or the real failure reason. -->
         <section class="driver-push" id="driverPushBox">
-          <button type="button" class="driver-btn driver-push-btn" id="driverPushBtn">🔔 تفعيل إشعارات الطلبات</button>
+          <button type="button" class="driver-btn driver-push-btn" id="driverPushBtn">تفعيل إشعارات الطلبات</button>
           <p class="driver-push-msg" id="driverPushMsg" role="status" aria-live="polite" hidden></p>
         </section>
 
@@ -137,6 +161,7 @@
               <strong id="driverTripRequestNumber"></strong>
               <span id="driverTripStatus"></span>
             </div>
+            <ol class="driver-steps" id="driverTripSteps" aria-label="مراحل الرحلة"></ol>
             <ul class="driver-trip-list">
               <li>
                 <span class="driver-trip-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.2" r="3.4" stroke="currentColor" stroke-width="1.7"/><path d="M4.8 19.3c1-3.3 3.9-5.3 7.2-5.3s6.2 2 7.2 5.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
@@ -151,6 +176,12 @@
                 <span class="driver-trip-key">موقع الانطلاق</span><b id="driverTripPickupLocation"></b>
               </li>
             </ul>
+
+            <ul class="driver-trip-list driver-trip-extra" id="driverTripExtra"></ul>
+            <div class="driver-contact" id="driverTripContact" hidden>
+              <a class="driver-contact-btn call" id="driverCallBtn" href="#">اتصال بالزبون</a>
+              <a class="driver-contact-btn wa" id="driverWaBtn" href="#" target="_blank" rel="noopener">واتساب</a>
+            </div>
 
             <!-- Accept/Reject card — shown only while trip.status === 'assigned'
                  (toggled from driver.js via renderTripActions()). Not present

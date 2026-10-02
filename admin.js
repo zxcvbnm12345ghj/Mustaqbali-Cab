@@ -959,7 +959,15 @@ async function populateDriverAssignSelect(currentPhone) {
   const select = document.getElementById('driverPhone');
   if (!select) return;
 
-  assignDriverRoster = (await loadDriversRoster()) || [];
+  // Only drivers of the SAME service as the open request are offered
+  // (drivers.service_type === trip_requests.service_type). Active/inactive
+  // handling is unchanged: inactive drivers of that service still show,
+  // labelled "(غير نشط)". How driver_phone is saved is untouched.
+  const openRequest = findRequestById(state.selectedId);
+  const allDrivers = (await loadDriversRoster()) || [];
+  assignDriverRoster = openRequest
+    ? allDrivers.filter(d => d.service_type === openRequest.service_type)
+    : [];
 
   const options = ['<option value="">— بلا سائق —</option>'].concat(
     assignDriverRoster.map(d =>
@@ -1774,8 +1782,46 @@ async function deletePlace(kind, id) {
   await loadPlaces(kind);
 }
 
+// Delivery pickup coordinates for restaurants / markets / future_office
+// (columns lat/lng). The modal's static HTML has no inputs for them, so
+// they are added once from here, right under the address field, styled
+// like the existing inputs. Both empty = no coordinates = customers
+// cannot request delivery from this place.
+function ensurePlaceCoordFields() {
+  if (document.getElementById('placeLat')) return;
+  const addr = document.getElementById('placeAddress');
+  if (!addr) return;
+  const anchor = addr.closest('.field, .form-field, .form-group, .float-field') || addr.parentElement;
+  const wrap = document.createElement('div');
+  wrap.id = 'placeCoordsWrap';
+  wrap.style.cssText = 'margin-top:8px';
+  const cls = addr.className || '';
+  wrap.innerHTML =
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<label style="flex:1;min-width:120px;display:block">خط العرض (lat)' +
+        '<input id="placeLat" type="number" step="any" inputmode="decimal" class="' + cls + '" placeholder="مثال: 36.3350"></label>' +
+      '<label style="flex:1;min-width:120px;display:block">خط الطول (lng)' +
+        '<input id="placeLng" type="number" step="any" inputmode="decimal" class="' + cls + '" placeholder="مثال: 43.1189"></label>' +
+    '</div>' +
+    '<small style="display:block;margin-top:4px;opacity:.75">إحداثيات المكان — مطلوبة ليتمكّن الزبون من طلب توصيل من هذا المكان.</small>';
+  anchor.insertAdjacentElement('afterend', wrap);
+}
+
+function readPlaceCoords() {
+  const latRaw = document.getElementById('placeLat')?.value.trim() ?? '';
+  const lngRaw = document.getElementById('placeLng')?.value.trim() ?? '';
+  if (latRaw === '' && lngRaw === '') return { ok: true, lat: null, lng: null };
+  if (latRaw === '' || lngRaw === '') return { ok: false, message: 'أدخل خط العرض وخط الطول معاً أو اتركهما فارغين.' };
+  const lat = Number(latRaw), lng = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { ok: false, message: 'الإحداثيات غير صالحة (خط العرض بين -90 و90، وخط الطول بين -180 و180).' };
+  }
+  return { ok: true, lat, lng };
+}
+
 function openPlaceModal(kind, row) {
   const cfg = PLACE_TABLES[kind];
+  ensurePlaceCoordFields();
   placesState.editingKind = kind;
   placesState.editingId = row ? row.id : null;
 
@@ -1794,6 +1840,9 @@ function openPlaceModal(kind, row) {
   document.getElementById('placeSortOrder').value = row?.sort_order ?? '';
   document.getElementById('placePhone').value = row?.phone || '';
   document.getElementById('placeAddress').value = row?.address || '';
+  const latEl = document.getElementById('placeLat'), lngEl = document.getElementById('placeLng');
+  if (latEl) latEl.value = row?.lat ?? '';
+  if (lngEl) lngEl.value = row?.lng ?? '';
   document.getElementById('placeHours').value = row?.hours_text || '';
   document.getElementById('placeDescription').value = row?.description || '';
   document.getElementById('placeActive').checked = row ? !!row.active : true;
@@ -1855,12 +1904,20 @@ async function savePlace() {
     return;
   }
 
+  const coords = readPlaceCoords();
+  if (!coords.ok) {
+    showPlaceModalError(coords.message);
+    return;
+  }
+
   const payload = {
     name,
     category: category || null,
     image_url: image_url || null,
     phone: phone || null,
     address: address || null,
+    lat: coords.lat,
+    lng: coords.lng,
     hours_text: hours_text || null,
     description: description || null,
     active,

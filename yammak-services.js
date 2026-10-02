@@ -197,7 +197,7 @@ async function ysvcLoadProviders(categoryId) {
   try {
     const { data, error } = await supabaseClient
       .from('local_service_providers')
-      .select('id, image_url, name, details, phone, address, hours_text')
+      .select('id, image_url, name, details, phone, address, hours_text, lat, lng')
       .eq('category_id', categoryId)
       .eq('active', true)
       .order('sort_order', { ascending: true });
@@ -313,6 +313,9 @@ function ysvcRenderProviderDetail(row) {
     else phoneRow.hidden = true;
   }
 
+  const deliveryBtn = ysvcEnsureDeliveryButton();
+  if (deliveryBtn) deliveryBtn.onclick = () => ysvcRequestDelivery(row);
+
   const callBtn = document.getElementById('ysvcCallBtn');
   if (callBtn) {
     const cleanTel = (row.phone || '').replace(/[^\d+]/g, '');
@@ -324,6 +327,54 @@ function ysvcRenderProviderDetail(row) {
       callBtn.classList.add('is-disabled');
     }
   }
+}
+
+/* ---- طلب توصيل من مزود خدمة حقيقي — نفس نظام الدليفري الحالي
+   (نموذج خدمة courier → اختيار سائق → submit_trip_request). الاستلام
+   من إحداثيات المزود الحقيقية (local_service_providers.lat/lng) وليس
+   من موقع الزبون؛ مزود بلا إحداثيات لا يمكن الطلب منه. ---- */
+function ysvcEnsureDeliveryButton() {
+  let btn = document.getElementById('ysvcDeliveryBtn');
+  if (btn) return btn;
+  const actions = document.getElementById('ysvcDetailActions');
+  if (!actions) return null;
+  btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'ysvcDeliveryBtn';
+  btn.className = 'app-btn secondary plc-delivery-btn';
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" stroke="currentColor" stroke-width="1.4"/><circle cx="17.5" cy="18" r="1.6" stroke="currentColor" stroke-width="1.4"/></svg> اطلب توصيل';
+  actions.appendChild(btn);
+  return btn;
+}
+
+function ysvcRequestDelivery(row) {
+  const lat = row && row.lat != null ? Number(row.lat) : NaN;
+  const lng = row && row.lng != null ? Number(row.lng) : NaN;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    toast('لا يمكن طلب توصيل من هذا المزود حالياً — موقعه غير محدد بعد');
+    return;
+  }
+
+  // The provider IS the pickup — an explicit choice — so live GPS must
+  // not replace it (same handling as requestPlaceDelivery in places.js).
+  if (typeof stopGpsWatch === 'function') stopGpsWatch();
+  const prevAutoLocate = state.autoLocateAttempted;
+  state.autoLocateAttempted = true;
+  try {
+    openBooking('courier');
+  } finally {
+    state.autoLocateAttempted = prevAutoLocate;
+  }
+  setTimeout(() => {
+    setPickup(lat, lng, { reverseGeocode: false, fly: true, animate: true });
+    const pickupEl = document.getElementById('pickup');
+    const pickupText = row.address || row.name || '';
+    if (pickupEl && pickupText) pickupEl.value = pickupText;
+    const notesEl = document.getElementById('notes');
+    if (notesEl) notesEl.value = `توصيل من خدمات يمّك — ${row.name}`.slice(0, 480);
+    if (typeof updatePriceBar === 'function') updatePriceBar();
+    toast('جهّزنا طلب التوصيل — أكمل بياناتك للتأكيد');
+  }, 60);
 }
 
 /* ---- Home tile badge — real active-section count, same pattern as

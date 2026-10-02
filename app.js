@@ -18,24 +18,68 @@ const SERVICES = {
 // ============================================================
 // مسميات الأدوار الرسمية داخل يمّك — نص فقط، بلا إيموجي/أيقونات
 // بجانب الاسم، يُميَّز كل دور بلونه وخطّه الخاص (Badge) عبر CSS:
-//   - "كابتن يمّك"  → خدمات النقل والرحلات (تكسي/خصوصي/بين المحافظات/نقل نفرات/حمل ونقل الأثاث)
-//   - "مندوب يمّك"  → الدليفري والتوصيل والطرود (دليفري)
-//   - "شريك يمّك"   → المطاعم والأسواق والمتاجر ومقدمو الخدمات
+//   - "الكابتن"     → خدمات النقل والرحلات (تكسي/خصوصي/بين المحافظات/نقل نفرات/حمل)
+//   - "المندوب"     → الدليفري والتوصيل والطرود (دليفري)
+//   - "شريك يمّك"   → الخدمات التي تعتمد على مزوّد خدمة (مطاعم/أسواق/خدمات محلية)
 // هذا استبدال نصي فقط لكلمة "السائق" القديمة أينما ظهرت للعميل —
 // لا يمسّ أي بيانات أو RPC أو منطق حجز/تعيين موجود.
 // ============================================================
 const ROLE_LABELS = {
-  captain: 'كابتن يمّك',
-  agent: 'مندوب يمّك',
+  captain: 'الكابتن',
+  agent: 'المندوب',
   partner: 'شريك يمّك',
 };
 function roleKeyForService(serviceType) {
-  if (serviceType === 'courier') return 'agent';
-  return 'captain'; // تشمل taxi/private/intercity/cargo/starx، وتُستخدم أيضاً كافتراضي عام
+  if (serviceType === 'courier') return 'agent';                 // الدليفري → المندوب
+  if (!serviceType || SERVICES[serviceType]) return 'captain';   // خدمات النقل (taxi/private/intercity/cargo/starx) + الافتراضي عند غياب النوع
+  return 'partner';                                              // أي نوع خدمة آخر غير النقل (مطاعم/أسواق/خدمات محلية) → شريك يمّك
 }
 function roleLabelForService(serviceType) {
   return ROLE_LABELS[roleKeyForService(serviceType)];
 }
+// الاسم الوظيفي كما يظهر داخل جُمل رسائل الحالة (بدون «يمّك» لأن الشارة
+// الأطول مخصّصة لقائمة الاختيار). يُحسب دائماً من نوع الخدمة الفعلي
+// للطلب — مصدر واحد فقط، فلا يمكن أن يتكرر داخل الجملة نفسها.
+//   name  : الاسم الظاهر في بداية الجملة
+//   byName: الاسم بعد حرف الجر «ب» (للـ aria-label)
+//   plural: عنوان قائمة الاختيار     available: عبارة «يرجى اختيار …»
+const ROLE_TITLES = {
+  captain: { name: 'الكابتن',    byName: 'بالكابتن',    plural: 'الكباتن',     available: 'الكابتن المتاح' },
+  agent:   { name: 'المندوب',    byName: 'بالمندوب',    plural: 'المناديب',    available: 'المندوب المتاح' },
+  partner: { name: 'شريك يمّك',  byName: 'بشريك يمّك',  plural: 'شركاء يمّك',  available: 'شريك يمّك المتاح' },
+};
+function roleTitleForService(serviceType) {
+  return ROLE_TITLES[roleKeyForService(serviceType)];
+}
+
+// رسائل شاشة حالة الطلب — دالة نقية (بلا DOM) تعتمد على نوع الخدمة +
+// حالة الطلب الحقيقية القادمة من get_trip_request_status. يظهر الاسم
+// الوظيفي مرة واحدة فقط في كل رسالة، والرسالة الثانية تستخدم ضميراً
+// («تعيينه»/«وصوله») بدل إعادة الاسم.
+//   headline: العنوان قبل تعيين مزوّد الخدمة (بدل اسمه)
+//   sub     : السطر الفرعي تحت العنوان/الاسم
+//   banner  : الشارة البارزة (null = مخفية)
+function statusMessages(serviceType, status, hasDriver) {
+  const role = roleTitleForService(serviceType).name;
+  if (status === 'cancelled') {
+    return hasDriver
+      ? { headline: null, sub: 'تم إلغاء الطلب', banner: null }
+      : { headline: 'تم إلغاء الطلب', sub: 'يمكنك إرسال طلب جديد في أي وقت', banner: null };
+  }
+  if (status === 'completed') {
+    return hasDriver
+      ? { headline: null, sub: 'شكرًا لاختيارك يمّك', banner: null }
+      : { headline: 'اكتمل الطلب', sub: 'شكرًا لاختيارك يمّك', banner: null };
+  }
+  if (!hasDriver) {
+    return { headline: `بانتظار تعيين ${role}`, sub: 'سنُعلمك فور تعيينه', banner: null };
+  }
+  if (status === 'arrived') {
+    return { headline: null, sub: 'بانتظارك الآن', banner: `${role} وصل إلى موقعك` };
+  }
+  return { headline: null, sub: 'سنُعلمك عند وصوله', banner: `${role} في الطريق إليك` };
+}
+
 function roleBadgeHtml(serviceType) {
   const key = roleKeyForService(serviceType);
   return `<span class="role-badge role-${key}">${ROLE_LABELS[key]}</span>`;
@@ -60,7 +104,7 @@ function roleBadgeHtml(serviceType) {
 // make correctly-uploaded images silently keep showing the SVG
 // fallback. The tag forces every client to treat this as a brand-new
 // URL and re-fetch it for real.
-const VEHICLE_PHOTOS_VERSION = 'v=2026092201';
+const VEHICLE_PHOTOS_VERSION = 'v=2026100201';
 const VEHICLE_PHOTOS = {
   taxi:      `assets/vehicles/taxi.jpg?${VEHICLE_PHOTOS_VERSION}`,       // سيارة تكسي (سيدان صفراء/عادية)
   private:   `assets/vehicles/private.jpg?${VEHICLE_PHOTOS_VERSION}`,    // سيارة خصوصي (سيدان فاخرة)
@@ -88,7 +132,7 @@ const VEHICLE_PHOTOS = {
 // فشل التحميل = لا كلاس يُضاف = تبقى الأيقونة الأصلية ظاهرة تلقائياً
 // تماماً كحالها قبل إضافة صور التصنيف هذه بالكامل (لا دائرة فارغة بأي
 // حالة). لا تغيير على places.js/market.js ولا على أي بيانات Supabase.
-const CATEGORY_PHOTOS_VERSION = 'v=2026092301';
+const CATEGORY_PHOTOS_VERSION = 'v=2026100201';
 const CATEGORY_PHOTOS = {
   'restaurants':     `assets/places/restaurants.jpg?${CATEGORY_PHOTOS_VERSION}`,
   'markets':         `assets/places/markets.jpg?${CATEGORY_PHOTOS_VERSION}`,
@@ -972,11 +1016,11 @@ async function loadServiceDrivers(serviceType) {
       const canRequest = row.status === 'active';
       const hasActions = cleanTel || waTarget || canRequest;
 
-      const roleLabel = roleLabelForService(serviceType);
+      const roleTitle = roleTitleForService(serviceType);
       const actionsHtml = hasActions ? `
         <div class="driver-actions">
-          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال بـ${roleLabel}">${CALL_ICON_SVG} اتصال</a>` : ''}
-          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب ${roleLabel}">${WA_ICON_SVG} واتساب</a>` : ''}
+          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال ${roleTitle.byName}">${CALL_ICON_SVG} اتصال</a>` : ''}
+          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب ${roleTitle.name}">${WA_ICON_SVG} واتساب</a>` : ''}
           ${canRequest ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
         </div>
       ` : '';
@@ -994,7 +1038,7 @@ async function loadServiceDrivers(serviceType) {
       `;
     }).join('');
 
-    wrap.innerHTML = `<p class="section-label">السواق</p>${cardsHtml}`;
+    wrap.innerHTML = `<p class="section-label">${roleTitleForService(serviceType).plural}</p>${cardsHtml}`;
     wrap.hidden = false;
   } catch (err) {
     console.error('loadServiceDrivers failed', err);
@@ -1541,7 +1585,7 @@ async function handleSubmit(e) {
     if (!state.featuredDriverPhone) {
       console.log('[SUBMIT] no driver selected — stopping before RPC');
       haptic(20);
-      showMsg(`يرجى اختيار ${roleLabelForService(state.currentService)} متاح من القائمة أولاً`);
+      showMsg(`يرجى اختيار ${roleTitleForService(state.currentService).available} من القائمة أولاً`);
       return;
     }
 
@@ -1583,6 +1627,11 @@ async function handleSubmit(e) {
       p_pickup_lat: parsedPickupLat,
       p_pickup_lng: parsedPickupLng,
       p_dropoff_location: dropoff || null,
+      // Real drop-off coordinates exactly as set by the map tap/drag or
+      // the typed-address geocoding (state.dropoffLatLng) — null when the
+      // customer never set a drop-off point. Both or neither.
+      p_dropoff_lat: state.dropoffLatLng && Number.isFinite(Number(state.dropoffLatLng.lat)) && Number.isFinite(Number(state.dropoffLatLng.lng)) ? Number(state.dropoffLatLng.lat) : null,
+      p_dropoff_lng: state.dropoffLatLng && Number.isFinite(Number(state.dropoffLatLng.lat)) && Number.isFinite(Number(state.dropoffLatLng.lng)) ? Number(state.dropoffLatLng.lng) : null,
       p_scheduled_at,
       p_notes: notes || null,
       // The driver the customer actually tapped "طلب" on (if any) —
@@ -1727,16 +1776,20 @@ function renderStatusView() {
   document.getElementById('statusPickup').textContent = s.pickup || '—';
   document.getElementById('statusDropoff').textContent = s.dropoff || '—';
 
-  // مسمى الدور المعروض قبل تعيين مزوّد الخدمة — نفس منطق applyDriverInfo
-  // أدناه لاحقاً بمجرد وصول بيانات حقيقية، بدون أي بيانات وهمية هنا.
+  // رسائل ما قبل تعيين مزوّد الخدمة — المسمى من نوع الخدمة الفعلي للطلب،
+  // يظهر مرة واحدة فقط، بدون أي بيانات وهمية.
   const pendingTextEl = document.getElementById('driverPendingText');
   const pendingSubEl = document.getElementById('driverPendingSub');
   const callBtnEl = document.getElementById('callDriverBtn');
   const waBtnEl = document.getElementById('whatsappDriverBtn');
-  if (pendingTextEl) pendingTextEl.innerHTML = `بانتظار تعيين ${roleBadgeHtml(s.service_type)}`;
-  if (pendingSubEl) pendingSubEl.innerHTML = `سنُعلمك فور تعيين ${roleBadgeHtml(s.service_type)}`;
-  if (callBtnEl) callBtnEl.setAttribute('aria-label', `اتصال بـ${roleLabelForService(s.service_type)}`);
-  if (waBtnEl) waBtnEl.setAttribute('aria-label', `واتساب ${roleLabelForService(s.service_type)}`);
+  const phoneTagEl = document.getElementById('driverPhoneTag');
+  const roleTitle = roleTitleForService(s.service_type);
+  const pendingMsg = statusMessages(s.service_type, 'new', false);
+  if (pendingTextEl) pendingTextEl.textContent = pendingMsg.headline;
+  if (pendingSubEl) pendingSubEl.textContent = pendingMsg.sub;
+  if (callBtnEl) callBtnEl.setAttribute('aria-label', `اتصال ${roleTitle.byName}`);
+  if (waBtnEl) waBtnEl.setAttribute('aria-label', `واتساب ${roleTitle.name}`);
+  if (phoneTagEl) phoneTagEl.setAttribute('aria-label', `اتصال ${roleTitle.byName}`);
 
   renderTimeline('new');
   const businessLink = buildWhatsappLink();
@@ -1815,9 +1868,8 @@ function applyDriverInfo(row) {
     pendingText.textContent = row.driver_name;
     const isArrived = row.status === 'arrived';
     const assignedServiceType = state.lastSubmission?.service_type;
-    pendingSub.innerHTML = isArrived
-      ? `${roleBadgeHtml(assignedServiceType)} وصل لموقعك`
-      : `${roleBadgeHtml(assignedServiceType)} في الطريق إليك`;
+    const liveMsg = statusMessages(assignedServiceType, row.status, true);
+    pendingSub.textContent = liveMsg.sub;
 
     if (ratingTag) {
       if (row.driver_rating != null) {
@@ -1847,17 +1899,19 @@ function applyDriverInfo(row) {
       }
     }
 
-    // Status banner (في الطريق / وصل) — same row.status already used
-    // above for driverPendingSub, just surfaced as a clearer banner too.
+    // Status banner (في الطريق / وصل) — الاسم الوظيفي هنا فقط (مرة واحدة
+    // في البطاقة)، والسطر الفرعي أعلاه يستخدم ضميراً بدل تكراره.
     if (banner && bannerText) {
-      bannerText.innerHTML = isArrived
-        ? `${roleBadgeHtml(assignedServiceType)} وصل — بانتظارك`
-        : `${roleBadgeHtml(assignedServiceType)} في الطريق إليك`;
-      banner.classList.toggle('arrived', isArrived);
-      banner.hidden = false;
+      if (liveMsg.banner) {
+        bannerText.textContent = liveMsg.banner;
+        banner.classList.toggle('arrived', isArrived);
+        banner.hidden = false;
+      } else {
+        banner.hidden = true;
+      }
     }
 
-    if (row.eta_minutes != null && row.status !== 'arrived' && row.status !== 'completed') {
+    if (row.eta_minutes != null && row.status !== 'arrived' && row.status !== 'completed' && row.status !== 'cancelled') {
       etaWrap.hidden = false;
       document.getElementById('driverEtaVal').textContent = row.eta_minutes;
     } else {
@@ -1903,6 +1957,9 @@ function applyDriverInfo(row) {
   } else {
     card.classList.add('driver-pending');
     card.classList.remove('driver-live');
+    const pendingMsg = statusMessages(state.lastSubmission?.service_type, row.status, false);
+    pendingText.textContent = pendingMsg.headline;
+    pendingSub.textContent = pendingMsg.sub;
     if (statusDot) statusDot.hidden = true;
     if (ratingTag) ratingTag.hidden = true;
     if (colorTag) colorTag.hidden = true;
@@ -2832,7 +2889,7 @@ function initHelpAccordion() {
    past requests, by phone, same trust model as get_trip_request_status.
    ============================================================ */
 function setActiveNavTab(view) {
-  const map = { home: 'home', transport: 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
+  const map = { home: 'home', transport: 'home', 'svc-restaurants': 'home', 'svc-markets': 'home', 'svc-futureoffice': 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
   const activeKey = map[view] || null;
   document.querySelectorAll('.bnav-item[data-nav]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.nav === activeKey);
@@ -3734,6 +3791,17 @@ document.addEventListener('DOMContentLoaded', () => {
       var pendingLangRetry = false;
       var sessionError = false;
       var langIndex = 0;
+      // --- إدارة دورة الجلسات المتكررة ---
+      // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل
+      // (بدونه كان نص/خطأ قديم يلوّث الجلسة التالية).
+      // مؤقّت الحماية: بعض المتصفحات لا تُطلق onend بعد stop() أو بعد
+      // النتيجة النهائية أو بعد الخطأ، فيبقى active=true للأبد ويصير الزر
+      // «ميتاً» (الضغطة التالية تستدعي stop() على جلسة منتهية). عند انقضاء
+      // المهلة تُنهى الجلسة قسراً ويتحرر الزر.
+      var sessionId = 0;
+      var stopping = false;      // طُلب الإيقاف وننتظر onend
+      var guardTimer = null;
+      var guardDue = 0;
       micBtn.hidden = false;
       micBtn.setAttribute('aria-pressed', 'false');
       function yaSpeechDisable() { // إخفاء نهائي بعد اكتشاف عدم الدعم فعلياً
@@ -3745,8 +3813,14 @@ document.addEventListener('DOMContentLoaded', () => {
       function yaSpeechNotify(msg) {
         try { if (typeof toast === 'function') toast(msg, 5000); } catch (e) {}
       }
+      function yaSpeechClearGuard() {
+        if (guardTimer) { clearTimeout(guardTimer); guardTimer = null; }
+        guardDue = 0;
+      }
       function yaSpeechIdle() {
+        yaSpeechClearGuard();
         active = false;
+        stopping = false;
         micBtn.classList.remove('ya-listening');
         micBtn.setAttribute('aria-pressed', 'false');
       }
@@ -3758,8 +3832,60 @@ document.addEventListener('DOMContentLoaded', () => {
         yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
       }
 
+      // نهاية الجلسة (من onend أو من إنهاء قسري) — منطق واحد للحالتين.
+      function yaSpeechHandleEnd(sid) {
+        if (sid !== sessionId) return;
+        yaSpeechClearGuard();
+        recognition = null;
+        if (pendingLangRetry && !stoppedByUser) {
+          pendingLangRetry = false;
+          try { yaSpeechStart(); return; } catch (e) {
+            try { console.error('[Yammak speech] retry failed', e); } catch (e2) {}
+            yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((e && e.name) || 'start-failed') + ']');
+          }
+        }
+        pendingLangRetry = false;
+        // انتهت الجلسة دون onresult نهائي لكن وصل نص مؤقت: اعتمده
+        if (lastText && !finalHandled) yaSpeechFinish(lastText);
+        // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
+        if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
+        yaSpeechIdle();
+      }
+      // إنهاء قسري: فصل معالجات الجلسة (لا يصل منها أي حدث بعد الآن) ثم abort.
+      function yaSpeechForceEnd() {
+        var old = recognition;
+        var sid = sessionId;
+        if (old) {
+          old.onstart = old.onresult = old.onerror = old.onend = old.onspeechend = old.onaudioend = null;
+          try { old.abort(); } catch (e) {}
+        }
+        yaSpeechHandleEnd(sid);
+      }
+      function yaSpeechArmGuard(ms) {
+        // لا نمدّد مهلة أقصر معلّقة: الأقرب موعداً يبقى
+        if (guardTimer && guardDue <= Date.now() + ms) return;
+        yaSpeechClearGuard();
+        guardDue = Date.now() + ms;
+        var sid = sessionId;
+        guardTimer = setTimeout(function () {
+          guardTimer = null;
+          if (sid !== sessionId || !active) return;
+          try { console.warn('[Yammak speech] لم يصل onend خلال ' + ms + 'ms — إنهاء قسري للجلسة'); } catch (e) {}
+          yaSpeechForceEnd();
+        }, ms);
+      }
+      // إيقاف صامت (تغيّبت الصفحة/التطبيق): لا نترك المايك مفتوحاً ولا الزر معلّقاً.
+      function yaSpeechAbortAll() {
+        if (!active) return;
+        stoppedByUser = true;
+        yaSpeechForceEnd();
+      }
+      document.addEventListener('visibilitychange', function () { if (document.hidden) yaSpeechAbortAll(); });
+      window.addEventListener('pagehide', yaSpeechAbortAll);
+
       function yaSpeechStart() {
         var rec = new SpeechRecognitionCtor();
+        var sid = ++sessionId;
         recognition = rec;
         rec.lang = YA_SPEECH_LANGS[langIndex];
         rec.continuous = false;
@@ -3767,10 +3893,12 @@ document.addEventListener('DOMContentLoaded', () => {
         rec.maxAlternatives = 1;
 
         rec.onstart = function () {
+          if (sid !== sessionId) return;
           micBtn.classList.add('ya-listening');
           micBtn.setAttribute('aria-pressed', 'true');
         };
         rec.onresult = function (ev) {
+          if (sid !== sessionId) return;
           var text = '';
           var isFinal = false;
           for (var i = 0; i < ev.results.length; i++) {
@@ -3784,48 +3912,52 @@ document.addEventListener('DOMContentLoaded', () => {
           lastText = text;
           if (isFinal) {
             yaSpeechFinish(text);
+            yaSpeechArmGuard(2500); // continuous=false: onend يتبع النتيجة النهائية
           } else {
             input.value = text; // نص مؤقت أثناء الكلام
           }
         };
+        rec.onspeechend = rec.onaudioend = function () {
+          if (sid !== sessionId) return;
+          yaSpeechArmGuard(5000);
+        };
         rec.onerror = function (ev) {
+          if (sid !== sessionId) return;
           var code = (ev && ev.error) ? ev.error : 'unknown';
           try { console.error('[Yammak speech] error=' + code, 'lang=' + rec.lang, (ev && ev.message) || ''); } catch (e) {}
-          if (code === 'aborted' && stoppedByUser) return;
+          if (code === 'aborted' && (stoppedByUser || stopping)) return;
           sessionError = true;
           if (code === 'language-not-supported' && langIndex < YA_SPEECH_LANGS.length - 1) {
             sessionError = false;
             langIndex++;
-            pendingLangRetry = true; // يُعاد التشغيل في onend باللغة التالية
+            pendingLangRetry = true; // يُعاد التشغيل عند onend باللغة التالية
+            yaSpeechArmGuard(1500);
             return;
           }
           var msg = YA_SPEECH_ERRORS[code] || 'تعذّر التعرف على الصوت';
           yaSpeechNotify(msg + ' [' + code + ']');
           // PWA على iPhone: الخدمة غير متاحة فعلياً → أخفِ الزر وأظهر التلميح
-          if (code === 'service-not-allowed' && yaIsIOS && yaIsStandalone) yaSpeechDisable();
+          if (code === 'service-not-allowed' && yaIsIOS && yaIsStandalone) { yaSpeechDisable(); return; }
+          yaSpeechArmGuard(1500); // بعض المتصفحات لا تُطلق onend بعد الخطأ
         };
         rec.onend = function () {
-          if (rec !== recognition) return;
-          if (pendingLangRetry) {
-            pendingLangRetry = false;
-            try { yaSpeechStart(); return; } catch (e) {
-              try { console.error('[Yammak speech] retry failed', e); } catch (e2) {}
-              yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((e && e.name) || 'start-failed') + ']');
-            }
-          }
-          // انتهت الجلسة دون onresult نهائي لكن وصل نص مؤقت: اعتمده
-          if (lastText && !finalHandled) yaSpeechFinish(lastText);
-          // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
-          if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
-          yaSpeechIdle();
+          yaSpeechHandleEnd(sid);
         };
         rec.start();
       }
 
       micBtn.addEventListener('click', function () {
-        if (active) { // ضغطة ثانية = إيقاف التسجيل (يُسلِّم ما التقطه)
+        if (active) {
+          if (stopping) { // ضغطة أخرى أثناء انتظار الإيقاف: أنهِ قسراً بدل الانتظار
+            stoppedByUser = true;
+            yaSpeechForceEnd();
+            return;
+          }
+          // ضغطة ثانية = إيقاف التسجيل (يُسلِّم ما التقطه)
           stoppedByUser = true;
+          stopping = true;
           try { recognition.stop(); } catch (e) {}
+          yaSpeechArmGuard(2000);
           return;
         }
         active = true;
@@ -3835,6 +3967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastText = '';
         pendingLangRetry = false;
         sessionError = false;
+        stopping = false;
         try {
           yaSpeechStart();
           doHaptic();
@@ -3937,6 +4070,7 @@ document.addEventListener('DOMContentLoaded', () => {
       bar.classList.remove('ya-msg-info', 'ya-msg-success', 'ya-msg-warning', 'ya-msg-offer');
       bar.classList.add('ya-msg-' + (type || 'info'));
     }
+    window.yaShowMessage = yaShowMessage;
 
     function yaShowAppOpenMessage() {
       if (YA_MESSAGES.alerts && YA_MESSAGES.alerts.length) {
@@ -4091,12 +4225,28 @@ document.addEventListener('DOMContentLoaded', () => {
     body.innerHTML = '<p class="sp-empty">' + esc(text) + '</p>';
     setCount(key, 0); setMore(key, false);
   }
-  function showError(key) {
+  // تصنيف الخطأ الحقيقي: «تحقق من الإنترنت» فقط عند فشل الشبكة فعلاً؛ أي خطأ من
+  // Supabase/PostgREST (عمود/جدول غير موجود، صلاحيات RLS …) يُعرض بكوده ورسالته الحقيقية.
+  function errInfo(err) {
+    var msg = String((err && (err.message || err.details)) || err || '');
+    var net = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      /failed to fetch|networkerror|network request failed|load failed/i.test(msg);
+    var parts = [];
+    if (err && err.code) parts.push(err.code);
+    if (msg) parts.push(msg);
+    if (err && err.hint) parts.push('hint: ' + err.hint);
+    return { net: net, detail: parts.join(' — ') };
+  }
+  function showError(key, err) {
     var body = bodyOf(key);
     if (!body) return;
+    var info = errInfo(err);
     body.className = 'sp-body';
     body.innerHTML =
-      '<div class="sp-error" role="alert"><p>تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p>' +
+      '<div class="sp-error" role="alert"><p>' +
+        (info.net ? 'تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.'
+                  : 'تعذّر تحميل البيانات من الخادم.') + '</p>' +
+      (!info.net && info.detail ? '<p class="sp-error-detail" dir="ltr" style="font-size:12px;opacity:.8;word-break:break-word">' + esc(info.detail) + '</p>' : '') +
       '<button type="button" class="sp-retry" data-sp-retry="' + key + '">إعادة المحاولة</button></div>';
     setCount(key, 0); setMore(key, false);
   }
@@ -4247,7 +4397,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadedAt[key] = Date.now();
     } catch (err) {
       console.error('space content failed: ' + key, err);
-      if (!silent || !cache[key]) { delete cache[key]; showError(key); }
+      if (!silent || !cache[key]) { delete cache[key]; showError(key, err); }
     } finally {
       inflight[key] = false;
     }
@@ -4336,6 +4486,383 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       panels.forEach(function (p) { onVisible(p.getAttribute('data-space')); });
     }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+/* =========================================================================
+   خارطة يمّك — صفحة الخريطة المستقلة (المرحلة 2: الخارطة)
+   -------------------------------------------------------------------------
+   إضافة معزولة: لا تُنشئ خريطة ثانية ولا GPS جديداً ولا RPC. تستخدم نفس
+   state.map/Leaflet ونفس الدوال القائمة: locateMe, setPickup/setDropoff
+   (عبر نقرة الخريطة الأصلية), selectService, openBooking, haversineKm,
+   SERVICES (الأسعار من service_prices) و ROAD_DISTANCE_FACTOR.
+   المسافة/السعر تُحسب بنفس معادلة updatePriceBar؛ لا يوجد مصدر حقيقي للزمن
+   (لا Routing API) فلا يُعرض زمن. البحث عن مكان = Nominatim الذي يستخدمه
+   التطبيق أصلاً (عند الضغط على بحث/Enter فقط).
+   ========================================================================= */
+(function () {
+  'use strict';
+  var isOpen = false, tick = null, lastRoute = '', hooked = false;
+  function $(id) { return document.getElementById(id); }
+  function shell() { return document.querySelector('.app-shell'); }
+  function val(id) { var e = $(id); return e ? String(e.value || '').trim() : ''; }
+  function key() { return state.currentService || 'taxi'; }
+
+  function buildSvcs() {
+    var wrap = $('ymSvcs'); if (!wrap) return;
+    wrap.innerHTML = '';
+    Object.keys(SERVICES).forEach(function (k) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'ym-svc'; b.setAttribute('data-k', k);
+      var img = document.createElement('img');
+      img.alt = ''; img.src = VEHICLE_PHOTOS[k];
+      img.onerror = function () {
+        var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        s.setAttribute('viewBox', '0 0 24 24'); s.innerHTML = ICONS[SERVICES[k].icon] || '';
+        if (img.parentNode) img.parentNode.replaceChild(s, img);
+      };
+      var t = document.createElement('span'); t.textContent = SERVICES[k].label;
+      b.appendChild(img); b.appendChild(t);
+      b.addEventListener('click', function () { selectService(k); refresh(); });
+      wrap.appendChild(b);
+    });
+  }
+
+  function setMode(m) {
+    state.mapTargetMode = m;
+    $('ymFromRow').classList.toggle('act', m === 'pickup');
+    $('ymToRow').classList.toggle('act', m === 'dropoff');
+    document.querySelectorAll('.mt-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.target === m); });
+  }
+
+  function refresh() {
+    var p = state.pickupLatLng, d = state.dropoffLatLng, k = key(), svc = SERVICES[k];
+    var from = val('pickup') || (p ? 'تم تحديد موقعك' : '');
+    $('ymFrom').textContent = from || 'من أين؟ حدّد على الخريطة أو اضغط «موقعي»';
+    $('ymLocT').textContent = from || 'لم يُحدَّد بعد';
+    var to = $('ymTo');
+    if (d && document.activeElement !== to && val('dropoff')) to.value = val('dropoff');
+    document.querySelectorAll('.ym-svc').forEach(function (b) { b.classList.toggle('act', b.getAttribute('data-k') === k); });
+    var stats = $('ymStats'), go = $('ymGo');
+    if (p && d && svc) {
+      var km = haversineKm(p.lat, p.lng, d.lat, d.lng) * ROAD_DISTANCE_FACTOR;
+      var total = svc.base + km * svc.perKm;
+      $('ymKm').textContent = km.toFixed(1) + ' كم';
+      $('ymPrice').textContent = Math.round(total).toLocaleString('en-US') + ' دينار';
+      stats.hidden = false; $('ymHint').hidden = false;
+      go.textContent = 'تابع طلب ' + svc.label; go.classList.remove('off');
+      var rk = [p.lat, p.lng, d.lat, d.lng].join(',');
+      if (rk !== lastRoute && state.map) {
+        lastRoute = rk;
+        state.map.fitBounds(L.latLngBounds([[p.lat, p.lng], [d.lat, d.lng]]),
+          { paddingTopLeft: [36, 210], paddingBottomRight: [36, 340], maxZoom: 16 });
+      }
+    } else {
+      lastRoute = ''; stats.hidden = true; $('ymHint').hidden = true;
+      go.textContent = 'اختر وجهتك'; go.classList.add('off');
+    }
+  }
+
+  function search() {
+    var t = val('ymTo'), res = $('ymRes');
+    if (t.length < 2) return;
+    res.innerHTML = '<div class="ym-note">جارٍ البحث…</div>';
+    fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&accept-language=ar&countrycodes=iq&q=' + encodeURIComponent(t))
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        res.innerHTML = '';
+        if (!list || !list.length) { res.innerHTML = '<div class="ym-note">لا نتائج — جرّب اسماً آخر أو حدّد الوجهة على الخريطة</div>'; return; }
+        list.forEach(function (it) {
+          var b = document.createElement('button'); b.type = 'button';
+          b.textContent = String(it.display_name || '').split(',').slice(0, 3).join('، ');
+          b.addEventListener('click', function () {
+            var label = b.textContent;
+            $('dropoff').value = label; $('ymTo').value = label; res.innerHTML = '';
+            $('ymTo').blur(); $('yMap').classList.remove('srch');
+            setDropoff(parseFloat(it.lat), parseFloat(it.lon), { reverseGeocode: false, fly: false });
+            setMode('pickup'); refresh();
+          });
+          res.appendChild(b);
+        });
+      })
+      .catch(function () { res.innerHTML = '<div class="ym-note">تعذّر البحث — تحقق من الاتصال بالإنترنت</div>'; });
+  }
+
+  function inv() { if (state.map) state.map.invalidateSize(); }
+
+  window.openYMap = function () {
+    var sh = shell(), root = $('yMap');
+    if (isOpen || !sh || !root || sh.classList.contains('is-fullscreen-view')) return;
+    if (!state.map) { toast('تعذّر تحميل الخريطة الآن — حاول لاحقاً'); return; }
+    isOpen = true; buildSvcs(); setMode('pickup');
+    if (!hooked) {   // أي نقرة على الخريطة تُنهي وضع البحث (تُظهر البطاقة السفلية) بعد أن يعالجها المعالج الأصلي
+      hooked = true;
+      state.map.on('click', function () {
+        if (!isOpen) return;
+        $('ymTo').blur(); $('ymRes').innerHTML = ''; $('yMap').classList.remove('srch');
+      });
+    }
+    sh.classList.add('ymap-on'); root.classList.add('on'); root.setAttribute('aria-hidden', 'false');
+    setTimeout(function () {
+      inv();
+      if (state.pickupLatLng) state.map.setView([state.pickupLatLng.lat, state.pickupLatLng.lng], 15);
+    }, 60);
+    if (!state.pickupLatLng) locateMe(true);
+    refresh(); tick = setInterval(refresh, 700);
+    haptic();
+  };
+
+  window.closeYMap = function () {
+    var sh = shell(), root = $('yMap');
+    if (!isOpen) return;
+    isOpen = false; clearInterval(tick); tick = null;
+    setMode('pickup');
+    $('ymRes').innerHTML = '';
+    root.classList.remove('srch'); root.classList.remove('on'); root.setAttribute('aria-hidden', 'true');
+    if (sh) sh.classList.remove('ymap-on');
+    setTimeout(inv, 60);
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!$('yMap')) return;
+    $('ymBack').addEventListener('click', function () { closeYMap(); });
+    $('ymFromRow').addEventListener('click', function () { setMode('pickup'); $('ymRes').innerHTML = ''; $('yMap').classList.remove('srch'); });
+    $('ymTo').addEventListener('focus', function () { setMode('dropoff'); $('yMap').classList.add('srch'); });
+    $('ymTo').addEventListener('blur', function () { setTimeout(function () { if (!$('ymRes').children.length) $('yMap').classList.remove('srch'); }, 150); });
+    $('ymTo').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+    $('ymTo').addEventListener('input', function () {
+      $('ymRes').innerHTML = '';
+      if (state.dropoffLatLng) {            // نص جديد يُلغي الوجهة السابقة (كما يفعل حقل #dropoff الأصلي)
+        state.dropoffLatLng = null; $('dropoffLat').value = ''; $('dropoffLng').value = ''; $('dropoff').value = '';
+        if (state.map) {
+          if (state.dropoffMarker) { state.map.removeLayer(state.dropoffMarker); state.dropoffMarker = null; }
+          if (state.decorLine) { state.map.removeLayer(state.decorLine); state.decorLine = null; }
+        }
+        updatePriceBar(); refresh();
+      }
+    });
+    $('ymSearch').addEventListener('click', search);
+    $('ymZoomIn').addEventListener('click', function () { if (state.map) state.map.zoomIn(); });
+    $('ymZoomOut').addEventListener('click', function () { if (state.map) state.map.zoomOut(); });
+    $('ymLocate').addEventListener('click', function () {
+      var b = $('ymLocate'); b.classList.add('locating');
+      locateMe(false); haptic();
+      setTimeout(function () { b.classList.remove('locating'); }, 1800);
+    });
+    $('ymGo').addEventListener('click', function () {
+      if (!state.pickupLatLng || !state.dropoffLatLng) { setMode(state.pickupLatLng ? 'dropoff' : 'pickup'); if (state.pickupLatLng) $('ymTo').focus(); else toast('حدّد نقطة الانطلاق أولاً'); return; }
+      var k = key();
+      closeYMap();
+      openBooking(k);   // نفس مسار الطلب الحالي بلا أي تغيير (يقرأ #pickup/#dropoff والإحداثيات)
+    });
+  });
+})();
+
+
+/* =========================================================================
+   المرحلة 3 — صفحات الخدمات المستقلة (المطاعم / الأسواق / مكتب المستقبل)
+   -------------------------------------------------------------------------
+   كل قسم من هذه الأقسام الثلاثة كان يفتح شاشة places مشتركة بتبويبات (تخلط
+   المطاعم والأسواق). هنا لكل قسم صفحته المستقلة data-view="svc-<key>" ببياناته فقط.
+   - المصدر: نفس جداول places.js وبنفس الشروط (restaurants / markets / future_office،
+     active = true، ترتيب sort_order ثم created_at) — قراءة فقط، بلا RPC جديد، بلا كتابة.
+   - لا Mock ولا Demo: فارغ → «قريباً…»، فشل → «تعذّر التحميل» + إعادة المحاولة.
+   - التفاصيل: openPlaceDetail القائم (places.js) كما في المرحلة 2، والرجوع من التفاصيل
+     يعود إلى هذه الصفحة (placesState.detailBackTarget = 'svc-<key>').
+   - النقل والتوصيل / خدمات يمّك / بيع وشراء كانت أصلاً صفحات مستقلة (transport،
+     yammakServices، market) فتبقى كما هي مع نفس الهيرو والتصميم الموحّد (CSS + HTML فقط).
+   - لا يمسّ الطلبات ولا GPS ولا الخارطة ولا السائقين ولا التسعير ولا الصوت.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  var PAGE = 24;
+  var CFG = {
+    restaurants:  { table: 'restaurants',   placeKind: 'restaurants',  noun: 'مطاعم',  one: 'مطعم',  msg: 'restaurants' },
+    markets:      { table: 'markets',       placeKind: 'markets',      noun: 'أسواق',  one: 'سوق',   msg: 'markets' },
+    futureoffice: { table: 'future_office', placeKind: 'futureOffice', noun: 'فروع',   one: 'فرع',   msg: 'futureOffice' }
+  };
+  var LEGACY_IDS = { soonCardRestaurants: 'restaurants', soonCardMarkets: 'markets', soonCardFutureOffice: 'futureoffice' };
+
+  var rowsBy = {};     // key -> rows المحمّلة
+  var totalBy = {};    // key -> العدد الكلي الحقيقي
+  var busy = {};       // key -> جاري التحميل
+  var loadedAt = {};
+  var STALE_MS = 5 * 60 * 1000;
+
+  function esc(t) { return escapeHtmlText(t); }
+  function attr(t) { return escapeHtmlAttr(t); }
+  function pageEl(key) { return document.querySelector('.svc-page[data-svc="' + key + '"]'); }
+  function q(key, sel) { var p = pageEl(key); return p && p.querySelector(sel); }
+
+  var CLOCK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHEV = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function card(cfg, row) {
+    var img = row.image_url ? '<img src="' + attr(row.image_url) + '" alt="" loading="lazy">' : '';
+    return '<button type="button" class="svc-card" data-svc-id="' + attr(row.id) + '">' +
+      '<span class="svc-card-img sp-ph-' + cfg.placeKind + (img ? '' : ' is-noimg') + '">' + img + '</span>' +
+      '<span class="svc-card-body">' +
+        '<b class="svc-card-title">' + esc(row.name) + '</b>' +
+        (row.category ? '<span class="svc-card-cat">' + esc(row.category) + '</span>' : '') +
+        (row.hours_text ? '<span class="svc-card-meta">' + CLOCK + '<span>' + esc(row.hours_text) + '</span></span>' : '') +
+      '</span>' +
+      '<span class="svc-card-chev">' + CHEV + '</span>' +
+    '</button>';
+  }
+
+  function setCount(key, n) {
+    var el = q(key, '[data-svc-count]');
+    if (!el) return;
+    if (n > 0) { el.textContent = String(n); el.hidden = false; } else { el.hidden = true; }
+  }
+  function setMore(key, show) { var b = q(key, '[data-svc-more]'); if (b) b.hidden = !show; }
+  function skeleton(key) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    body.className = 'svc-body svc-body-skel';
+    body.innerHTML = '<span class="svc-skel"></span><span class="svc-skel"></span><span class="svc-skel"></span><span class="svc-skel"></span>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function showEmpty(key) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    body.className = 'svc-body';
+    body.innerHTML = '<p class="svc-empty">قريباً — لا توجد ' + esc(CFG[key].noun) + ' مضافة بعد</p>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function errInfo(err) {
+    var msg = String((err && (err.message || err.details)) || err || '');
+    var net = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      /failed to fetch|networkerror|network request failed|load failed/i.test(msg);
+    var parts = [];
+    if (err && err.code) parts.push(err.code);
+    if (msg) parts.push(msg);
+    if (err && err.hint) parts.push('hint: ' + err.hint);
+    return { net: net, detail: parts.join(' — ') };
+  }
+  function showError(key, err) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    var info = errInfo(err);
+    body.className = 'svc-body';
+    body.innerHTML = '<div class="svc-error" role="alert"><p>' +
+      (info.net ? 'تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.'
+                : 'تعذّر تحميل البيانات من الخادم.') + '</p>' +
+      (!info.net && info.detail ? '<p dir="ltr" style="font-size:12px;opacity:.8;word-break:break-word">' + esc(info.detail) + '</p>' : '') +
+      '<button type="button" class="svc-retry" data-svc-retry>إعادة المحاولة</button></div>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function paint(key) {
+    var cfg = CFG[key], rows = rowsBy[key] || [], body = q(key, '[data-svc-body]');
+    if (!body) return;
+    if (!rows.length) { showEmpty(key); return; }
+    body.className = 'svc-body svc-list';
+    body.innerHTML = rows.map(function (r) { return card(cfg, r); }).join('');
+    setCount(key, totalBy[key] || rows.length);
+    setMore(key, rows.length < (totalBy[key] || rows.length));
+  }
+
+  async function load(key, opts) {
+    opts = opts || {};
+    var cfg = CFG[key];
+    if (!cfg || busy[key]) return;
+    busy[key] = true;
+    var more = !!opts.more;
+    var from = more ? (rowsBy[key] || []).length : 0;
+    if (!more && (!opts.silent || !rowsBy[key])) skeleton(key);
+    var moreBtn = q(key, '[data-svc-more]');
+    if (more && moreBtn) { moreBtn.disabled = true; moreBtn.textContent = 'جارٍ التحميل…'; }
+    try {
+      if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('supabaseClient unavailable');
+      var res = await supabaseClient
+        .from(cfg.table)
+        .select('*', { count: 'exact' })
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (res.error) throw res.error;
+      var data = res.data || [];
+      rowsBy[key] = more ? (rowsBy[key] || []).concat(data) : data;
+      totalBy[key] = typeof res.count === 'number' ? res.count : rowsBy[key].length;
+      loadedAt[key] = Date.now();
+      paint(key);
+    } catch (err) {
+      console.error('svc page failed: ' + key, err);
+      if (more) { /* نُبقي ما عُرض ونتيح إعادة الضغط */ }
+      else if (!opts.silent || !rowsBy[key]) { delete rowsBy[key]; showError(key, err); }
+    } finally {
+      busy[key] = false;
+      if (moreBtn) { moreBtn.disabled = false; moreBtn.textContent = 'عرض المزيد'; }
+    }
+  }
+
+  window.openSvcPage = function (key) {
+    var cfg = CFG[key];
+    if (!cfg || !pageEl(key)) return false;
+    showView('svc-' + key);
+    if (typeof sheet !== 'undefined' && sheet && sheet.setSnap) sheet.setSnap('full');
+    if (typeof haptic === 'function') haptic();
+    // رسالة التوجيه نفسها التي كانت تُعرض عند ضغط البطاقة القديمة (شريط الرئيسية)
+    if (typeof window.yaShowMessage === 'function' && window.YA_MESSAGES && YA_MESSAGES.place) {
+      window.yaShowMessage(YA_MESSAGES.place[cfg.msg], 'success');
+    }
+    if (!rowsBy[key] || Date.now() - (loadedAt[key] || 0) > STALE_MS) load(key, { silent: !!rowsBy[key] });
+    return true;
+  };
+
+  function openDetail(key, row) {
+    var cfg = CFG[key];
+    placesState.detailBackTarget = 'svc-' + key;
+    document.querySelectorAll('#plcTabs [data-plc-kind]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.plcKind === cfg.placeKind);
+    });
+    openPlaceDetail(cfg.placeKind, row);
+  }
+
+  function init() {
+    // نقرات الصفحات الثلاث (تفويض)
+    document.querySelectorAll('.svc-page[data-svc]').forEach(function (page) {
+      var key = page.getAttribute('data-svc');
+      page.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-svc-id],[data-svc-retry],[data-svc-more]');
+        if (!t || !page.contains(t)) return;
+        if (t.hasAttribute('data-svc-retry')) { load(key, {}); return; }
+        if (t.hasAttribute('data-svc-more')) { load(key, { more: true }); return; }
+        var id = t.getAttribute('data-svc-id');
+        var row = (rowsBy[key] || []).find(function (r) { return String(r.id) === String(id); });
+        if (!row) return;
+        openDetail(key, row);
+        if (typeof haptic === 'function') haptic();
+      });
+      // صورة فاشلة: تُزال ويظهر البديل (صورة التصنيف الحقيقية من assets/places + تدرّج) — بلا صورة مكسورة
+      page.addEventListener('error', function (e) {
+        var img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        var ph = img.closest('.svc-card-img');
+        if (ph) { ph.classList.add('is-noimg'); img.remove(); }
+      }, true);
+    });
+
+    // أي دخول قديم إلى المطاعم/الأسواق/المكتب (المساعد، «عرض الكل»، شاشة المزيد) يفتح الآن الصفحة المستقلة
+    // بدل شاشة places المشتركة. التقاط مبكر على document؛ لا نمسّ places.js.
+    document.addEventListener('click', function (e) {
+      var el = e.target && e.target.closest && e.target.closest('#soonCardRestaurants,#soonCardMarkets,#soonCardFutureOffice');
+      if (el && LEGACY_IDS[el.id] && pageEl(LEGACY_IDS[el.id])) {
+        e.preventDefault(); e.stopPropagation();
+        window.openSvcPage(LEGACY_IDS[el.id]);
+        return;
+      }
+      // رجوع صفحة التفاصيل: إن فُتحت من إحدى هذه الصفحات يعود إليها بدل الرئيسية
+      var back = e.target && e.target.closest && e.target.closest('#plcDetailBackBtn');
+      if (back && typeof placesState !== 'undefined' && String(placesState.detailBackTarget || '').indexOf('svc-') === 0) {
+        var target = placesState.detailBackTarget;
+        e.preventDefault(); e.stopPropagation();
+        showView(target);
+        if (typeof sheet !== 'undefined' && sheet && sheet.setSnap) sheet.setSnap('full');
+      }
+    }, true);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

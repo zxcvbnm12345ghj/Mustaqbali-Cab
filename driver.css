@@ -47,10 +47,10 @@
   /* ---- Brand purple (primary) — reused via --teal-* names so every
      component rule below (written against --teal/--teal-dim/--teal-text)
      renders in the yammak-purple identity automatically ---- */
-  --teal: #7C3AED;
+  --teal: #6C3CE0;
   --teal-dim: #EFE7FE;
-  --teal-text: #6D28D9;
-  --brand-grad: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
+  --teal-text: #5B2FC8;
+  --brand-grad: linear-gradient(135deg, #6C3CE0 0%, #5530C4 100%);
 
   /* ---- Secondary accents — gold (badges/ratings) and orange (the
      "still trying" warn state) are deliberately two distinct hues,
@@ -730,3 +730,121 @@ html, body.driver-body{
     border: 1px solid var(--surface-brd);
   }
 }
+
+
+/* =========================================================
+   Phase 4 — profile card, trip steps, extra rows, contact.
+   Scoped to driver.html only; reuses the tokens above.
+   ========================================================= */
+.driver-body, .driver-app, .driver-sheet{ overflow-x: clip; }
+.driver-profile, .driver-trip{ min-width: 0; }
+.driver-profile[hidden]{ display: none; }
+
+/* Driver profile card — purple identity header + info rows + call button.
+   Only styles the existing ids/classes; every value is filled from real
+   RPC data by driver.js (renderDriverCard). */
+.driver-profile{
+  margin-bottom: 16px; padding: 0; overflow: hidden;
+  background: var(--surface); border: 1.5px solid var(--surface-brd);
+  border-radius: var(--app-r-lg, 20px); box-shadow: var(--elev-2);
+}
+.driver-profile-top{
+  display: flex; align-items: center; gap: 14px; min-width: 0;
+  padding: 18px 16px;
+  background: var(--brand-grad); color: #fff;
+}
+.driver-avatar{
+  flex: 0 0 64px; width: 64px; height: 64px; border-radius: 50%;
+  display: grid; place-items: center; overflow: hidden;
+  background: rgba(255,255,255,0.16); color: #fff;
+  border: 2px solid rgba(255,255,255,0.45);
+}
+.driver-avatar svg{ width: 32px; height: 32px; }
+.driver-avatar img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.driver-avatar img[hidden], .driver-avatar svg[hidden]{ display: none; }
+.driver-profile-id{ min-width: 0; flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.driver-profile-id strong{ font-size: 21px; font-weight: 800; color: #fff; overflow-wrap: anywhere; line-height: 1.3; letter-spacing: 0; }
+.driver-avail{
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 100px; font-size: 12.5px; font-weight: 800;
+  background: var(--surface-hi); color: var(--text-muted);
+}
+.driver-avail[hidden]{ display: none; }
+.driver-avail i{ width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
+.driver-avail.is-free{ background: #E5F7EC; color: #15803D; }
+.driver-avail.is-busy{ background: var(--orange-dim); color: var(--orange-text); }
+.driver-avail.is-off{ background: var(--surface-hi); color: var(--text-muted); }
+.driver-profile-list{ list-style: none; margin: 0; padding: 4px 16px; }
+.driver-profile-list[hidden]{ display: none; }
+.driver-profile-list li, .driver-trip-extra li{
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 11px 0; border-top: 1px solid var(--surface-brd); font-size: 14px;
+}
+.driver-profile-list li:first-child{ border-top: 0; }
+.driver-profile-list b, .driver-trip-extra b{ margin-inline-start: auto; text-align: end; min-width: 0; overflow-wrap: anywhere; color: var(--text); font-weight: 700; }
+.driver-profile-call{
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 4px 16px 16px; min-height: 48px; padding: 0 16px;
+  border-radius: 14px; background: var(--teal); color: #fff;
+  font-size: 15px; font-weight: 800; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.driver-profile-call[hidden]{ display: none; }
+.driver-profile-call svg{ width: 20px; height: 20px; flex: 0 0 20px; }
+.driver-profile-call:active{ background: var(--teal-text); }
+.driver-profile-call:focus-visible{ outline: 3px solid var(--teal-dim); outline-offset: 2px; }
+.driver-trip-extra[hidden]{ display: none; }
+.driver-trip-extra{ list-style: none; margin: 0; padding: 0; }
+
+/* trip stepper: accepted -> en_route -> arrived -> completed */
+.driver-steps{ list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; }
+.driver-steps[hidden]{ display: none; }
+.driver-steps li{
+  text-align: center; font-size: 11.5px; font-weight: 800; padding: 7px 2px 6px;
+  color: var(--text-faint); border-top: 4px solid var(--surface-brd); border-radius: 2px;
+  min-width: 0; white-space: nowrap;
+}
+.driver-steps li.is-done{ color: var(--success); border-top-color: var(--success); }
+.driver-steps li.is-now{ color: var(--teal-text); border-top-color: var(--teal); }
+
+/* contact (customer phone from the real trip) */
+.driver-contact{ display: flex; gap: 10px; margin: 12px 0 4px; }
+.driver-contact[hidden], .driver-contact-btn[hidden]{ display: none; }
+.driver-contact-btn{
+  flex: 1 1 0; min-width: 0; min-height: 46px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 14px; font-weight: 800; font-size: 14px; text-decoration: none; color: #fff;
+}
+.driver-contact-btn.call{ background: var(--teal); }
+.driver-contact-btn.wa{ background: #16A34A; }
+
+/* trip actions: large touch targets, accept = green, reject = outlined */
+.driver-btn-accept{ background: #16A34A; }
+.driver-btn-reject{ background: var(--surface); color: var(--danger); border: 1.5px solid var(--danger); }
+.driver-trip-actions .driver-btn, .driver-trip .driver-btn{ min-height: 48px; }
+.driver-trip-list b{ overflow-wrap: anywhere; min-width: 0; }
+
+/* bell icon for the push button (replaces the removed emoji) */
+.driver-push-btn::before{
+  content: ""; display: inline-block; width: 18px; height: 18px; margin-inline-end: 8px; vertical-align: -3px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7'/%3E%3Cpath d='M10 20a2 2 0 0 0 4 0'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7'/%3E%3Cpath d='M10 20a2 2 0 0 0 4 0'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+@media (max-width: 340px){
+  .driver-app{ padding-inline: max(12px, env(safe-area-inset-left)); }
+  .driver-profile-top{ padding: 14px 12px; gap: 12px; }
+  .driver-profile-list{ padding-inline: 12px; }
+  .driver-profile-call{ margin-inline: 12px; }
+  .driver-profile-id strong{ font-size: 19px; }
+  .driver-steps li{ font-size: 10.5px; }
+}
+
+/* long real values (addresses, names) wrap instead of being cut off */
+.driver-trip-list li, .driver-trip-extra li, .driver-profile-list li{ justify-content: flex-start; align-items: flex-start; }
+.driver-trip-list li .driver-trip-ico{ margin-top: 1px; }
+.driver-trip-list b, .driver-trip-extra b, .driver-profile-list b{
+  flex: 1 1 0; min-width: 0; max-width: none; margin-inline-start: 0;
+  text-align: end; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
+.driver-trip-extra li{ border-top: 1px dashed var(--surface-brd); padding: 10px 0; }
+.driver-trip-extra{ border-top: 1px dashed var(--surface-brd); }

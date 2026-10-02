@@ -532,13 +532,44 @@
        destination, no new logic. -->
   <button type="button" class="map-search-pill" id="mapSearchPill" aria-label="ابحث عن موقع">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <span>ابحث عن موقع...</span>
+    <span>وين تريد تروح؟</span>
   </button>
 
   <button class="fab recenter-fab" id="recenterBtn" aria-label="تحديد موقعي الحالي">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     <span>موقعي الحالي</span>
   </button>
+
+  <!-- خارطة يمّك: صفحة الخريطة المستقلة — تُفعَّل بالكلاس ymap-on على .app-shell (انظر آخر app.js/app.css) -->
+  <div id="yMap" aria-hidden="true">
+    <div class="ym-top">
+      <div class="ym-bar">
+        <button type="button" class="ym-round" id="ymBack" aria-label="رجوع"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="ym-brand"><img src="icon-192.png" alt="" width="30" height="30"><span>خارطة يمّك</span></div>
+      </div>
+      <div class="ym-card">
+        <p class="ym-q">وين تريد تروح؟</p>
+        <button type="button" class="ym-row act" id="ymFromRow"><i class="ym-dot"></i><span class="ym-t" id="ymFrom">من أين؟</span></button>
+        <div class="ym-row" id="ymToRow"><i class="ym-dot b"></i><input type="search" id="ymTo" placeholder="إلى أين؟" enterkeyhint="search" autocomplete="off" maxlength="120" aria-label="إلى أين؟"><button type="button" class="ym-sbtn" id="ymSearch" aria-label="بحث"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+        <div class="ym-res" id="ymRes"></div>
+      </div>
+    </div>
+    <div class="ym-bot">
+      <div class="ym-fabs">
+        <button type="button" class="ym-round" id="ymZoomIn" aria-label="تكبير"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <button type="button" class="ym-round" id="ymZoomOut" aria-label="تصغير"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <button type="button" class="ym-round loc" id="ymLocate" aria-label="موقعي"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="ym-sheet">
+        <div class="ym-grab"></div>
+        <div class="ym-loc"><span class="ym-pin"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" stroke-width="1.8"/></svg></span><div><small>موقعك الحالي</small><b id="ymLocT">—</b></div></div>
+        <div class="ym-svcs" id="ymSvcs"></div>
+        <div class="ym-stats" id="ymStats" hidden><div><small>المسافة التقريبية</small><b id="ymKm">—</b></div><div class="p"><small>السعر التقديري</small><b id="ymPrice">—</b></div></div>
+        <p class="ym-hint" id="ymHint" hidden>السعر والمسافة تقديريان (خط مستقيم × معامل الطريق) وقد يختلفان قليلاً.</p>
+        <button type="button" class="ym-cta off" id="ymGo">اختر وجهتك</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Bottom sheet -->
   <div class="sheet" id="sheet">
@@ -830,11 +861,12 @@
            #quickServices هو نفس العنصر القديم (نفس المعرّف) ويملؤه
            buildQuickServiceChips() من SERVICES/VEHICLE_PHOTOS في app.js —
            نفس البيانات ونفس openBooking(service) عند النقر. -->
-      <section class="sheet-view" data-view="transport">
+      <section class="sheet-view svc-page svc-page-existing hub-transport" data-view="transport">
         <button type="button" class="sheet-back" data-back="home">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           رجوع
         </button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
         <h2 class="sheet-title">خدمات النقل والتوصيل</h2>
         <p class="sec-intro">رحلتك وتوصيلك ويّاك بكل خطوة</p>
         <div class="quick-services" id="quickServices">
@@ -1062,20 +1094,20 @@
 
             <div class="driver-info">
               <div class="driver-name-row">
-                <b id="driverPendingText">بانتظار تعيين <span class="role-badge role-captain">كابتن يمّك</span></b>
+                <b id="driverPendingText">بانتظار تعيين الكابتن</b>
                 <span class="driver-rating" id="driverRatingTag" hidden>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9L5.7 21l1.7-7-5.4-4.7 7.1-.6L12 2z"/></svg>
                   <span id="driverRatingVal">4.8</span>
                 </span>
               </div>
-              <span id="driverPendingSub">سنُعلمك فور تعيين <span class="role-badge role-captain">كابتن يمّك</span></span>
+              <span id="driverPendingSub">سنُعلمك فور تعيينه</span>
 
               <!-- رقم هاتف السائق — نص حقيقي وواضح (وليس فقط زر أيقونة)
                    وقابل للضغط للاتصال مباشرة. يُملأ ويُظهر فقط من
                    applyDriverInfo() في app.js عند وجود row.driver_phone
                    الحقيقي القادم من قاعدة البيانات؛ يبقى مخفياً كلياً
                    غير ذلك — لا رقم وهمي هنا. -->
-              <a href="#" class="driver-phone-row" id="driverPhoneTag" hidden aria-label="اتصال بكابتن يمّك">
+              <a href="#" class="driver-phone-row" id="driverPhoneTag" hidden aria-label="اتصال بالكابتن">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span id="driverPhoneVal">—</span>
               </a>
@@ -1101,18 +1133,18 @@
                مصدر بيانات جديد. -->
           <div class="driver-status-banner" id="driverStatusBanner" hidden>
             <span class="driver-status-banner-dot"></span>
-            <span id="driverStatusBannerText"><span class="role-badge role-captain">كابتن يمّك</span> في الطريق إليك</span>
+            <span id="driverStatusBannerText">الكابتن في الطريق إليك</span>
           </div>
         </div>
 
         <div class="driver-actions" id="driverActions" hidden>
-          <a href="#" class="driver-action-btn call" id="callDriverBtn" aria-label="اتصال بكابتن يمّك">
+          <a href="#" class="driver-action-btn call" id="callDriverBtn" aria-label="اتصال بالكابتن">
             <span class="driver-action-ic">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
             <span>اتصال</span>
           </a>
-          <a href="#" class="driver-action-btn whatsapp" id="whatsappDriverBtn" target="_blank" rel="noopener" aria-label="واتساب كابتن يمّك">
+          <a href="#" class="driver-action-btn whatsapp" id="whatsappDriverBtn" target="_blank" rel="noopener" aria-label="واتساب الكابتن">
             <span class="driver-action-ic">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>
             </span>
@@ -1258,10 +1290,10 @@
 
             <div class="help-item">
               <button type="button" class="help-q" aria-expanded="false">
-                <span>كيف أتواصل مع <span class="role-badge role-captain">كابتن يمّك</span>؟</span>
+                <span>كيف أتواصل بعد تعيين طلبي؟</span>
                 <svg class="help-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <div class="help-a-wrap"><div class="help-a"><p>بعد تعيين <span class="role-badge role-captain">كابتن يمّك</span> يمكنك الاتصال أو التواصل عبر واتساب مباشرة.</p></div></div>
+              <div class="help-a-wrap"><div class="help-a"><p>بعد التعيين يمكنك الاتصال أو التواصل عبر واتساب مباشرة مع <span class="role-badge role-captain">الكابتن</span> في خدمات النقل، أو <span class="role-badge role-agent">المندوب</span> في الدليفري، أو <span class="role-badge role-partner">شريك يمّك</span> في الخدمات التي تعتمد على مزوّد خدمة.</p></div></div>
             </div>
 
             <div class="help-item">
@@ -1489,11 +1521,12 @@
            ===================================================== -->
 
       <!-- MARKET HOME — search, categories, latest listings -->
-      <section class="sheet-view" data-view="market">
+      <section class="sheet-view svc-page svc-page-existing hub-ymarket" data-view="market">
         <button type="button" class="sheet-back" data-back="home">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           رجوع
         </button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
         <h2 class="sheet-title">سوق يمّك</h2>
 
         <div class="mkt-searchbar">
@@ -1864,11 +1897,12 @@
            empty and only ever shows real active rows; zero real rows
            at any level → a professional "قريباً" empty state, never
            invented data. -->
-      <section class="sheet-view" data-view="yammakServices">
+      <section class="sheet-view svc-page svc-page-existing hub-yservices" data-view="yammakServices">
         <button type="button" class="sheet-back" id="ysvcBackBtn">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           رجوع
         </button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
         <h2 class="sheet-title" id="ysvcTitle">خدمات يمّك</h2>
         <p class="sec-intro" id="ysvcIntro">تحتاج خدمة؟ يمّك يوصلك إلها.</p>
 
@@ -1932,6 +1966,48 @@
             </a>
           </div>
         </div>
+      </section>
+
+      <!-- المرحلة 3 — صفحة «المطاعم» المستقلة. تُملأ من app.js (قسم «المرحلة 3 — صفحات الخدمات») ببيانات Supabase الحقيقية فقط (قراءة)،
+           ولا تخلط بيانات قسم بآخر. التفاصيل تفتح عبر openPlaceDetail القائم، والرجوع إلى هذه الصفحة. -->
+      <section class="sheet-view svc-page hub-restaurants" data-view="svc-restaurants" data-svc="restaurants">
+        <button type="button" class="sheet-back svc-back" data-back="home" aria-label="رجوع إلى الصفحة الرئيسية"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>رجوع إلى الرئيسية</button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
+        <div class="svc-headline">
+          <h2 class="svc-title">المطاعم</h2>
+          <span class="svc-count" data-svc-count hidden></span>
+        </div>
+        <p class="svc-sub">اطلب أكلك المفضل من مطاعم جنوب الموصل</p>
+        <div class="svc-body" data-svc-body aria-live="polite"></div>
+        <button type="button" class="svc-more" data-svc-more hidden>عرض المزيد</button>
+      </section>
+
+      <!-- المرحلة 3 — صفحة «الأسواق» المستقلة. تُملأ من app.js (قسم «المرحلة 3 — صفحات الخدمات») ببيانات Supabase الحقيقية فقط (قراءة)،
+           ولا تخلط بيانات قسم بآخر. التفاصيل تفتح عبر openPlaceDetail القائم، والرجوع إلى هذه الصفحة. -->
+      <section class="sheet-view svc-page hub-markets" data-view="svc-markets" data-svc="markets">
+        <button type="button" class="sheet-back svc-back" data-back="home" aria-label="رجوع إلى الصفحة الرئيسية"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>رجوع إلى الرئيسية</button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
+        <div class="svc-headline">
+          <h2 class="svc-title">الأسواق</h2>
+          <span class="svc-count" data-svc-count hidden></span>
+        </div>
+        <p class="svc-sub">كل احتياجاتك من الأسواق والمحلات ويّاك</p>
+        <div class="svc-body" data-svc-body aria-live="polite"></div>
+        <button type="button" class="svc-more" data-svc-more hidden>عرض المزيد</button>
+      </section>
+
+      <!-- المرحلة 3 — صفحة «مكتب المستقبل للقرطاسية والطباعة» المستقلة. تُملأ من app.js (قسم «المرحلة 3 — صفحات الخدمات») ببيانات Supabase الحقيقية فقط (قراءة)،
+           ولا تخلط بيانات قسم بآخر. التفاصيل تفتح عبر openPlaceDetail القائم، والرجوع إلى هذه الصفحة. -->
+      <section class="sheet-view svc-page hub-futureoffice" data-view="svc-futureoffice" data-svc="futureoffice">
+        <button type="button" class="sheet-back svc-back" data-back="home" aria-label="رجوع إلى الصفحة الرئيسية"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>رجوع إلى الرئيسية</button>
+        <div class="svc-hero hub-media" aria-hidden="true"><span class="svc-hero-shade"></span></div>
+        <div class="svc-headline">
+          <h2 class="svc-title">مكتب المستقبل للقرطاسية والطباعة</h2>
+          <span class="svc-count" data-svc-count hidden></span>
+        </div>
+        <p class="svc-sub">قرطاسية وطباعة وكل احتياجات مكتبك</p>
+        <div class="svc-body" data-svc-body aria-live="polite"></div>
+        <button type="button" class="svc-more" data-svc-more hidden>عرض المزيد</button>
       </section>
 
     </div>
@@ -2072,7 +2148,8 @@
     var pill = document.getElementById('mapSearchPill');
     if (!pill) return;
     pill.addEventListener('click', function () {
-      if (typeof openBooking === 'function') openBooking();
+      if (typeof openYMap === 'function') openYMap();
+      else if (typeof openBooking === 'function') openBooking();
     });
   }
 
@@ -2445,6 +2522,10 @@
       var key = btn.getAttribute('data-hub');
       if (key === 'transport') {
         if (typeof openTransportHub === 'function') openTransportHub();
+        return;
+      }
+      if ((key === 'restaurants' || key === 'markets' || key === 'futureoffice') && typeof window.openSvcPage === 'function') {
+        window.openSvcPage(key);
         return;
       }
       var legacy = document.getElementById(TARGETS[key]);
