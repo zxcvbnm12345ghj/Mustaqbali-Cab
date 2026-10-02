@@ -1,0 +1,4926 @@
+// Yammak — Customer App Shell (PWA) — v2 (Careem/Uber-grade)
+// Same backend contract: submit_trip_request RPC + the new
+// get_trip_request_status RPC for live status polling (see schema.sql v1.1).
+
+// Fallback defaults used only until loadServicePrices() successfully
+// fetches the real, admin-editable prices from Supabase (service_prices
+// table). These numbers are never shown to the customer as final unless
+// the fetch fails — see loadServicePrices().
+const SERVICES = {
+  taxi:      { label: 'تكسي',            base: 3000,  perKm: 500, icon: 'taxi' },
+  private:   { label: 'خصوصي',           base: 8000,  perKm: 800, icon: 'private' },
+  courier:   { label: 'دليفري',          base: 2000,  perKm: 400, icon: 'courier' },
+  intercity: { label: 'بين المحافظات',    base: 20000, perKm: 350, icon: 'intercity' },
+  cargo:     { label: 'حمل',             base: 6000,  perKm: 700, icon: 'cargo' },
+  starx:     { label: 'نقل نفرات',        base: 4000,  perKm: 550, icon: 'starx' },
+};
+
+// ============================================================
+// مسميات الأدوار الرسمية داخل يمّك — نص فقط، بلا إيموجي/أيقونات
+// بجانب الاسم، يُميَّز كل دور بلونه وخطّه الخاص (Badge) عبر CSS:
+//   - "الكابتن"     → خدمات النقل والرحلات (تكسي/خصوصي/بين المحافظات/نقل نفرات/حمل)
+//   - "المندوب"     → الدليفري والتوصيل والطرود (دليفري)
+//   - "شريك يمّك"   → الخدمات التي تعتمد على مزوّد خدمة (مطاعم/أسواق/خدمات محلية)
+// هذا استبدال نصي فقط لكلمة "السائق" القديمة أينما ظهرت للعميل —
+// لا يمسّ أي بيانات أو RPC أو منطق حجز/تعيين موجود.
+// ============================================================
+const ROLE_LABELS = {
+  captain: 'الكابتن',
+  agent: 'المندوب',
+  partner: 'شريك يمّك',
+};
+function roleKeyForService(serviceType) {
+  if (serviceType === 'courier') return 'agent';                 // الدليفري → المندوب
+  if (!serviceType || SERVICES[serviceType]) return 'captain';   // خدمات النقل (taxi/private/intercity/cargo/starx) + الافتراضي عند غياب النوع
+  return 'partner';                                              // أي نوع خدمة آخر غير النقل (مطاعم/أسواق/خدمات محلية) → شريك يمّك
+}
+function roleLabelForService(serviceType) {
+  return ROLE_LABELS[roleKeyForService(serviceType)];
+}
+// الاسم الوظيفي كما يظهر داخل جُمل رسائل الحالة (بدون «يمّك» لأن الشارة
+// الأطول مخصّصة لقائمة الاختيار). يُحسب دائماً من نوع الخدمة الفعلي
+// للطلب — مصدر واحد فقط، فلا يمكن أن يتكرر داخل الجملة نفسها.
+//   name  : الاسم الظاهر في بداية الجملة
+//   byName: الاسم بعد حرف الجر «ب» (للـ aria-label)
+//   plural: عنوان قائمة الاختيار     available: عبارة «يرجى اختيار …»
+const ROLE_TITLES = {
+  captain: { name: 'الكابتن',    byName: 'بالكابتن',    plural: 'الكباتن',     available: 'الكابتن المتاح' },
+  agent:   { name: 'المندوب',    byName: 'بالمندوب',    plural: 'المناديب',    available: 'المندوب المتاح' },
+  partner: { name: 'شريك يمّك',  byName: 'بشريك يمّك',  plural: 'شركاء يمّك',  available: 'شريك يمّك المتاح' },
+};
+function roleTitleForService(serviceType) {
+  return ROLE_TITLES[roleKeyForService(serviceType)];
+}
+
+// رسائل شاشة حالة الطلب — دالة نقية (بلا DOM) تعتمد على نوع الخدمة +
+// حالة الطلب الحقيقية القادمة من get_trip_request_status. يظهر الاسم
+// الوظيفي مرة واحدة فقط في كل رسالة، والرسالة الثانية تستخدم ضميراً
+// («تعيينه»/«وصوله») بدل إعادة الاسم.
+//   headline: العنوان قبل تعيين مزوّد الخدمة (بدل اسمه)
+//   sub     : السطر الفرعي تحت العنوان/الاسم
+//   banner  : الشارة البارزة (null = مخفية)
+function statusMessages(serviceType, status, hasDriver) {
+  const role = roleTitleForService(serviceType).name;
+  if (status === 'cancelled') {
+    return hasDriver
+      ? { headline: null, sub: 'تم إلغاء الطلب', banner: null }
+      : { headline: 'تم إلغاء الطلب', sub: 'يمكنك إرسال طلب جديد في أي وقت', banner: null };
+  }
+  if (status === 'completed') {
+    return hasDriver
+      ? { headline: null, sub: 'شكرًا لاختيارك يمّك', banner: null }
+      : { headline: 'اكتمل الطلب', sub: 'شكرًا لاختيارك يمّك', banner: null };
+  }
+  if (!hasDriver) {
+    return { headline: `بانتظار تعيين ${role}`, sub: 'سنُعلمك فور تعيينه', banner: null };
+  }
+  if (status === 'arrived') {
+    return { headline: null, sub: 'بانتظارك الآن', banner: `${role} وصل إلى موقعك` };
+  }
+  return { headline: null, sub: 'سنُعلمك عند وصوله', banner: `${role} في الطريق إليك` };
+}
+
+function roleBadgeHtml(serviceType) {
+  const key = roleKeyForService(serviceType);
+  return `<span class="role-badge role-${key}">${ROLE_LABELS[key]}</span>`;
+}
+
+// Stage — real vehicle photos for the service list/switch, replacing
+// the flat SVG car icons. Each service maps to a local image under
+// assets/vehicles/ (ship these files with the app — no network call,
+// works offline like the rest of the shell). If a photo file is
+// missing (e.g. before you've dropped the real photos in), the <img>
+// onerror handler below falls back to the old ICONS SVG for that one
+// service only, so the UI never breaks — nothing else changes.
+// Recommended photo specs: real, well-lit photo of the actual vehicle
+// type, square-ish crop (at least 300x300px), JPG or WEBP, vehicle
+// filling most of the frame on a plain/blurred background so it reads
+// clearly at the small 38–44px display size.
+// v=2026090401 — cache-busting query tag. Bump this string any time the
+// image FILES under assets/vehicles/ are replaced/updated. Without it,
+// a browser or the PWA service worker (sw.js) that already cached the
+// old 404/missing response for these paths can keep "remembering" the
+// failure and never re-request the now-present file — this alone can
+// make correctly-uploaded images silently keep showing the SVG
+// fallback. The tag forces every client to treat this as a brand-new
+// URL and re-fetch it for real.
+const VEHICLE_PHOTOS_VERSION = 'v=2026100201';
+const VEHICLE_PHOTOS = {
+  taxi:      `assets/vehicles/taxi.jpg?${VEHICLE_PHOTOS_VERSION}`,       // سيارة تكسي (سيدان صفراء/عادية)
+  private:   `assets/vehicles/private.jpg?${VEHICLE_PHOTOS_VERSION}`,    // سيارة خصوصي (سيدان فاخرة)
+  courier:   `assets/vehicles/courier.jpg?${VEHICLE_PHOTOS_VERSION}`,    // دراجة نارية توصيل
+  intercity: `assets/vehicles/intercity.jpg?${VEHICLE_PHOTOS_VERSION}`,  // باص/فان بين المحافظات
+  cargo:     `assets/vehicles/cargo.jpg?${VEHICLE_PHOTOS_VERSION}`,      // بيك أب / سيارة حمل
+  starx:     `assets/vehicles/starx.jpg?${VEHICLE_PHOTOS_VERSION}`,      // فان نقل نفرات
+};
+
+// ============================================================
+// صور تصنيف عامة — المطاعم/الأسواق/خدمات أخرى/مكتب المستقبل
+// (assets/places/*.jpg، مستخدمة فقط في app.css كـ background-image
+// لأربعة مواضع: بطاقات "قريباً" بالرئيسية، بانر شاشة المطاعم/الأسواق،
+// الحالة الفارغة داخل #plcGrid، وصفحة تفاصيل عنصر واحد — لا علاقة لها
+// بـ image_url الفردي لكل مطعم/سوق الذي يديره places.js وحده كما هو،
+// بلا أي تغيير هنا).
+// FIX (الصورة لا تظهر ولا أي بديل عند 404): background-image في CSS
+// الخالص لا يملك onerror، وكانت app.css تُخفي أيقونة SVG البديلة بشكل
+// دائم (svg{display:none}) بصرف النظر عن نجاح تحميل الصورة من عدمه —
+// فإن فشلت الصورة كانت الدائرة تبقى فارغة تماماً. الحل هنا: نفس أسلوب
+// الـ preload بـ Image() المستخدم أصلاً في places.js (renderPlaceDetail)
+// لكن على مستوى الصفحة كلها ومرة واحدة فقط لكل صورة تصنيف: عند نجاح
+// التحميل نضيف كلاساً على <html> (مثل has-cat-photo-restaurants)،
+// وapp.css يشترط هذا الكلاس قبل تفعيل background-image/إخفاء SVG —
+// فشل التحميل = لا كلاس يُضاف = تبقى الأيقونة الأصلية ظاهرة تلقائياً
+// تماماً كحالها قبل إضافة صور التصنيف هذه بالكامل (لا دائرة فارغة بأي
+// حالة). لا تغيير على places.js/market.js ولا على أي بيانات Supabase.
+const CATEGORY_PHOTOS_VERSION = 'v=2026100201';
+const CATEGORY_PHOTOS = {
+  'restaurants':     `assets/places/restaurants.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'markets':         `assets/places/markets.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'other-services':  `assets/places/other-services.jpg?${CATEGORY_PHOTOS_VERSION}`,
+  'future-office':   `assets/places/future-office.jpg?${CATEGORY_PHOTOS_VERSION}`,
+};
+function preloadCategoryPhotos() {
+  Object.keys(CATEGORY_PHOTOS).forEach((key) => {
+    const probe = new Image();
+    probe.onload = () => {
+      document.documentElement.classList.add(`has-cat-photo-${key}`);
+    };
+    // onerror: عمداً بلا أي فعل — عدم إضافة الكلاس كافٍ ليبقى SVG
+    // الأصلي هو المعروض (نفس فكرة vehiclePhotoFallback أعلاه، لكن
+    // كلاس عام بدل استبدال عنصر واحد لأن الهدف هنا background-image).
+    probe.src = CATEGORY_PHOTOS[key];
+  });
+}
+
+// Stage — realistic, multi-color vehicle icons (replaces the previous
+// flat single-stroke outlines). Each is a small self-contained flat
+// illustration (body + windows + wheels + accent) built from inline
+// SVG shapes with their own explicit fill colors, so every service
+// reads as a distinct little "photo-like" vehicle badge instead of a
+// generic line icon recolored per service. Purely visual: still valid
+// inner-SVG markup dropped into the exact same wrapper markup as
+// before (buildQuickServiceChips / buildServiceSwitch), so no other
+// app.js logic, data attribute, or click handler changes.
+// Stage 2 — refined to match the reference ride-list icon style more
+// closely: smoother rounded car-silhouette body (instead of a boxy
+// rect body) for the three car-type services, plus a light diagonal
+// "gloss" reflection stroke added to every icon for a glossier,
+// less flat-drawn look. Still small self-contained flat illustrations
+// (no external images/network calls — offline-safe), still dropped
+// into the exact same wrapper markup, so no other app.js logic changes.
+const CAR_BODY = 'M2.2 14.8c0-.66.4-1.25 1-1.5l2.1-.9 1.7-2.9A2.1 2.1 0 0 1 8.8 8.4h6.4a2.1 2.1 0 0 1 1.8 1.1l1.7 2.9 2.1.9c.6.25 1 .84 1 1.5v1.6a.9.9 0 0 1-.9.9h-1.3a2.4 2.4 0 0 1-4.7 0H8.9a2.4 2.4 0 0 1-4.7 0H3.1a.9.9 0 0 1-.9-.9Z';
+const CAR_WHEELS = '<circle cx="6.5" cy="17.3" r="2.3" fill="#1F2430"/><circle cx="6.5" cy="17.3" r="0.85" fill="#C9CFDA"/><circle cx="17.5" cy="17.3" r="2.3" fill="#1F2430"/><circle cx="17.5" cy="17.3" r="0.85" fill="#C9CFDA"/>';
+const CAR_GLOSS = '<path d="M5.4 10c2-1 4.5-1.5 6.6-1.5s4.6.5 6.6 1.5" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" opacity="0.4" fill="none"/>';
+function carIcon(bodyFill, windowFill){
+  return `<path d="${CAR_BODY}" fill="${bodyFill}"/>` +
+    `<path d="M6.9 12.9l1.5-3.55a1 1 0 0 1 .95-.65h2.05v4.2Z" fill="${windowFill}"/>` +
+    `<path d="M11.85 8.7h2.65a1.1 1.1 0 0 1 1 .63l1.7 3.57h-5.35Z" fill="${windowFill}"/>` +
+    CAR_GLOSS + CAR_WHEELS;
+}
+const ICONS = {
+  taxi: carIcon('#F5B301', '#FFF3D0') + '<rect x="9.6" y="8.55" width="4.8" height="0.55" fill="#1A1A1A"/><rect x="9.9" y="4.6" width="4.2" height="1.5" rx="0.4" fill="#1A1A1A"/>',
+  private: carIcon('#2B3352', '#9FC6FF'),
+  courier: '<circle cx="5.8" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="5.8" cy="17.4" r="0.8" fill="#C9CFDA"/><circle cx="17.5" cy="17.4" r="2.1" fill="#1F2430"/><circle cx="17.5" cy="17.4" r="0.8" fill="#C9CFDA"/><path d="M5.8 17.4h2.8l1.6-5.4h2.7" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M10.5 12l1.3-3h2.6" stroke="#3A2E1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="14" y="9.6" width="5.4" height="5.1" rx="0.9" fill="#D9A441"/><rect x="14" y="9.6" width="5.4" height="1.5" fill="#8A6415"/><circle cx="11.9" cy="7.1" r="1.5" fill="#E7B463"/><path d="M14.7 10.7h3.9" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.45"/>',
+  intercity: '<rect x="2.6" y="6" width="18.8" height="9.4" rx="2.2" fill="#1E9E82"/><rect x="4" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="7.6" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="11.2" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="14.8" y="7.4" width="3" height="2.6" rx="0.5" fill="#EAF9F4"/><rect x="2.6" y="11.6" width="18.8" height="1.4" fill="#146854"/><rect x="2.6" y="15.2" width="18.8" height="2" rx="1" fill="#146854"/><path d="M3.4 6.9h17.2" stroke="#FFFFFF" stroke-width="0.6" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="18" r="1.8" fill="#12131A"/><circle cx="6.6" cy="18" r="0.7" fill="#8B93A8"/><circle cx="17.4" cy="18" r="1.8" fill="#12131A"/><circle cx="17.4" cy="18" r="0.7" fill="#8B93A8"/>',
+  cargo: '<rect x="2.4" y="9.4" width="10.6" height="6" rx="0.8" fill="#C97A3D"/><rect x="2.4" y="8" width="7.6" height="1.6" fill="#8A4E1E"/><path d="M13 11h3.6a2 2 0 0 1 1.8 1.1l1.4 2.6v1.7h-6.8Z" fill="#8A4E1E"/><rect x="15.2" y="12.4" width="3.4" height="2.2" rx="0.4" fill="#FFE1C2"/><rect x="3.2" y="10.6" width="8.9" height="1" fill="#E0A16A"/><path d="M3.2 10.1h7" stroke="#FFFFFF" stroke-width="0.5" stroke-linecap="round" opacity="0.4"/><circle cx="6.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="6.6" cy="17.6" r="0.75" fill="#C9CFDA"/><circle cx="16.6" cy="17.6" r="1.9" fill="#1F2430"/><circle cx="16.6" cy="17.6" r="0.75" fill="#C9CFDA"/>',
+  starx: carIcon('#45C2D6', '#DFF7F8') + '<path d="M11.85 8.7v4.2" stroke="#0A5A68" stroke-width="0.5"/>',
+};
+
+const BUSINESS_WHATSAPP_NUMBER = '9647718828710'; // دعم يمّك — 07718828710
+// Initial camera position only — used to frame the map (south Mosul /
+// Nineveh service area, not Baghdad) for the brief moment before a
+// real GPS fix arrives; it is never shown as a marker, pin, or name,
+// and setPickup()/setDropoff() always override it with the customer's
+// actual GPS/tap/search position. Kept because Leaflet needs *some*
+// initial center — removing it would leave the map with no defined
+// starting view (e.g. mid-ocean at zoom 11) until GPS resolves or if
+// location permission is denied.
+const SERVICE_REGION_CENTER = { lat: 35.9824, lng: 43.2578 };
+const TIMELINE_STEPS = ['new', 'assigned', 'en_route', 'arrived', 'completed'];
+const TIMELINE_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة' };
+const STATUS_POLL_MS = 6000;
+const RECENT_KEY = 'mustaqbali_recent_locations';
+// Straight-line (haversine) distance underestimates real road distance.
+// This fixed correction factor approximates typical road-vs-straight-line
+// ratios until a paid routing API (Google/Mapbox Directions) is configured
+// — see README's "أفكار للتوسع لاحقاً" section, which already flags this.
+const ROAD_DISTANCE_FACTOR = 1.3;
+
+const state = {
+  currentService: null,
+  pickupLatLng: null,
+  dropoffLatLng: null,
+  // Set once we've attempted an automatic GPS fix for the customer's
+  // pickup point, so we only ever try this once per visit — never
+  // re-prompting or overwriting a point the customer already set
+  // manually (typed address, map tap, marker drag, or the "موقعي" button).
+  autoLocateAttempted: false,
+  // Live GPS tracking (watchPosition) — see startGpsWatch()/stopGpsWatch().
+  // gpsWatchId: the id returned by navigator.geolocation.watchPosition(),
+  // so it can be cleared; null when no watch is currently running.
+  // gpsFollowing: true only while the pickup pin should keep following the
+  // customer's real, moving device position. Set true on every real GPS fix
+  // (auto-locate or the "موقعي الحالي" button) and set false the instant the
+  // customer takes manual control of the pickup point (map tap or marker
+  // drag) — so live tracking can never fight or overwrite a manual choice.
+  gpsWatchId: null,
+  gpsFollowing: false,
+  // Throttle for reverse-geocoding pickup while live-tracking: avoids
+  // hammering the Nominatim API (and rewriting the pickup text field) on
+  // every single GPS tick — only re-resolves the address once the device
+  // has actually moved a meaningful distance since the last lookup.
+  lastGeocodedPickup: null,
+  lastGeocodeAt: 0,
+  mapTargetMode: 'pickup', // 'pickup' | 'dropoff' — which marker the next map tap sets
+  map: null,
+  pickupMarker: null,
+  dropoffMarker: null,
+  driverMarker: null, // assigned driver's live position pin — only set when the status RPC returns real driver_lat/driver_lng
+  myLocationMarker: null, // small "you are here" dot — purely visual, sits under the pickup pin, never draggable/clickable, never used for pricing or submission
+  decorLine: null,
+  lastSubmission: null, // { id, request_number, phone, service_type, pickup, dropoff, created_at }
+  statusPollTimer: null,
+  lastKnownStatus: null,
+  featuredDriverId: null, // id of the driver currently shown on the booking card, captured at booking time
+  featuredDriverPhone: null, // phone of that same driver — sent to submit_trip_request so the pick is a real assignment, not cosmetic
+};
+
+/* ============================================================
+   Haptic-like feedback (real device vibration where supported;
+   silently does nothing on iOS Safari, which has no vibrate API —
+   the visual press animations in CSS carry the feedback there).
+   ============================================================ */
+function haptic(strength = 8) {
+  if (navigator.vibrate) navigator.vibrate(strength);
+}
+
+/* ============================================================
+   Bottom Sheet — drag engine
+   Snap points: peek 25vh, half 50vh, full 85vh.
+   - Dragging from the handle always works, any direction.
+   - Dragging from the content only converts to a sheet-drag when the
+     content is already scrolled to its top AND the finger moves down;
+     otherwise the content scrolls natively with zero interference.
+   - Velocity is tracked so a fast flick snaps in the flick direction
+     even if released before crossing the midpoint (fling gesture).
+   - Every view (home/booking/submitting/status) shares the same single
+     #sheet element, so switching views can never "lose" the drag
+     handlers — this is what fixes the freeze after submitting.
+   ============================================================ */
+// The sheet is now a fixed, non-draggable panel — no peek/half/full
+// resizing, no swipe gestures, no horizontal movement of any kind. Height
+// is one constant value set entirely in CSS (see .sheet in app.css).
+// This class is kept only so every existing sheet.setSnap(...) call
+// elsewhere in the app (after booking, after submit, on view switches,
+// etc.) keeps working without needing to touch those call sites —
+// setSnap() now simply scrolls the panel's content back to the top,
+// which is the only "reset" a fixed panel still needs.
+class BottomSheet {
+  constructor(el, handleEl, scrollEl) {
+    this.el = el;
+    this.handle = handleEl;
+    this.scrollEl = scrollEl;
+    this.current = 'fixed';
+  }
+
+  setSnap() {
+    if (this.el) this.el.style.removeProperty('--sheet-h');
+    if (this.scrollEl) this.scrollEl.scrollTop = 0;
+  }
+}
+
+let sheet;
+
+/* ============================================================
+   Map
+   ============================================================ */
+
+function initMap() {
+  try {
+    state.map = L.map('map', {
+      zoomControl: false,
+      // A minimal attribution control is required by the tile provider's
+      // usage policy below (OpenStreetMap) — kept as small/unobtrusive as
+      // possible via app.css's .leaflet-control-attribution rule, not a
+      // design change to the map itself.
+      attributionControl: true,
+      center: [SERVICE_REGION_CENTER.lat, SERVICE_REGION_CENTER.lng],
+      zoom: 11,
+      minZoom: 6,
+      maxZoom: 18,
+      // No maxBounds/maxBoundsViscosity clamp — panning and zooming
+      // (drag, pinch, scroll, double-tap) all behave like a normal,
+      // unrestricted Leaflet map. Dragging, touch-zoom, scroll-wheel
+      // zoom, and double-click zoom all stay at their Leaflet defaults
+      // (enabled) — nothing here disables any of them.
+      fadeAnimation: true,
+      zoomAnimation: true,
+    });
+
+    // Standard OpenStreetMap raster tiles — a reliable, genuinely keyless
+    // source (no account, no secret, nothing to embed in the published
+    // code). Switched from CARTO's basemaps.cartocdn.com endpoint, which
+    // started requiring an API key in late August 2026 and now serves
+    // every unauthenticated request with a large "API KEY REQUIRED"
+    // watermark. Same Leaflet setup, same raster-tile approach, same
+    // real place names sourced live from OpenStreetMap data in whatever
+    // language OSM itself has each name tagged in — which for this
+    // service region is already predominantly Arabic. Nothing here is
+    // hardcoded or fabricated. Combined with the accuracy filter in
+    // app.css (.leaflet-tile-pane), this keeps the same calm, light look.
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      subdomains: 'abc',
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    }).addTo(state.map);
+
+    // Leaflet's own "Leaflet" credit/logo link (added automatically by
+    // the attribution control above) is just library branding — Leaflet
+    // itself is BSD-licensed and requires no attribution at all. It's
+    // dropped here so only the tile provider's REQUIRED notice remains
+    // (OpenStreetMap's copyright link set on the tile layer above, via
+    // the `attribution` option). This does not touch, hide, or shrink
+    // that OpenStreetMap notice, and has nothing to do with Google Maps/
+    // Places — no Google mapping product is used anywhere in this app,
+    // so no Google attribution exists here to remove.
+    if (state.map.attributionControl) state.map.attributionControl.setPrefix(false);
+
+    tiles.on('load', () => {
+      const skel = document.getElementById('mapSkeleton');
+      if (skel) skel.classList.add('hide');
+    });
+
+    state.map.on('click', (e) => {
+      if (state.mapTargetMode === 'dropoff') {
+        setDropoff(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
+      } else {
+        // Manual pickup selection on the map — the customer has explicitly
+        // chosen a point, so live GPS tracking must stop instead of moving
+        // this pin again on the next device-position update.
+        stopGpsWatch();
+        setPickup(e.latlng.lat, e.latlng.lng, { reverseGeocode: true, fly: false });
+      }
+    });
+
+    setTimeout(() => state.map.invalidateSize(), 250);
+    window.addEventListener('resize', () => state.map && state.map.invalidateSize());
+
+    // FIX (حركة/حجم الخريطة): 'resize' على window وحده لا يلتقط تغيّر
+    // حجم بطاقة الخريطة نفسها (#map) عندما يتغيّر حجمها لأسباب لا تُغيّر
+    // حجم النافذة ذاتها — مثل تحديث --app-map-h، أو ظهور/اختفاء لوحة
+    // المفاتيح على الموبايل (body.kb-open)، أو انتقال العرض بين شاشة
+    // ممتلئة وشاشة الرئيسية. ResizeObserver يراقب عنصر #map مباشرة
+    // ويستدعي invalidateSize() في كل مرة يتغيّر حجمه الفعلي، بغض النظر
+    // عن السبب — إضافي بحت فوق الاستماع الحالي على 'resize'، لا يستبدله
+    // ولا يغيّر أي شيء من منطق الخريطة/GPS/الطلبات. يتحقق من دعم
+    // المتصفح لـResizeObserver قبل استخدامه فلا يكسر شيئاً في متصفح
+    // قديم لا يدعمه.
+    if (typeof ResizeObserver !== 'undefined') {
+      const mapEl = document.getElementById('map');
+      if (mapEl) {
+        const mapResizeObserver = new ResizeObserver(() => {
+          if (state.map) state.map.invalidateSize();
+        });
+        mapResizeObserver.observe(mapEl);
+      }
+    }
+  } catch (err) {
+    console.error('Map failed to load', err);
+    document.getElementById('map').style.background =
+      'radial-gradient(120% 90% at 15% -10%, #F8FBFF 0%, #FFFFFF 45%)';
+    const skel = document.getElementById('mapSkeleton');
+    if (skel) skel.classList.add('hide');
+  }
+}
+
+function pickupDivIcon() {
+  return L.divIcon({
+    className: 'pickup-pin dropped',
+    html: `<svg viewBox="0 0 34 34" fill="none">
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#1D6FD1" stroke="#FFFFFF" stroke-width="1.4"/>
+      <circle cx="17" cy="13.5" r="4.6" fill="#FFFFFF"/>
+    </svg>`,
+    iconSize: [40, 52],
+    iconAnchor: [20, 50],
+  });
+}
+
+function dropoffDivIcon() {
+  return L.divIcon({
+    className: 'pickup-pin dropped dropoff-pin',
+    html: `<svg viewBox="0 0 34 34" fill="none">
+      <path d="M17 2c-6.6 0-12 5.3-12 11.8C5 22 17 32 17 32s12-10 12-18.2C29 7.3 23.6 2 17 2Z" fill="#E5B85C" stroke="#FFFFFF" stroke-width="1.4"/>
+      <rect x="13.5" y="10" width="7" height="7" rx="1.4" fill="#FFFFFF"/>
+    </svg>`,
+    iconSize: [40, 52],
+    iconAnchor: [20, 50],
+  });
+}
+
+// "You are here" indicator — a small, non-interactive blue dot with a
+// soft breathing halo, exactly like the live-location marker in
+// Uber/Careem. Purely visual: it never intercepts clicks, is never
+// draggable, and carries no coordinates used for pricing or submission
+// (those still live only in state.pickupLatLng, set via setPickup()).
+// It sits *underneath* the pickup pin (lower zIndexOffset) since on
+// first load both markers share the same GPS fix — the pickup pin is
+// the interactive "نقطة الانطلاق" the customer can drag anywhere, while
+// this dot keeps showing their real device position the whole time,
+// so the two stay visually distinct the moment the pickup pin moves.
+function myLocationDivIcon() {
+  return L.divIcon({
+    className: 'my-location-pin',
+    html: `<span class="my-location-pulse"></span><span class="my-location-dot"></span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
+
+function updateMyLocationMarker(lat, lng) {
+  if (!state.map) return;
+  if (state.myLocationMarker) {
+    state.myLocationMarker.setLatLng([lat, lng]);
+  } else {
+    state.myLocationMarker = L.marker([lat, lng], {
+      icon: myLocationDivIcon(),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: -1000,
+    }).addTo(state.map);
+  }
+}
+
+function setPickup(lat, lng, { reverseGeocode = false, fly = true, animate = true, accuracy = null } = {}) {
+  state.pickupLatLng = { lat, lng };
+  document.getElementById('pickupLat').value = lat;
+  document.getElementById('pickupLng').value = lng;
+  showLocationMapLink('pickupMapLink', lat, lng);
+
+  if (state.map) {
+    if (!state.pickupMarker) {
+      state.pickupMarker = L.marker([lat, lng], { icon: pickupDivIcon(), draggable: true }).addTo(state.map);
+      state.pickupMarker.on('dragend', () => {
+        // The customer just took manual control of the pickup point —
+        // live GPS tracking must stop here so it can never drag the pin
+        // back to the device's real-time position on the next fix.
+        stopGpsWatch();
+        const p = state.pickupMarker.getLatLng();
+        setPickup(p.lat, p.lng, { reverseGeocode: true, fly: false });
+      });
+    } else {
+      state.pickupMarker.setLatLng([lat, lng]);
+      // animate=false is used for live GPS ticks (see startGpsWatch()) so
+      // the pin glides to its new spot instead of replaying the "drop"
+      // bounce every few seconds while the customer is simply moving.
+      if (animate) {
+        const el = state.pickupMarker.getElement();
+        if (el) {
+          el.classList.remove('dropped');
+          void el.offsetWidth;
+          el.classList.add('dropped');
+        }
+      }
+    }
+    drawRoute();
+    if (fly) state.map.flyTo([lat, lng], 15, { duration: 1.1 });
+  }
+
+  if (reverseGeocode) reverseGeocodePickup(lat, lng, accuracy);
+  updatePriceBar();
+  validateField('pickup');
+  updateSubmitButtonState();
+}
+
+function setDropoff(lat, lng, { reverseGeocode = false, fly = true } = {}) {
+  state.dropoffLatLng = { lat, lng };
+  document.getElementById('dropoffLat').value = lat;
+  document.getElementById('dropoffLng').value = lng;
+  showLocationMapLink('dropoffMapLink', lat, lng);
+
+  if (state.map) {
+    if (!state.dropoffMarker) {
+      state.dropoffMarker = L.marker([lat, lng], { icon: dropoffDivIcon(), draggable: true }).addTo(state.map);
+      state.dropoffMarker.on('dragend', () => {
+        const p = state.dropoffMarker.getLatLng();
+        setDropoff(p.lat, p.lng, { reverseGeocode: true, fly: false });
+      });
+    } else {
+      state.dropoffMarker.setLatLng([lat, lng]);
+      const el = state.dropoffMarker.getElement();
+      if (el) {
+        el.classList.remove('dropped');
+        void el.offsetWidth;
+        el.classList.add('dropped');
+      }
+    }
+    drawRoute();
+    if (fly) state.map.flyTo([lat, lng], 15, { duration: 1.1 });
+  }
+
+  if (reverseGeocode) reverseGeocodeDropoff(lat, lng);
+  updatePriceBar();
+}
+
+// Draws the visible line between pickup and dropoff when both are set;
+// falls back to the short decorative flourish (original behavior) when
+// only pickup is known yet. This is a straight line on the map — it is
+// NOT a routed path (no driving-directions API is configured) — but the
+// distance used for pricing already accounts for that via
+// ROAD_DISTANCE_FACTOR, so the price itself is a fair approximation even
+// though the drawn line is straight.
+function drawRoute() {
+  if (!state.map || !state.pickupLatLng) return;
+  if (state.decorLine) state.map.removeLayer(state.decorLine);
+
+  const from = [state.pickupLatLng.lat, state.pickupLatLng.lng];
+  const to = state.dropoffLatLng
+    ? [state.dropoffLatLng.lat, state.dropoffLatLng.lng]
+    : [state.pickupLatLng.lat + 0.01, state.pickupLatLng.lng + 0.014]; // decorative fallback
+
+  state.decorLine = L.polyline([from, to], {
+    className: 'decor-route',
+    weight: 4,
+  }).addTo(state.map);
+
+  if (state.dropoffLatLng) {
+    state.map.fitBounds(L.latLngBounds([from, to]), { padding: [70, 70], maxZoom: 15 });
+  }
+}
+
+// Nominatim's reverse geocode returns a full administrative chain in
+// display_name (country, governorate, city, district, village...). The
+// customer needs the most precise detail actually available — a street/
+// road, plus a nearby landmark and/or hyper-local area for context —
+// never a governorate/qadaa/administrative-boundary name (e.g. "الموصل"
+// or "قضاء الموصل") standing in for a precise location. This only
+// changes what's SHOWN in the text field; the lat/lng hidden inputs are
+// already set from the raw coordinates before this ever runs (see
+// setPickup/setDropoff above) and are completely untouched by it.
+function shortAddressFromGeocode(data) {
+  if (!data) return null;
+  const a = data.address || {};
+  const landmark = a.amenity || a.shop || a.tourism || a.building || a.office || a.leisure;
+  const street = a.road;
+  // Hyper-local area tags only (neighbourhood/village-level) — deliberately
+  // excludes county/state_district/city/state (governorate/qadaa-level
+  // administrative names), which must never be shown or relied on in
+  // place of the real coordinates.
+  const area = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.village || a.hamlet || a.town;
+
+  // A name is only ever returned when there's a real street, landmark, or
+  // at least a hyper-local area tag to anchor it. With none of those
+  // (rural spot, open desert, water, etc.), the caller falls back to the
+  // real lat/lng coordinates (see coordsLabel()) instead of a
+  // governorate/qadaa name or any other administrative-boundary guess.
+  if (landmark && street && area) return `${landmark}، ${street}، ${area}`;
+  if (landmark && street) return `${landmark}، ${street}`;
+  if (landmark && area) return `${landmark}، ${area}`;
+  if (landmark) return landmark;
+  if (street && area) return `${street}، ${area}`;
+  if (street) return street;
+  if (area) return area;
+  return null;
+}
+
+// location-system fix: renders a small tappable "open on map" link into
+// one of the (originally empty/hidden) pickupMapLink / dropoffMapLink
+// hint spans, using the exact saved coordinates — so both the customer
+// and, wherever this same trip data is displayed to a driver, anyone
+// reading the address text also has a one-tap way to open the precise
+// GPS point itself, never just a written name that could be ambiguous.
+// Purely presentational: does not read/write state.*LatLng or touch the
+// hidden #pickupLat/#pickupLng/#dropoffLat/#dropoffLng inputs used for
+// submission — those are already set by setPickup()/setDropoff() before
+// this ever runs.
+function showLocationMapLink(hintElId, lat, lng) {
+  const el = document.getElementById(hintElId);
+  if (!el) return;
+  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+  el.innerHTML = `<a href="${url}" target="_blank" rel="noopener">📍 فتح الموقع على الخريطة</a>`;
+  el.hidden = false;
+}
+
+// Fallback label used when reverse geocoding has no reliable street,
+// landmark, or hyper-local area name to offer (see shortAddressFromGeocode
+// above). Per the display requirement, this must never show raw lat/lng
+// digits or symbols, and never a governorate/qadaa/administrative-boundary
+// name — just a plain confirmation that the location was captured. The
+// real coordinates are already saved separately (hidden #pickupLat/
+// #pickupLng / #dropoffLat/#dropoffLng inputs + state.pickupLatLng/
+// state.dropoffLatLng, set in setPickup()/setDropoff() before this ever
+// runs) and are exactly what's used for GPS tracking, distance/price,
+// and the request sent to Supabase — this only controls what the
+// customer sees written in the address text field when no clear address
+// is available.
+function coordsLabel(lat, lng) {
+  return 'تم تحديد موقعك';
+}
+
+async function reverseGeocodePickup(lat, lng, accuracy = null) {
+  // While live GPS tracking is moving this pin every few seconds, re-
+  // resolving the address on every single tick would hammer the Nominatim
+  // API and make the pickup text field flicker constantly while the
+  // customer is simply standing still or moving slowly. Skip the lookup
+  // if the device hasn't moved meaningfully since the last one — this
+  // only throttles the *text lookup*; the actual GPS coordinates saved
+  // for the trip are always the latest real fix, untouched by this.
+  const now = Date.now();
+  if (state.lastGeocodedPickup) {
+    const movedM = haversineKm(state.lastGeocodedPickup.lat, state.lastGeocodedPickup.lng, lat, lng) * 1000;
+    if (movedM < 40 && (now - state.lastGeocodeAt) < 8000) return;
+  }
+  state.lastGeocodedPickup = { lat, lng };
+  state.lastGeocodeAt = now;
+
+  const input = document.getElementById('pickup');
+  const original = input.value;
+  input.placeholder = ' ';
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}&accept-language=ar`);
+    const data = await res.json();
+    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng);
+  } catch (err) {
+    if (!original) input.value = coordsLabel(lat, lng);
+  }
+  updateSubmitButtonState();
+}
+
+async function reverseGeocodeDropoff(lat, lng) {
+  const input = document.getElementById('dropoff');
+  const original = input.value;
+  input.placeholder = ' ';
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}&accept-language=ar`);
+    const data = await res.json();
+    input.value = shortAddressFromGeocode(data) || coordsLabel(lat, lng);
+  } catch (err) {
+    if (!original) input.value = coordsLabel(lat, lng);
+  }
+}
+
+// Forward-geocodes whatever the customer typed into the dropoff field so
+// distance-based pricing works even if they never touch the map. Only
+// runs when we don't already have dropoff coordinates from a map tap/drag
+// (those are more precise and shouldn't be overwritten by a text search).
+async function geocodeDropoff(query) {
+  if (!query || state.dropoffLatLng) return;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=ar&countrycodes=iq`);
+    const data = await res.json();
+    if (data && data[0]) {
+      setDropoff(parseFloat(data[0].lat), parseFloat(data[0].lon), { reverseGeocode: false, fly: false });
+      // setDropoff() overwrites the input with our own value only via
+      // reverseGeocode; since that's false here, the customer's typed
+      // text is preserved as-is instead of being replaced.
+    }
+  } catch (err) {
+    console.error('dropoff geocoding failed', err);
+  }
+}
+
+// Great-circle distance in kilometers between two coordinates.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Locates the customer and drops the pickup pin on their real position.
+//
+// Two things used to make this fail even after the browser's native
+// permission prompt was accepted:
+//  1) A single getCurrentPosition() call with enableHighAccuracy:true and
+//     only a 10s timeout — a fresh GPS/Wi-Fi fix regularly takes longer
+//     than that on a phone that isn't outdoors, so the call would hit
+//     TIMEOUT (error code 3) and we'd show a "check your permission"
+//     message even though permission was never the problem.
+//  2) Every failure (denied / unavailable / timeout) showed the exact
+//     same generic message, so the customer had no way to tell a real
+//     permission block from a slow/failed fix.
+//
+// Fix: try a high-accuracy fix first; if that specifically times out,
+// silently retry once with a relaxed (low-accuracy, longer timeout,
+// cached-position-allowed) request instead of failing outright. Only
+// PERMISSION_DENIED and a failed retry produce an error toast, and each
+// case gets its own message.
+function locateMe(auto = false) {
+  const btn = document.getElementById('recenterBtn');
+  const locateBtn = document.getElementById('locateBtnApp');
+  const startSpin = () => [btn, locateBtn].forEach(b => b && b.classList.add('locating'));
+  const stopSpin = () => [btn, locateBtn].forEach(b => b && b.classList.remove('locating'));
+  startSpin();
+
+  if (!navigator.geolocation) {
+    stopSpin();
+    if (!auto) toast('متصفحك لا يدعم تحديد الموقع الجغرافي');
+    return;
+  }
+
+  // Geolocation is only available in a secure context (HTTPS or
+  // localhost). On a plain-HTTP page the browser blocks the call before
+  // any permission prompt even appears, which used to surface as the
+  // same confusing "check your permission" toast.
+  if (window.isSecureContext === false) {
+    stopSpin();
+    if (!auto) toast('تحديد الموقع يتطلب اتصالاً آمنًا (HTTPS) — تعذّر الوصول لموقعك');
+    return;
+  }
+
+  const onSuccess = (pos) => {
+    // A real GPS/network fix just came in — the pin should now actively
+    // follow the customer's real, moving device position until they take
+    // manual control (map tap / marker drag — see setPickup()).
+    state.gpsFollowing = true;
+    setPickup(pos.coords.latitude, pos.coords.longitude, { reverseGeocode: true, fly: true, accuracy: pos.coords.accuracy });
+    updateMyLocationMarker(pos.coords.latitude, pos.coords.longitude);
+    startGpsWatch();
+    stopSpin();
+  };
+
+  const attemptRelaxed = () => {
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      (err) => {
+        stopSpin();
+        if (auto) return;
+        if (err.code === err.PERMISSION_DENIED) {
+          toast('تعذّر الوصول لموقعك — الرجاء السماح بإذن الموقع من إعدادات المتصفح');
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          toast('تعذّر تحديد موقعك حاليًا — تأكد من تفعيل خدمة الموقع (GPS) وحاول مجددًا');
+        } else {
+          toast('تعذّر تحديد موقعك — حاول مرة أخرى');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+    );
+  };
+
+  navigator.geolocation.getCurrentPosition(
+    onSuccess,
+    (err) => {
+      // Permission was actually denied: no point retrying, and no
+      // amount of relaxing the accuracy/timeout will fix that.
+      if (err.code === err.PERMISSION_DENIED) {
+        stopSpin();
+        if (!auto) toast('تعذّر الوصول لموقعك — الرجاء السماح بإذن الموقع من إعدادات المتصفح');
+        return;
+      }
+      // TIMEOUT or POSITION_UNAVAILABLE on the high-accuracy attempt:
+      // retry once with relaxed settings before giving up.
+      attemptRelaxed();
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+/* ============================================================
+   Live GPS tracking (watchPosition)
+   ------------------------------------------------------------
+   Keeps the pickup pin following the customer's REAL, moving device
+   position — using the browser's native watchPosition with
+   enableHighAccuracy:true, exactly like the single-fix call above.
+   This is what makes the pin update automatically while the customer
+   is in motion, instead of only ever reflecting a single moment-in-
+   time fix. It only ever runs after a real fix has already succeeded
+   (see locateMe's onSuccess) and only ever moves the pin while
+   state.gpsFollowing is true — the instant the customer manually taps
+   the map or drags the pin, that flag flips false and this watch is
+   cleared outright (see setPickup/map click handler), so live
+   tracking can never override a manual choice. No fixed/simulated
+   coordinates are ever used here — every update comes straight from
+   navigator.geolocation.
+   ============================================================ */
+function startGpsWatch() {
+  if (!navigator.geolocation || state.gpsWatchId !== null) return;
+  state.gpsWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      // The "you are here" dot always tracks the real device fix, even
+      // after the customer has taken manual control of the pickup pin —
+      // it's informational only and never moves the pickup point itself.
+      updateMyLocationMarker(pos.coords.latitude, pos.coords.longitude);
+      if (!state.gpsFollowing) return; // customer already took manual control
+      setPickup(pos.coords.latitude, pos.coords.longitude, {
+        reverseGeocode: true,
+        fly: false,   // don't fight the customer's own map panning/zooming
+        animate: false, // glide, don't replay the drop-bounce every tick
+        accuracy: pos.coords.accuracy,
+      });
+    },
+    () => {
+      // Silent by design: a transient signal-loss/timeout on one watch
+      // tick shouldn't interrupt the customer with a toast — the watch
+      // keeps running and simply resumes updating on the next good fix,
+      // and the pin stays exactly where its last real fix placed it.
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function stopGpsWatch() {
+  if (state.gpsWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(state.gpsWatchId);
+  }
+  state.gpsWatchId = null;
+  state.gpsFollowing = false;
+}
+
+/* ============================================================
+   View switching
+   ============================================================ */
+function showView(name) {
+  document.querySelectorAll('.sheet-view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+  document.getElementById('sheetScroll').scrollTop = 0;
+  setActiveNavTab(name);
+  // Fixed full-screen layout — additive UI-only toggle, no request/driver
+  // logic touched. Any view other than "home" hides the map (and its
+  // controls) and lets the sheet grow to fill the entire app-shell via
+  // the flex layout already in app.css, matching a real full-screen
+  // service/detail screen. backToHome()/showView('home') removes this
+  // class again, restoring the home screen exactly as it was.
+  const shell = document.querySelector('.app-shell');
+  const wasFullscreen = shell && shell.classList.contains('is-fullscreen-view');
+  if (shell) shell.classList.toggle('is-fullscreen-view', name !== 'home');
+  // Leaflet renders blank/misaligned tiles if resized while its container
+  // was display:none — re-measure it the moment the map card becomes
+  // visible again (coming back from a full-screen view to home).
+  if (name === 'home' && wasFullscreen && state.map) {
+    setTimeout(() => state.map.invalidateSize(), 60);
+  }
+}
+
+function openBooking(serviceKey) {
+  if (serviceKey) selectService(serviceKey);
+  else if (!state.currentService) selectService('taxi');
+  showView('booking');
+  sheet.setSnap('full');
+  applyProfileToBookingForm();
+  haptic();
+
+  // Auto-detect the customer's pickup location once per visit, the
+  // moment they open the request form — the right time to ask per
+  // Android/iOS guidance (in context, not on cold page load), and
+  // silent (auto=true) so a denial or slow fix never shows an error;
+  // the pickup field simply stays open for manual entry as before.
+  // Skipped entirely if a pickup point is already set, so this never
+  // overwrites a manually typed address, map tap, or marker drag.
+  if (!state.pickupLatLng && !state.autoLocateAttempted) {
+    state.autoLocateAttempted = true;
+    locateMe(true);
+  }
+}
+
+// الصفحة الرئيسية → واجهة "خدمات النقل والتوصيل" المستقلة (عرض/تنقّل فقط):
+// تعرض #quickServices نفسه (الخدمات الستة كما يبنيها buildQuickServiceChips)،
+// ونقر أي خدمة يبقى openBooking(service) كما هو — لا منطق طلبات جديد هنا.
+function openTransportHub() {
+  showView('transport');
+  sheet.setSnap('full');
+  haptic();
+}
+
+function backToHome() {
+  stopStatusPolling();
+  showView('home');
+  sheet.setSnap('half');
+}
+
+/* ============================================================
+   Service selection
+   ============================================================ */
+function selectService(key) {
+  state.currentService = key;
+  document.querySelectorAll('.svc-pill').forEach(p => p.classList.toggle('active', p.dataset.service === key));
+  const isCourier = key === 'courier' || key === 'cargo';
+  document.querySelector('label[for="pickup"]').textContent = isCourier ? 'مكان الاستلام' : 'مكان الانطلاق';
+  document.querySelector('label[for="dropoff"]').textContent = isCourier ? 'مكان التسليم' : 'الوجهة';
+  updatePriceBar();
+  loadServiceDrivers(key);
+  haptic();
+}
+
+/* ============================================================
+   Driver card (booking view) — shows EVERY driver currently returned
+   by get_service_driver_roster() for this service, with no queue/turn
+   concept on the customer side at all: no "front of the queue", no
+   "waiting their turn". The customer sees only two real states —
+   available or busy — and can tap "طلب" on ANY available driver to
+   request that exact driver directly. A busy driver is shown (so the
+   customer can see who's currently working) but has no "طلب" button
+   and cannot be selected. The customer never sees a name or phone-as-
+   identifier here, only vehicle type and status, per privacy design.
+
+   status is computed server-side (see get_service_driver_roster) —
+   this file only ever reads it, never assumes a value when absent
+   (falls back to "متاح" so a driver still returned by the roster is
+   never wrongly shown as busy).
+   ============================================================ */
+const DRIVER_AVATAR_SVG = '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+const CALL_ICON_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const WA_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>';
+const REQUEST_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// Exactly two states shown to the customer, per the no-FIFO design:
+// 🟢 متاح (status === 'active' — selectable) or 🔴 مشغول (anything
+// else — busy or offline both read as simply "not available right
+// now"; the customer never sees a third "بانتظار الدور" queue state).
+//
+// FIX (سائقون/خدمات تظهر "مشغول" خطأً): الشرط القديم كان
+// `String(status||'').toLowerCase() === 'active'` — أي قيمة status لا
+// تساوي 'active' حرفياً، بما فيها الفارغة/null (سائق لم تُحدَّث حالته
+// بعد)، كانت تُصنَّف "مشغول" تلقائياً. هذا يعاكس ما وثّقه هذا الملف
+// نفسه سابقاً ("تعود افتراضياً إلى متاح عند غياب القيمة"). التعديل
+// الوحيد هنا: القيمة الفارغة/null تبقى "متاح" كما كان يُفترض أصلاً؛
+// "active" تبقى "متاح"؛ أي قيمة أخرى غير فارغة (وهي فعلياً ما ترجعه
+// get_service_driver_roster لسائق مشغول/غير متاح) تبقى "مشغول" كما
+// كانت. لا تغيير على الـ RPC ولا على canRequest (شرط زر "طلب" أدناه)،
+// ولا على أي منطق تعيين سائق.
+function rosterStatusInfo(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  const isAvailable = normalized === '' || normalized === 'active';
+  return isAvailable
+    ? { dot: '🟢', label: 'متاح', cls: 'badge-live' }
+    : { dot: '🔴', label: 'مشغول', cls: 'badge-onjob' };
+}
+
+// Renders EVERY driver for this service, each in its own card (no
+// limit(1), nothing hidden — get_service_driver_roster() returns the
+// full roster, including phone). The customer can call/WhatsApp ANY
+// visible driver. "طلب" only appears on an available driver (status
+// === 'active') and requests that exact driver directly — a busy
+// driver has no "طلب" button and cannot be selected. There is no
+// queue/turn concept here at all: no driver is singled out as "next",
+// every available driver is equally selectable.
+// Display-order-only sort: closest real GPS distance to the customer
+// first, everyone else after in original list order — purely
+// cosmetic ordering, never touches the database or any driver's data.
+// A driver's location is ignored (treated as unknown) once it's older
+// than STALE_LOCATION_MS — they simply fall back to the end of the
+// list in original order, instead of showing a false position.
+const STALE_LOCATION_MS = 10 * 60 * 1000; // 10 minutes
+
+function sortRosterByDistance(roster, customerLat, customerLng) {
+  if (customerLat == null || customerLng == null) return roster;
+  const now = Date.now();
+
+  const enriched = roster.map((row, idx) => {
+    const hasFreshLoc =
+      row.driver_lat != null && row.driver_lng != null && row.location_updated_at &&
+      (now - new Date(row.location_updated_at).getTime()) <= STALE_LOCATION_MS;
+    const distanceKm = hasFreshLoc ? haversineKm(customerLat, customerLng, row.driver_lat, row.driver_lng) : Infinity;
+    return { row, idx, distanceKm };
+  });
+
+  enriched.sort((a, b) => {
+    if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
+    return a.idx - b.idx; // stable fallback — preserves the existing list order
+  });
+
+  return enriched.map((e) => e.row);
+}
+
+async function loadServiceDrivers(serviceType) {
+  const wrap = document.getElementById('driversListApp');
+  if (!wrap) return;
+
+  state.featuredDriverId = null;
+  wrap.hidden = true;
+  wrap.innerHTML = '';
+
+  try {
+    const { data: roster, error: rosterError } = await supabaseClient
+      .rpc('get_service_driver_roster', { p_service_type: serviceType });
+
+    if (rosterError || !roster || roster.length === 0) return; // hidden entirely if no drivers exist yet for this service
+
+    const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر يمّك`);
+
+    // Pure real-GPS distance sort (see sortRosterByDistance). Falls
+    // back to the roster's original order untouched when the customer
+    // hasn't set a pickup point yet.
+    const sortedRoster = state.pickupLatLng
+      ? sortRosterByDistance(roster, state.pickupLatLng.lat, state.pickupLatLng.lng)
+      : roster;
+
+    const cardsHtml = sortedRoster.map((row) => {
+      const info = rosterStatusInfo(row.status);
+      const vehicleTypeLabel = row.vehicle_type || SERVICES[serviceType]?.label || 'مركبة';
+      const cleanTel = (row.phone || '').replace(/[^\d+]/g, '');
+      const waTarget = normalizeIraqiPhoneForWhatsapp(row.phone);
+      // "طلب" is only offered on an actually available driver (status
+      // === 'active') — a busy driver cannot be picked for a real,
+      // immediate assignment. Every available driver in the
+      // GPS-sorted list can be chosen equally; none is singled out.
+      const canRequest = row.status === 'active';
+      const hasActions = cleanTel || waTarget || canRequest;
+
+      const roleTitle = roleTitleForService(serviceType);
+      const actionsHtml = hasActions ? `
+        <div class="driver-actions">
+          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال ${roleTitle.byName}">${CALL_ICON_SVG} اتصال</a>` : ''}
+          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب ${roleTitle.name}">${WA_ICON_SVG} واتساب</a>` : ''}
+          ${canRequest ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
+        </div>
+      ` : '';
+
+      return `
+        <div class="driver-card-app${canRequest ? ' driver-live' : ''}">
+          <span class="driver-avatar">${DRIVER_AVATAR_SVG}</span>
+          <div class="driver-info">
+            <b>${escapeHtml(vehicleTypeLabel)}</b>
+            ${roleBadgeHtml(serviceType)}
+            <div class="driver-meta"><span class="${info.cls}">${info.dot} ${info.label}</span></div>
+          </div>
+        </div>
+        ${actionsHtml}
+      `;
+    }).join('');
+
+    wrap.innerHTML = `<p class="section-label">${roleTitleForService(serviceType).plural}</p>${cardsHtml}`;
+    wrap.hidden = false;
+  } catch (err) {
+    console.error('loadServiceDrivers failed', err);
+  }
+}
+
+function updatePriceBar() {
+  if (!state.currentService) return;
+  const svc = SERVICES[state.currentService];
+  if (!svc) return;
+
+  let distanceKm = null;
+  let total = svc.base;
+  if (state.pickupLatLng && state.dropoffLatLng) {
+    const straightKm = haversineKm(
+      state.pickupLatLng.lat, state.pickupLatLng.lng,
+      state.dropoffLatLng.lat, state.dropoffLatLng.lng
+    );
+    distanceKm = straightKm * ROAD_DISTANCE_FACTOR;
+    total = svc.base + distanceKm * svc.perKm;
+  }
+
+  const priceEl = document.getElementById('priceEstimate');
+  const distanceTag = document.getElementById('distanceTag');
+  priceEl.style.opacity = '0';
+  setTimeout(() => {
+    if (distanceKm != null) {
+      priceEl.textContent = `${Math.round(total).toLocaleString('en-US')} دينار`;
+      distanceTag.hidden = false;
+      distanceTag.textContent = `المسافة التقريبية: ${distanceKm.toFixed(1)} كم`;
+    } else {
+      priceEl.textContent = `${Math.round(svc.base).toLocaleString('en-US')} دينار (سعر أساسي بدون وجهة)`;
+      distanceTag.hidden = true;
+    }
+    priceEl.style.opacity = '1';
+  }, 100);
+  document.getElementById('bookBtnLabel').textContent = `اطلب ${svc.label} الآن`;
+}
+
+// Fetches real, admin-editable prices from Supabase and overwrites the
+// SERVICES fallback defaults in place — every function that reads
+// SERVICES[...] (chips, price bar, submit) automatically picks up the
+// real values because they all read from this same shared object.
+async function loadServicePrices() {
+  try {
+    const { data, error } = await supabaseClient.from('service_prices').select('*');
+    if (error || !data) return;
+    data.forEach(row => {
+      if (SERVICES[row.service_type]) {
+        SERVICES[row.service_type].label = row.label;
+        SERVICES[row.service_type].base = Number(row.base_price);
+        SERVICES[row.service_type].perKm = Number(row.price_per_km);
+      }
+    });
+    buildQuickServiceChips();
+    buildServiceSwitch();
+    updatePriceBar();
+  } catch (err) {
+    console.error('failed to load service prices, using fallback defaults', err);
+  }
+}
+
+/* ============================================================
+   Customer ads carousel — additive only. Reads active/in-schedule
+   ads via the get_active_customer_ads() RPC (see
+   migrations/migration_customer_ads.sql) and rotates them in the
+   home view, right below the existing promo-card. Does not touch
+   booking, pricing, the map, or any GPS/location code.
+   ============================================================ */
+const adsState = {
+  ads: [],
+  index: 0,
+  timer: null,
+};
+
+function stopAdsRotation() {
+  if (adsState.timer) {
+    clearTimeout(adsState.timer);
+    adsState.timer = null;
+  }
+}
+
+function renderAdsDots() {
+  const dots = document.getElementById('adsDots');
+  if (!dots) return;
+  if (adsState.ads.length <= 1) {
+    dots.hidden = true;
+    dots.innerHTML = '';
+    return;
+  }
+  dots.hidden = false;
+  dots.innerHTML = adsState.ads.map((_, i) =>
+    `<span class="ads-dot${i === adsState.index ? ' active' : ''}"></span>`
+  ).join('');
+}
+
+function showAdSlide(i) {
+  const track = document.getElementById('adsTrack');
+  if (!track) return;
+  adsState.index = ((i % adsState.ads.length) + adsState.ads.length) % adsState.ads.length;
+  track.style.transform = `translateX(${adsState.index * 100}%)`;
+  renderAdsDots();
+}
+
+function scheduleNextAdSlide() {
+  stopAdsRotation();
+  if (adsState.ads.length <= 1) return;
+  const current = adsState.ads[adsState.index];
+  const seconds = Number(current?.display_seconds) > 0 ? Number(current.display_seconds) : 6;
+  adsState.timer = setTimeout(() => {
+    showAdSlide(adsState.index + 1);
+    scheduleNextAdSlide();
+  }, seconds * 1000);
+}
+
+function renderAdsCarousel() {
+  const carousel = document.getElementById('adsCarousel');
+  const track = document.getElementById('adsTrack');
+  if (!carousel || !track) return;
+
+  if (!adsState.ads.length) {
+    carousel.hidden = true;
+    track.innerHTML = '';
+    stopAdsRotation();
+    return;
+  }
+
+  track.innerHTML = adsState.ads.map(ad => {
+    const img = ad.image_url
+      ? `<img class="ad-slide-img" src="${escapeHtmlAttr(ad.image_url)}" alt="" loading="lazy">`
+      : '';
+    const hasText = ad.title || ad.body;
+    const body = hasText
+      ? `<div class="ad-slide-body">${ad.title ? `<b>${escapeHtmlText(ad.title)}</b>` : ''}${ad.body ? `<span>${escapeHtmlText(ad.body)}</span>` : ''}</div>`
+      : '';
+    const tag = ad.link_url ? 'a' : 'div';
+    const href = ad.link_url ? ` href="${escapeHtmlAttr(ad.link_url)}" target="_blank" rel="noopener noreferrer"` : '';
+    return `<${tag} class="ad-slide"${href} data-ad-id="${escapeHtmlAttr(ad.id)}">${img}${body}</${tag}>`;
+  }).join('');
+
+  carousel.hidden = false;
+  adsState.index = 0;
+  track.style.transform = 'translateX(0%)';
+  renderAdsDots();
+  scheduleNextAdSlide();
+}
+
+// Small, local escaping helpers (app.js has no existing escapeHtml —
+// that lives only in admin.js) — kept minimal and scoped to ads only.
+function escapeHtmlText(str) {
+  return String(str == null ? '' : str)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+function escapeHtmlAttr(str) {
+  return escapeHtmlText(str).replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+async function loadCustomerAds() {
+  try {
+    const { data, error } = await supabaseClient.rpc('get_active_customer_ads');
+    if (error || !data) return;
+    adsState.ads = data;
+    renderAdsCarousel();
+    if (typeof window.ySpacesRenderPromos === 'function') window.ySpacesRenderPromos();
+  } catch (err) {
+    console.error('failed to load customer ads', err);
+  }
+}
+
+/* ============================================================
+   Future services teaser (المطاعم / الأسواق) — reads ACTIVE rows
+   from the admin-managed restaurants/markets tables (see the
+   "المطاعم والأسواق" tab in admin.js) and swaps the static "قريباً"
+   card content in index.html (#soonCardRestaurants/#soonCardMarkets)
+   for the real list of names, but ONLY once a category actually has
+   at least one active row. If a category has zero active rows, or
+   this read fails for any reason (offline, RLS, etc.), the existing
+   static "قريباً" markup already in index.html is left completely
+   untouched — there is no separate empty-state branch to maintain,
+   the original HTML already IS the empty state. Purely a read-only
+   display list: no click handler, no data-service attribute, no
+   ordering/booking logic is attached to these names, and nothing
+   about trip_requests/drivers/service_prices/customer_ads is read
+   or touched here.
+   ============================================================ */
+/* ============================================================
+   Future services teaser badges (المطاعم / الأسواق / مكتب المستقبل)
+   — reads the COUNT of active rows from the admin-managed
+   restaurants/markets/future_office tables (see the "المطاعم
+   والأسواق ومكتب المستقبل" tab in admin.js) and updates each tile's
+   small badge with that real count, or leaves it as the static
+   "قريباً" already in index.html when a category has zero active
+   rows (or the read fails) — never invented data. These three tiles
+   are real navigation buttons wired in places.js (openPlaces()); this
+   function only ever touches the badge <span>, never the tile's
+   click behaviour. "خدمات أخرى" (other_services /
+   #soonCardOtherServices) keeps its original separate, unrelated
+   behaviour below — untouched.
+   ============================================================ */
+async function loadFutureServices() {
+  await Promise.all([
+    updatePlacesBadge('restaurants', 'soonBadgeRestaurants', 'مطعم'),
+    updatePlacesBadge('markets', 'soonBadgeMarkets', 'سوق'),
+    updatePlacesBadge('future_office', 'soonBadgeFutureOffice', 'فرع'),
+    loadFutureServiceCategory('other_services', 'soonCardOtherServices', '🛠️', 'خدمات أخرى'),
+  ]);
+}
+
+async function updatePlacesBadge(table, badgeId, unitLabel) {
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  try {
+    const { count, error } = await supabaseClient
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq('active', true);
+    if (error || !count) return; // keep the static "قريباً" badge as-is
+    badge.textContent = `${count} ${unitLabel}${count > 1 ? '+' : ''}`;
+  } catch (err) {
+    console.error(`failed to load ${table} count for teaser badge`, err);
+    // network/RLS hiccup — silently keep showing "قريباً"
+  }
+}
+
+async function loadFutureServiceCategory(table, cardId, icon, label) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from(table)
+      .select('name')
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) return; // keep the static "قريباً" card as-is
+
+    const namesText = data.map((row) => escapeHtmlText(row.name)).join('، ');
+    card.innerHTML = `
+      <span class="soon-ic">${icon}</span>
+      <span class="soon-label">${label}</span>
+      <span class="soon-badge" style="background:transparent; color:var(--text-muted); font-weight:600; white-space:normal;">${namesText}</span>
+    `;
+  } catch (err) {
+    console.error(`failed to load ${table} for future services teaser`, err);
+    // network/RLS hiccup — silently keep showing the static "قريباً" card
+  }
+}
+
+/* ============================================================
+   Customer ads push opt-in — additive only. Registers the SAME
+   sw.js already used for the app shell (registerServiceWorker()
+   above already does this on page load; this just reuses that
+   registration rather than creating a second one), subscribes via
+   the browser's Push API using the SAME public VAPID key already
+   used elsewhere in this project, and saves the subscription via
+   save_customer_push_subscription() — a brand-new RPC that only
+   writes to the brand-new customer_push_subscriptions table. Does
+   not touch driver/admin push in any way.
+   ============================================================ */
+// Public VAPID key — safe to embed client-side by design (matches the
+// same key already used in admin.js/driver.js; the private key never
+// leaves the Edge Function's environment).
+const CUSTOMER_VAPID_PUBLIC_KEY = 'BA_mwRbHk_BXqtt8PKCma9oaAbuQVAoYNvNvtTmq2L8bcWTPakSgiU4AuDZKpo6NCpKCRzXM2gFaZ5QIA6s5_ww';
+
+function urlBase64ToUint8ArrayForAds(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function setupCustomerPushNotifications() {
+  const btn = document.getElementById('enableCustomerPushBtn');
+  const label = btn ? btn.querySelector('.more-item-label') : null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (label) label.textContent = 'الإشعارات غير مدعومة بهذا المتصفح';
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') {
+      if (label) label.textContent = 'تم رفض إذن الإشعارات';
+      return;
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8ArrayForAds(CUSTOMER_VAPID_PUBLIC_KEY),
+      });
+    }
+
+    const { error } = await supabaseClient.rpc('save_customer_push_subscription', {
+      p_subscription: subscription.toJSON(),
+    });
+    if (error) throw error;
+
+    if (label) label.textContent = 'الإشعارات مفعّلة 🔔';
+    if (btn) btn.disabled = true;
+    haptic();
+  } catch (err) {
+    console.error('customer push setup failed', err);
+    if (label) label.textContent = 'تعذّر تفعيل الإشعارات';
+  }
+}
+
+/* ============================================================
+   Live inline validation
+   ============================================================ */
+const PHONE_RE = /^07\d{9}$/;
+
+// Explicit map from input id -> error <span> id. Deliberately not derived
+// by string transformation (e.g. capitalizing "customerName") — that
+// approach previously produced "errCustomerName", which doesn't exist in
+// the markup (the real span is #errName) and threw on first validation.
+const ERROR_EL_ID = { pickup: 'errPickup', customerName: 'errName', phone: 'errPhone' };
+
+function setFieldError(inputId, message) {
+  const inputEl = document.getElementById(inputId);
+  const wrap = inputEl ? inputEl.closest('.float-field') : null;
+  const errEl = document.getElementById(ERROR_EL_ID[inputId]);
+  if (!wrap) return;
+  if (message) {
+    wrap.classList.add('invalid');
+    if (errEl) errEl.textContent = message;
+  } else {
+    wrap.classList.remove('invalid');
+    if (errEl) errEl.textContent = '';
+  }
+}
+
+function validateField(inputId) {
+  const val = document.getElementById(inputId).value.trim();
+
+  if (inputId === 'pickup' && !val) {
+    setFieldError('pickup', 'مكان الانطلاق مطلوب');
+    return false;
+  }
+  if (inputId === 'customerName') {
+    if (!val) { setFieldError('customerName', 'الاسم مطلوب'); return false; }
+    if (val.length < 2) { setFieldError('customerName', 'الاسم قصير جداً'); return false; }
+  }
+  if (inputId === 'phone') {
+    if (!val) { setFieldError('phone', 'رقم الجوال مطلوب'); return false; }
+    if (!PHONE_RE.test(val)) { setFieldError('phone', 'رقم غير صحيح — مثال: 07xxxxxxxxx'); return false; }
+  }
+  setFieldError(inputId, null);
+  return true;
+}
+
+/* ============================================================
+   Submit button enable/disable
+   #bookSubmitBtn is `disabled` by default in index.html. Nothing
+   previously removed that attribute, so the button could never be
+   clicked and the form's `submit` event never fired — handleSubmit()
+   never even started. This re-evaluates the required conditions
+   (pickup + name + a validly-formatted phone + the consent checkbox
+   + a specifically chosen available driver — no-FIFO: there is no
+   "submit and let the system pick someone" path) on every relevant
+   change and toggles `disabled` accordingly, without touching
+   validateField()'s own inline error-message logic or anything past
+   the button itself.
+   ============================================================ */
+function updateSubmitButtonState() {
+  const btn = document.getElementById('bookSubmitBtn');
+  if (!btn) return;
+  const pickup = document.getElementById('pickup')?.value.trim();
+  const name = document.getElementById('customerName')?.value.trim();
+  const phone = document.getElementById('phone')?.value.trim();
+  const consent = document.getElementById('consentCheck');
+  const ready = !!pickup && !!name && name.length >= 2 && !!phone && PHONE_RE.test(phone) && !!(consent && consent.checked) && !!state.featuredDriverPhone;
+  // FIX (bug #1 — button unresponsive): this used to set btn.disabled =
+  // !ready. A native `disabled` button in HTML swallows every click
+  // before it ever reaches our own JS — including the "submit" event
+  // listener that calls handleSubmit() — so whenever `ready` was false
+  // (most commonly: no driver picked from the list yet) the button
+  // looked normal but literally could not be tapped, with no message
+  // explaining why. The button is now ALWAYS enabled/clickable; we only
+  // toggle a CSS class for the same dimmed visual, and
+  // handleSubmit() itself does the real validation and tells the
+  // customer exactly what's missing. `removeAttribute` also covers the
+  // case where index.html still hard-codes `disabled` on this button by
+  // default — this guarantees it's cleared on first load too.
+  btn.classList.toggle('is-blocked', !ready);
+  btn.setAttribute('aria-disabled', String(!ready));
+  btn.removeAttribute('disabled');
+}
+
+/* ============================================================
+   Submit
+   ============================================================ */
+function showMsg(msg) {
+  const el = document.getElementById('appMsg');
+  el.textContent = msg;
+  el.classList.add('show', 'err');
+}
+function clearMsg() {
+  document.getElementById('appMsg').classList.remove('show');
+}
+
+function toast(msg, ms) {
+  const t = document.getElementById('appToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), ms || 2400);
+}
+
+function saveRecentLocation(pickup, dropoff) {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    const entry = { pickup, dropoff, t: Date.now() };
+    const filtered = list.filter(x => x.pickup !== pickup);
+    filtered.unshift(entry);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(filtered.slice(0, 3)));
+  } catch { /* localStorage unavailable — silently skip, non-critical */ }
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+}
+
+async function handleSubmit(e) {
+  // ============================================================
+  // DIAGNOSTIC INSTRUMENTATION (temporary — see console.log/[SUBMIT] lines)
+  // ------------------------------------------------------------
+  // ROOT CAUSE FOUND: the previous version's try/catch only wrapped the
+  // code from `showView('submitting')` onward. Every statement BEFORE
+  // that — e.preventDefault(), clearMsg(), all eight
+  // document.getElementById(...).value reads, and the three
+  // validateField() calls — sat OUTSIDE any try/catch. If ANY of those
+  // throws (e.g. a getElementById() call returns null because an input
+  // id doesn't match the live HTML, so `.value` throws
+  // "Cannot read properties of null"), the exception is never caught:
+  // it becomes a silent unhandled promise rejection (async function),
+  // execution of handleSubmit stops dead right there, and:
+  //   - no code after it ever runs, so .rpc() is never called → no POST,
+  //     ever, in the API Gateway — matches exactly what you're seeing.
+  //   - no NEW message is shown either, since showMsg() is also further
+  //     down — so whatever "تعذّر إرسال الطلب" text was already on
+  //     screen from an earlier attempt just stays there, looking
+  //     identical every time and making it seem like the same
+  //     "network" failure is recurring.
+  // The whole function is now wrapped in ONE try/catch from the very
+  // first line, with a `step` tracker updated before each statement.
+  // Whatever throws, we now catch it, log exactly which step it was on
+  // plus the real error, and show the user feedback instead of hanging
+  // silently. This structural fix is the actual bug fix — the labeled
+  // console.log lines are the temporary diagnostic layer on top of it;
+  // they can be trimmed later, but the try/catch restructuring must stay.
+  let step = 'start';
+  try {
+    step = 'preventDefault';
+    e.preventDefault();
+    console.log('[SUBMIT] 1/20 preventDefault OK');
+
+    step = 'clearMsg';
+    clearMsg();
+    console.log('[SUBMIT] 2/20 clearMsg OK');
+
+    step = 'read #customerName';
+    const name = document.getElementById('customerName').value.trim();
+    console.log('[SUBMIT] 3/20 name =', JSON.stringify(name));
+
+    step = 'read #phone';
+    const phone = document.getElementById('phone').value.trim();
+    console.log('[SUBMIT] 4/20 phone =', JSON.stringify(phone));
+
+    step = 'read #pickup';
+    const pickup = document.getElementById('pickup').value.trim();
+    console.log('[SUBMIT] 5/20 pickup =', JSON.stringify(pickup));
+
+    step = 'read #dropoff';
+    const dropoff = document.getElementById('dropoff').value.trim();
+    console.log('[SUBMIT] 6/20 dropoff =', JSON.stringify(dropoff));
+
+    step = 'read #scheduledAt';
+    const scheduledAt = document.getElementById('scheduledAt').value;
+    console.log('[SUBMIT] 7/20 scheduledAt =', JSON.stringify(scheduledAt));
+
+    step = 'read #notes';
+    const notes = document.getElementById('notes').value.trim();
+    console.log('[SUBMIT] 8/20 notes =', JSON.stringify(notes));
+
+    step = 'read #pickupLat';
+    const pickupLat = document.getElementById('pickupLat').value;
+    console.log('[SUBMIT] 9/20 pickupLat =', JSON.stringify(pickupLat));
+
+    step = 'read #pickupLng';
+    const pickupLng = document.getElementById('pickupLng').value;
+    console.log('[SUBMIT] 10/20 pickupLng =', JSON.stringify(pickupLng));
+
+    step = 'validateField(pickup)';
+    const validPickup = validateField('pickup');
+    console.log('[SUBMIT] 11/20 validPickup =', validPickup);
+
+    step = 'validateField(customerName)';
+    const validName = validateField('customerName');
+    console.log('[SUBMIT] 12/20 validName =', validName);
+
+    step = 'validateField(phone)';
+    const validPhone = validateField('phone');
+    console.log('[SUBMIT] 13/20 validPhone =', validPhone);
+
+    if (!validPickup || !validName || !validPhone) {
+      console.log('[SUBMIT] validation failed — stopping before RPC (this is expected/normal, not a bug)');
+      haptic(20);
+      const firstInvalid = document.querySelector('.float-field.invalid input');
+      if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // FIX (bug #1): the consent checkbox used to only be enforced by
+    // disabling the button (updateSubmitButtonState). Now that the
+    // button is always clickable (see that function), handleSubmit
+    // must check it explicitly too, or an unchecked box would let the
+    // request through — or, before this fix, could just as easily be
+    // the silent, unexplained reason the old disabled-button click did
+    // nothing at all.
+    step = 'check consent checkbox';
+    const consentEl = document.getElementById('consentCheck');
+    if (!consentEl || !consentEl.checked) {
+      console.log('[SUBMIT] consent not checked — stopping before RPC');
+      haptic(20);
+      showMsg('يرجى الموافقة على الشروط أولاً');
+      consentEl?.focus();
+      return;
+    }
+
+    // No-FIFO guard: a request can only ever be sent to a specific
+    // driver the customer actually tapped "طلب" on in the list. There
+    // is no "submit with nobody chosen" path from the customer side —
+    // if that ever happens (e.g. the driver list refreshed and the
+    // previous pick is now stale), stop here with a clear message
+    // instead of letting the RPC fall through to any server-side
+    // auto-assignment.
+    step = 'check featuredDriverPhone (no-FIFO guard)';
+    if (!state.featuredDriverPhone) {
+      console.log('[SUBMIT] no driver selected — stopping before RPC');
+      haptic(20);
+      showMsg(`يرجى اختيار ${roleTitleForService(state.currentService).available} من القائمة أولاً`);
+      return;
+    }
+
+    step = 'showView(submitting)';
+    showView('submitting');
+    console.log('[SUBMIT] 14/20 showView(submitting) OK');
+
+    step = "sheet.setSnap('half') #1";
+    sheet.setSnap('half');
+    console.log('[SUBMIT] 15/20 sheet.setSnap OK');
+
+    // Build every RPC argument OUTSIDE the .rpc() call itself, field by
+    // field, with risky conversions guarded individually (an unparsable
+    // scheduledAt used to throw RangeError here — now it just falls
+    // back to null instead of aborting the whole function).
+    step = 'build p_scheduled_at';
+    let p_scheduled_at = null;
+    if (scheduledAt) {
+      const parsed = new Date(scheduledAt);
+      if (isNaN(parsed.getTime())) {
+        console.error('[SUBMIT] scheduledAt unparsable, using null:', scheduledAt);
+      } else {
+        p_scheduled_at = parsed.toISOString();
+      }
+    }
+    console.log('[SUBMIT] 16/20 p_scheduled_at =', p_scheduled_at);
+
+    step = 'build lat/lng';
+    const parsedPickupLat = pickupLat && Number.isFinite(Number(pickupLat)) ? Number(pickupLat) : null;
+    const parsedPickupLng = pickupLng && Number.isFinite(Number(pickupLng)) ? Number(pickupLng) : null;
+    console.log('[SUBMIT] 17/20 parsedPickupLat/Lng =', parsedPickupLat, parsedPickupLng);
+
+    step = 'build submitPayload';
+    const submitPayload = {
+      p_service_type: state.currentService,
+      p_customer_name: name,
+      p_phone: phone,
+      p_pickup_location: pickup,
+      p_pickup_lat: parsedPickupLat,
+      p_pickup_lng: parsedPickupLng,
+      p_dropoff_location: dropoff || null,
+      // Real drop-off coordinates exactly as set by the map tap/drag or
+      // the typed-address geocoding (state.dropoffLatLng) — null when the
+      // customer never set a drop-off point. Both or neither.
+      p_dropoff_lat: state.dropoffLatLng && Number.isFinite(Number(state.dropoffLatLng.lat)) && Number.isFinite(Number(state.dropoffLatLng.lng)) ? Number(state.dropoffLatLng.lat) : null,
+      p_dropoff_lng: state.dropoffLatLng && Number.isFinite(Number(state.dropoffLatLng.lat)) && Number.isFinite(Number(state.dropoffLatLng.lng)) ? Number(state.dropoffLatLng.lng) : null,
+      p_scheduled_at,
+      p_notes: notes || null,
+      // The driver the customer actually tapped "طلب" on (if any) —
+      // the RPC re-validates this driver is still active for this
+      // service at the moment of insert and, only if so, assigns them
+      // to the trip immediately (status → 'assigned'). If the driver
+      // is gone/inactive by now, or nothing was picked, this is simply
+      // null and behavior is identical to before (status stays 'new').
+      p_selected_driver_phone: state.featuredDriverPhone || null,
+    };
+    console.log('[SUBMIT] 18/20 payload built:', submitPayload);
+
+    step = 'check supabaseClient';
+    console.log('[SUBMIT] 19/20 typeof supabaseClient =', typeof supabaseClient, supabaseClient);
+    if (!supabaseClient || typeof supabaseClient.rpc !== 'function') {
+      throw new Error('supabaseClient is missing or not initialized (typeof=' + typeof supabaseClient + ') — check script load order / that the Supabase config script runs before app.js');
+    }
+
+    step = 'await supabaseClient.rpc(submit_trip_request)';
+    console.log('[SUBMIT] 20/20 calling supabaseClient.rpc("submit_trip_request", ...) now — if this is the LAST line you see, the request never left the browser.');
+    const { data, error } = await supabaseClient
+      .rpc('submit_trip_request', submitPayload)
+      .single();
+
+    step = 'after rpc call returned';
+    console.log('[SUBMIT] rpc() returned. error =', error, ' data =', data);
+
+    if (error) throw error;
+
+    // ⚠️ Design change (see migration 3 / FINAL_DESIGN.md): the queue
+    // bump (last_served_at + request_count) now happens ATOMICALLY
+    // *inside* submit_trip_request itself — for BOTH the case where the
+    // customer picked a specific driver AND the new case where nobody
+    // was picked and the RPC auto-assigns the front-of-queue driver
+    // server-side. A separate select_driver() call here would DOUBLE-
+    // bump the same driver for the same booking, corrupting fairness
+    // stats. So this call is intentionally gone — do not re-add it.
+    state.featuredDriverId = null;
+    state.featuredDriverPhone = null;
+
+    state.lastSubmission = {
+      id: data.id,
+      request_number: data.request_number,
+      phone,
+      service_type: state.currentService,
+      pickup, dropoff,
+      created_at: new Date().toISOString(),
+    };
+    state.lastKnownStatus = 'new';
+    saveRecentLocation(pickup, dropoff);
+    renderStatusView();
+    showView('status');
+    sheet.setSnap('half');
+    haptic(15);
+    startStatusPolling();
+    console.log('[SUBMIT] success — request_number:', data.request_number);
+  } catch (err) {
+    // Log the REAL Postgres/PostgREST error (message/details/hint/code)
+    // instead of only the generic object — this is what actually shows
+    // the true cause (e.g. an outdated CHECK constraint, a missing grant,
+    // vs. an actual network failure) in the browser console. Also logs
+    // WHICH step failed, since the try/catch now covers the entire
+    // function instead of only the RPC call.
+    console.error(`[SUBMIT] FAILED at step "${step}":`, {
+      message: err?.message, details: err?.details, hint: err?.hint, code: err?.code, name: err?.name, raw: err,
+    });
+    showView('booking');
+    sheet.setSnap('full');
+
+    // ============================================================
+    // TEMPORARY ON-SCREEN DIAGNOSTIC (remove once root cause is
+    // confirmed — see request to restore the plain user-facing message
+    // afterward). Console isn't reachable from the reporter's iPhone,
+    // so surface the same step name + real error detail that
+    // console.error already logs above, directly in the visible
+    // error banner (showMsg → #appMsg, via textContent, so this is
+    // safe from HTML injection regardless of error content).
+    // ============================================================
+    const diagnosticDetail = [
+      err?.message,
+      err?.code ? `code=${err.code}` : null,
+      err?.hint ? `hint=${err.hint}` : null,
+      err?.details ? `details=${err.details}` : null,
+    ].filter(Boolean).join(' | ') || String(err);
+    showMsg(`تعذّر إرسال الطلب. [تشخيص مؤقت] فشل عند الخطوة: "${step}" — ${diagnosticDetail}`);
+  }
+}
+
+/* ============================================================
+   Iraqi phone normalization for wa.me links
+   Admin can type the driver's number in more than one shape (with/
+   without a leading 0, with +964, with spaces/dashes). A naive
+   `.replace(/^0/, '964')` silently produces a wrong or incomplete
+   number for every shape except the exact "07xxxxxxxxx" one — this
+   normalizes all common shapes, and returns null (rather than a
+   broken link) when the input can't be confidently normalized.
+   ============================================================ */
+function normalizeIraqiPhoneForWhatsapp(raw) {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, ''); // strip spaces, dashes, +, etc.
+  if (!digits) return null;
+
+  if (digits.startsWith('00964')) return digits.slice(2);        // 00964xxxxxxxxxx -> 964xxxxxxxxxx
+  if (digits.startsWith('964') && digits.length === 13) return digits; // already correct
+  if (digits.startsWith('0') && digits.length === 11) return '964' + digits.slice(1); // 07xxxxxxxxx
+  if (digits.startsWith('7') && digits.length === 10) return '964' + digits;          // missing leading 0
+
+  return null; // unrecognized shape — caller must hide the button rather than link a wrong number
+}
+
+function buildWhatsappLink(driverPhoneRaw) {
+  const s = state.lastSubmission;
+  if (!s) return null;
+  const target = driverPhoneRaw ? normalizeIraqiPhoneForWhatsapp(driverPhoneRaw) : BUSINESS_WHATSAPP_NUMBER;
+  if (!target) return null; // couldn't normalize — caller must not show a broken link
+  const svc = SERVICES[s.service_type]?.label || s.service_type;
+  const text = encodeURIComponent(
+    `مرحباً، لدي طلب رحلة على يمّك\n` +
+    `رقم الطلب: ${s.request_number}\n` +
+    `الخدمة: ${svc}\n` +
+    `من: ${s.pickup}\n` +
+    (s.dropoff ? `إلى: ${s.dropoff}\n` : '')
+  );
+  return `https://wa.me/${target}?text=${text}`;
+}
+
+/* ============================================================
+   Status view rendering + live polling
+   ============================================================ */
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+function renderStatusView() {
+  const s = state.lastSubmission;
+  document.getElementById('statusReqChip').textContent = '#' + (s.request_number || s.id.slice(0, 8).toUpperCase());
+  document.getElementById('statusTime').textContent = formatTime(s.created_at);
+  document.getElementById('statusSvcTag').textContent = SERVICES[s.service_type]?.label || s.service_type;
+  document.getElementById('statusServiceLabel').textContent = SERVICES[s.service_type]?.label || s.service_type;
+  document.getElementById('statusPickup').textContent = s.pickup || '—';
+  document.getElementById('statusDropoff').textContent = s.dropoff || '—';
+
+  // رسائل ما قبل تعيين مزوّد الخدمة — المسمى من نوع الخدمة الفعلي للطلب،
+  // يظهر مرة واحدة فقط، بدون أي بيانات وهمية.
+  const pendingTextEl = document.getElementById('driverPendingText');
+  const pendingSubEl = document.getElementById('driverPendingSub');
+  const callBtnEl = document.getElementById('callDriverBtn');
+  const waBtnEl = document.getElementById('whatsappDriverBtn');
+  const phoneTagEl = document.getElementById('driverPhoneTag');
+  const roleTitle = roleTitleForService(s.service_type);
+  const pendingMsg = statusMessages(s.service_type, 'new', false);
+  if (pendingTextEl) pendingTextEl.textContent = pendingMsg.headline;
+  if (pendingSubEl) pendingSubEl.textContent = pendingMsg.sub;
+  if (callBtnEl) callBtnEl.setAttribute('aria-label', `اتصال ${roleTitle.byName}`);
+  if (waBtnEl) waBtnEl.setAttribute('aria-label', `واتساب ${roleTitle.name}`);
+  if (phoneTagEl) phoneTagEl.setAttribute('aria-label', `اتصال ${roleTitle.byName}`);
+
+  renderTimeline('new');
+  const businessLink = buildWhatsappLink();
+  const waBtnApp = document.getElementById('whatsappBtnApp');
+  if (businessLink) {
+    waBtnApp.href = businessLink;
+    waBtnApp.hidden = false;
+  } else {
+    waBtnApp.hidden = true; // BUSINESS_WHATSAPP_NUMBER not configured — hide rather than link nothing
+  }
+}
+
+function renderTimeline(status) {
+  const timelineEl = document.getElementById('timelineApp');
+  if (status === 'cancelled') {
+    timelineEl.innerHTML = `<div class="tla-step cancelled current"><span class="tla-dot"></span><span>تم إلغاء الطلب</span></div>`;
+    return;
+  }
+  const currentIndex = Math.max(0, TIMELINE_STEPS.indexOf(status));
+  timelineEl.innerHTML = TIMELINE_STEPS.map((step, i) => {
+    const done = i < currentIndex;
+    const current = i === currentIndex;
+    return `
+      <div class="tla-step ${done ? 'done' : ''} ${current ? 'current' : ''}">
+        <span class="tla-dot">${done ? '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</span>
+        <span>${TIMELINE_LABELS[step]}</span>
+      </div>`;
+  }).join('');
+}
+
+// Simple, defensive Arabic label map for common car-color values so the
+// color chip reads naturally either way — if the value already comes as
+// Arabic text from the database it's shown as-is (falls through the map
+// untouched); this never invents a color that isn't actually in the row.
+const CAR_COLOR_LABELS_AR = {
+  white: 'أبيض', black: 'أسود', silver: 'فضي', gray: 'رمادي', grey: 'رمادي',
+  red: 'أحمر', blue: 'أزرق', green: 'أخضر', gold: 'ذهبي', beige: 'بيج',
+  brown: 'بني', yellow: 'أصفر', orange: 'برتقالي',
+};
+// Matching dot colors for the small swatch next to the chip — purely a
+// cosmetic hint, falls back to a neutral gray dot for any unmapped value.
+const CAR_COLOR_SWATCH = {
+  'أبيض': '#F4F6F8', 'أسود': '#1A1F26', 'فضي': '#C7CDD6', 'رمادي': '#8A93A3',
+  'أحمر': '#D4453B', 'أزرق': '#2F6FE4', 'أخضر': '#2FAE63', 'ذهبي': '#E5B85C',
+  'بيج': '#D9C8A9', 'بني': '#7A5A3C', 'أصفر': '#E8C93A', 'برتقالي': '#E08A32',
+};
+
+function applyDriverInfo(row) {
+  const card = document.getElementById('driverCard');
+  const avatar = document.getElementById('driverAvatar');
+  const statusDot = document.getElementById('driverStatusDot');
+  const pendingText = document.getElementById('driverPendingText');
+  const pendingSub = document.getElementById('driverPendingSub');
+  const ratingTag = document.getElementById('driverRatingTag');
+  const meta = document.getElementById('driverMeta');
+  const colorTag = document.getElementById('driverColorTag');
+  const banner = document.getElementById('driverStatusBanner');
+  const bannerText = document.getElementById('driverStatusBannerText');
+  const etaWrap = document.getElementById('driverEta');
+  const actions = document.getElementById('driverActions');
+  const phoneTag = document.getElementById('driverPhoneTag');
+  const phoneVal = document.getElementById('driverPhoneVal');
+
+  if (row.driver_name) {
+    card.classList.remove('driver-pending');
+    card.classList.add('driver-live');
+    avatar.innerHTML = row.driver_photo_url
+      ? `<img src="${escapeHtml(row.driver_photo_url)}" alt="">`
+      : `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    // Re-append the online/status dot removed by overwriting innerHTML above.
+    if (statusDot) {
+      avatar.appendChild(statusDot);
+      statusDot.hidden = false;
+      statusDot.classList.toggle('arrived', row.status === 'arrived');
+    }
+    pendingText.textContent = row.driver_name;
+    const isArrived = row.status === 'arrived';
+    const assignedServiceType = state.lastSubmission?.service_type;
+    const liveMsg = statusMessages(assignedServiceType, row.status, true);
+    pendingSub.textContent = liveMsg.sub;
+
+    if (ratingTag) {
+      if (row.driver_rating != null) {
+        document.getElementById('driverRatingVal').textContent = Number(row.driver_rating).toFixed(1);
+        ratingTag.hidden = false;
+      } else {
+        ratingTag.hidden = true;
+      }
+    }
+
+    meta.hidden = false;
+    document.getElementById('driverCarTag').textContent = row.driver_car_type || '—';
+    document.getElementById('driverPlateTag').textContent = row.driver_plate || '—';
+
+    // Car color — only shown when the database actually returns it
+    // (row.driver_car_color); stays hidden otherwise, never a placeholder.
+    if (colorTag) {
+      if (row.driver_car_color) {
+        const raw = String(row.driver_car_color).trim();
+        const label = CAR_COLOR_LABELS_AR[raw.toLowerCase()] || raw;
+        document.getElementById('driverColorVal').textContent = label;
+        const dot = document.getElementById('driverColorDot');
+        if (dot) dot.style.background = CAR_COLOR_SWATCH[label] || '#93A0B4';
+        colorTag.hidden = false;
+      } else {
+        colorTag.hidden = true;
+      }
+    }
+
+    // Status banner (في الطريق / وصل) — الاسم الوظيفي هنا فقط (مرة واحدة
+    // في البطاقة)، والسطر الفرعي أعلاه يستخدم ضميراً بدل تكراره.
+    if (banner && bannerText) {
+      if (liveMsg.banner) {
+        bannerText.textContent = liveMsg.banner;
+        banner.classList.toggle('arrived', isArrived);
+        banner.hidden = false;
+      } else {
+        banner.hidden = true;
+      }
+    }
+
+    if (row.eta_minutes != null && row.status !== 'arrived' && row.status !== 'completed' && row.status !== 'cancelled') {
+      etaWrap.hidden = false;
+      document.getElementById('driverEtaVal').textContent = row.eta_minutes;
+    } else {
+      etaWrap.hidden = true;
+    }
+
+    actions.hidden = false;
+    const callBtn = document.getElementById('callDriverBtn');
+    const waBtn = document.getElementById('whatsappDriverBtn');
+    if (row.driver_phone) {
+      const cleanTel = row.driver_phone.replace(/[^\d+]/g, '');
+      callBtn.href = `tel:${cleanTel}`;
+      callBtn.hidden = false;
+      // Visible, tappable phone number — same real row.driver_phone and
+      // the same cleaned tel: target already used for callBtn above;
+      // no new data source, just also shown as readable text.
+      if (phoneTag && phoneVal) {
+        phoneVal.textContent = String(row.driver_phone).trim();
+        phoneTag.href = `tel:${cleanTel}`;
+        phoneTag.hidden = false;
+      }
+      const driverLink = buildWhatsappLink(row.driver_phone);
+      if (driverLink) {
+        waBtn.href = driverLink;
+        waBtn.hidden = false;
+      } else {
+        // Couldn't confidently normalize this number — hide the button
+        // instead of sending the customer to a wrong or dead WhatsApp chat.
+        waBtn.hidden = true;
+      }
+    } else {
+      callBtn.hidden = true;
+      waBtn.hidden = true;
+      if (phoneTag) phoneTag.hidden = true;
+    }
+
+    // Driver's live position on the tracking map — only drawn when the
+    // status RPC actually returns real coordinates for this trip
+    // (row.driver_lat/driver_lng). Nothing is guessed or simulated; if
+    // those fields aren't present the map simply keeps showing the
+    // pickup/dropoff pins exactly as before.
+    updateDriverMapMarker(row);
+  } else {
+    card.classList.add('driver-pending');
+    card.classList.remove('driver-live');
+    const pendingMsg = statusMessages(state.lastSubmission?.service_type, row.status, false);
+    pendingText.textContent = pendingMsg.headline;
+    pendingSub.textContent = pendingMsg.sub;
+    if (statusDot) statusDot.hidden = true;
+    if (ratingTag) ratingTag.hidden = true;
+    if (colorTag) colorTag.hidden = true;
+    if (banner) banner.hidden = true;
+    if (phoneTag) phoneTag.hidden = true;
+    meta.hidden = true;
+    etaWrap.hidden = true;
+    actions.hidden = true;
+    removeDriverMapMarker();
+  }
+}
+
+// Small car-shaped marker for the assigned driver's live position on the
+// same Leaflet map already used for pickup/dropoff (#map) — visually
+// consistent with pickupDivIcon()/dropoffDivIcon() above. Only ever
+// called with row.driver_lat/driver_lng that came straight from the
+// status RPC; if either is missing the marker is simply removed/skipped.
+function driverDivIcon() {
+  return L.divIcon({
+    className: 'driver-pin',
+    html: `<span class="driver-pin-pulse"></span><svg viewBox="0 0 34 34" fill="none">
+      <circle cx="17" cy="17" r="15" fill="#0B2036" stroke="#FFFFFF" stroke-width="2.4"/>
+      <path d="M11 19.5h1.1a1.9 1.9 0 0 0 3.6 0h3.4a1.9 1.9 0 0 0 3.6 0H24v-3l-1.6-3.3a1.4 1.4 0 0 0-1.3-.9h-8.2a1.4 1.4 0 0 0-1.3.9L10 16.5v3Z" fill="#E5B85C"/>
+    </svg>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
+function updateDriverMapMarker(row) {
+  if (!state.map || row.driver_lat == null || row.driver_lng == null) {
+    removeDriverMapMarker();
+    return;
+  }
+  const lat = Number(row.driver_lat), lng = Number(row.driver_lng);
+  if (!isFinite(lat) || !isFinite(lng)) { removeDriverMapMarker(); return; }
+
+  if (state.driverMarker) {
+    state.driverMarker.setLatLng([lat, lng]);
+  } else {
+    state.driverMarker = L.marker([lat, lng], { icon: driverDivIcon(), zIndexOffset: 500 }).addTo(state.map);
+  }
+}
+function removeDriverMapMarker() {
+  if (state.driverMarker && state.map) {
+    state.map.removeLayer(state.driverMarker);
+  }
+  state.driverMarker = null;
+}
+
+function startStatusPolling() {
+  stopStatusPolling();
+  pollStatus(); // fire immediately — setInterval alone waits STATUS_POLL_MS
+  // before its first run, leaving the customer on stale data unnecessarily.
+  state.statusPollTimer = setInterval(pollStatus, STATUS_POLL_MS);
+}
+function stopStatusPolling() {
+  if (state.statusPollTimer) {
+    clearInterval(state.statusPollTimer);
+    state.statusPollTimer = null;
+  }
+}
+
+async function pollStatus() {
+  const s = state.lastSubmission;
+  if (!s || !s.request_number) return;
+  try {
+    const { data, error } = await supabaseClient
+      .rpc('get_trip_request_status', { p_request_number: s.request_number, p_phone: s.phone })
+      .single();
+    if (error || !data) return;
+
+    if (data.status !== state.lastKnownStatus) {
+      state.lastKnownStatus = data.status;
+      renderTimeline(data.status);
+      if (data.status === 'completed' || data.status === 'cancelled') {
+        stopStatusPolling();
+      }
+      haptic(12);
+    }
+    applyDriverInfo(data);
+  } catch (err) {
+    console.error('status poll failed', err);
+  }
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+// Stage 2 — short, generic one-line descriptors shown under each
+// service name (subtitle), matching the title+description row layout
+// in the reference design. Static display copy only — not fetched
+// from Supabase, not used in pricing/logic, so loadServicePrices()
+// (which only overwrites label/base/perKm) is unaffected.
+const SERVICE_TAGLINES = {
+  taxi: 'الخيار الأفضل لتنقلاتك اليومية',
+  private: 'رحلة خاصة وراحة أكثر',
+  courier: 'توصيل سريع للطرود',
+  intercity: 'رحلات بين المحافظات',
+  cargo: 'نقل الأغراض والحمولات',
+  starx: 'نقل عدة أشخاص دفعة واحدة',
+};
+
+// Stage — shared fallback for the real vehicle <img> photos above: if
+// a photo file hasn't been added yet (or fails to load) for a given
+// service, swap that single <img> out for the old flat SVG icon so
+// the row/pill still looks correct instead of showing a broken-image
+// glyph. Purely cosmetic, DOM-only — no service data/logic touched.
+function vehiclePhotoFallback(imgEl, serviceKey) {
+  const wrap = document.createElement('span');
+  wrap.className = imgEl.className === 'svc-pill-photo' ? 'svc-pill-photo-fallback' : 'qs-row-photo-fallback';
+  wrap.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[SERVICES[serviceKey]?.icon] || ''}</svg>`;
+  imgEl.replaceWith(wrap.firstChild);
+}
+
+// Stage — quick-service selector rebuilt as a single vertical list of
+// rows (icon + title/subtitle + trailing chevron) instead of a grid of
+// icon tiles, matching the reference design's ride-option list
+// pattern. Same data source (SERVICES), same data-service attribute,
+// same click handler (openBooking) — only the markup/classes are new,
+// so nothing else in app.js needs to change. Price is intentionally
+// left out of this row (kept hidden from the customer, same as
+// elsewhere in the app — see .price-bar).
+function buildQuickServiceChips() {
+  const wrap = document.getElementById('quickServices');
+  wrap.innerHTML = Object.entries(SERVICES).map(([key, svc]) => `
+    <button type="button" class="qs-row" data-service="${key}">
+      <span class="qs-row-ic"><img class="qs-row-photo" src="${VEHICLE_PHOTOS[key]}" alt="${svc.label}" loading="lazy" onerror="vehiclePhotoFallback(this, '${key}')"></span>
+      <span class="qs-row-label">
+        <b>${svc.label}</b>
+        <span>${SERVICE_TAGLINES[key] || ''}</span>
+        <span class="qs-row-cta">طلب الآن</span>
+      </span>
+      <span class="qs-row-chev"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </button>
+  `).join('');
+  wrap.querySelectorAll('.qs-row').forEach(chip => {
+    chip.addEventListener('click', () => openBooking(chip.dataset.service));
+  });
+}
+
+// Stage — service switch (inside the booking form) now shows the same
+// realistic, full-color vehicle icon as the list above instead of a
+// single-tone masked silhouette. Same data-service attribute, same
+// click handler (selectService).
+function buildServiceSwitch() {
+  const wrap = document.getElementById('svcSwitch');
+  wrap.innerHTML = Object.entries(SERVICES).map(([key, svc]) => `
+    <button type="button" class="svc-pill" data-service="${key}">
+      <img class="svc-pill-photo" src="${VEHICLE_PHOTOS[key]}" alt="${svc.label}" loading="lazy" onerror="vehiclePhotoFallback(this, '${key}')">
+      <span>${svc.label}</span>
+    </button>
+  `).join('');
+  wrap.querySelectorAll('.svc-pill').forEach(pill => {
+    pill.addEventListener('click', () => selectService(pill.dataset.service));
+  });
+}
+
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(reg => { try { reg.update(); } catch (e) {} }).catch(() => {});
+    });
+  }
+}
+
+/* ============================================================
+   PWA Install Prompt — captures beforeinstallprompt and shows a
+   small branded card inviting the visitor to install the app.
+   Self-contained (styles injected via JS): does not touch
+   index.html, app.css, or style.css. Additive only — no existing
+   function or markup is changed.
+   ============================================================ */
+const PWA_INSTALLED_KEY = 'mustaqbali_pwa_installed';
+const PWA_DISMISSED_KEY = 'mustaqbali_pwa_install_dismissed_at';
+const PWA_DISMISS_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 يوماً
+let deferredInstallPrompt = null;
+// No persistent install button over the map anymore (topbar button
+// removed). This flag is the single source of truth for whether an
+// install action is currently offerable, and drives the visibility of
+// the remaining install entry points (welcome screen + "More" menu).
+let installAvailable = false;
+
+function injectInstallCardStyles() {
+  if (document.getElementById('pwaInstallStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'pwaInstallStyles';
+  style.textContent = `
+    #pwaInstallCard {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: calc(var(--bnav-h, 60px) + env(safe-area-inset-bottom) + 12px);
+      z-index: 45;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--bg-deep, #fff);
+      color: var(--text, #263746);
+      box-shadow: var(--shadow-deep, 0 10px 28px -12px rgba(50,90,120,0.25));
+      border: 1px solid var(--surface-brd, #DCEAF3);
+      font-family: inherit;
+      direction: rtl;
+      transform: translateY(120%);
+      transition: transform 0.3s ease;
+    }
+    #pwaInstallCard.show { transform: translateY(0); }
+    #pwaInstallCard .pwa-icon {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--gold, #E5B85C), var(--teal, #1D6FD1));
+      display: flex; align-items: center; justify-content: center;
+    }
+    #pwaInstallCard .pwa-text { flex: 1; min-width: 0; }
+    #pwaInstallCard .pwa-text b { display: block; font-size: 14px; }
+    #pwaInstallCard .pwa-text span { display: block; font-size: 12px; opacity: 0.75; margin-top: 2px; }
+    #pwaInstallCard .pwa-install-btn {
+      flex-shrink: 0;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(180deg, var(--teal-soft, #4A90D9), var(--teal, #1D6FD1));
+      cursor: pointer;
+    }
+    #pwaInstallCard .pwa-close-btn {
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-faint, #8091A0);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function showInstallCard() {
+  if (localStorage.getItem(PWA_INSTALLED_KEY) === '1') return;
+  const dismissedAt = Number(localStorage.getItem(PWA_DISMISSED_KEY) || 0);
+  if (dismissedAt && Date.now() - dismissedAt < PWA_DISMISS_COOLDOWN_MS) return;
+  if (document.getElementById('pwaInstallCard')) return;
+
+  injectInstallCardStyles();
+
+  const card = document.createElement('div');
+  card.id = 'pwaInstallCard';
+  card.innerHTML = `
+    <span class="pwa-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12L11 4L21 12L11 20L3 12Z" stroke="#0A0E1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="#0A0E1A"/></svg>
+    </span>
+    <span class="pwa-text">
+      <b>ثبّت تطبيق يمّك</b>
+      <span>وصول أسرع بدون فتح المتصفح في كل مرة</span>
+    </span>
+    <button type="button" class="pwa-install-btn" id="pwaInstallBtn">تثبيت التطبيق</button>
+    <button type="button" class="pwa-close-btn" id="pwaCloseBtn" aria-label="إغلاق">✕</button>
+  `;
+  document.body.appendChild(card);
+  requestAnimationFrame(() => card.classList.add('show'));
+
+  document.getElementById('pwaInstallBtn').addEventListener('click', triggerInstall);
+
+  document.getElementById('pwaCloseBtn').addEventListener('click', () => {
+    localStorage.setItem(PWA_DISMISSED_KEY, String(Date.now()));
+    hideInstallCard();
+  });
+}
+
+function hideInstallCard() {
+  const card = document.getElementById('pwaInstallCard');
+  if (!card) return;
+  card.classList.remove('show');
+  setTimeout(() => card.remove(), 300);
+}
+
+// Shared by the bottom install card's button, the welcome screen's
+// install button, and the "More" menu entry — all just trigger the one
+// captured beforeinstallprompt event the same way. On iOS/Safari, where
+// that event never exists, tapping instead opens the dedicated
+// "Add to Home Screen" modal dialog (see below) — always does something
+// useful, immediately, on every platform.
+async function triggerInstall() {
+  if (deferredInstallPrompt) {
+    const capturedPrompt = deferredInstallPrompt;
+    // The captured beforeinstallprompt event can go stale (Chrome
+    // invalidates it after enough time passes, or if it was already
+    // used once) — calling .prompt()/.userChoice on a stale event
+    // throws, and with no catch here that error used to abort this
+    // whole async function silently: no native dialog, no toast, no
+    // fallback — the button just sat there looking broken. Wrapping
+    // this in try/catch guarantees the tap always does something
+    // visible, on every path.
+    try {
+      capturedPrompt.prompt();
+      const { outcome } = await capturedPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installAvailable = false;
+      hideInstallCard();
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+      if (outcome === 'accepted') {
+        localStorage.setItem(PWA_INSTALLED_KEY, '1');
+      } else {
+        // Dismissing the native mini-prompt is easy to do by accident
+        // (small system UI, tap outside it, etc.) and Chrome won't
+        // re-offer this same captured event again — so without this
+        // message, the button simply vanishing looks identical to the
+        // tap having done nothing at all.
+        toast('تم إغلاق نافذة التثبيت — يمكنك التثبيت لاحقًا من قائمة المتصفح (⋮)');
+      }
+    } catch (err) {
+      // Stale/invalid captured event: the native prompt failed to open.
+      // Reset state and fall back to something the tap can still do,
+      // instead of leaving the button visible but inert.
+      deferredInstallPrompt = null;
+      installAvailable = false;
+      hideInstallCard();
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+      if (isIosDevice()) {
+        showIosInstallModal();
+      } else {
+        toast('تعذّر فتح نافذة التثبيت الآن — افتح قائمة المتصفح (⋮) واختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية"');
+      }
+    }
+    return;
+  }
+  if (isIosDevice()) {
+    showIosInstallModal();
+    return;
+  }
+  // Real PWA install isn't available right now — either the browser
+  // doesn't support it, the app is already installed, or Chrome hasn't
+  // judged the visit "engaged enough" yet to offer beforeinstallprompt.
+  // Rather than doing nothing, tell the customer what to do instead.
+  if (isStandaloneDisplay() || localStorage.getItem(PWA_INSTALLED_KEY) === '1') {
+    toast('التطبيق مثبّت لديك بالفعل ✓');
+  } else {
+    toast('التثبيت غير متاح الآن على هذا المتصفح — افتح قائمة المتصفح (⋮) واختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية"');
+  }
+}
+
+function initPwaInstallPrompt() {
+  const alreadyInstalled = localStorage.getItem(PWA_INSTALLED_KEY) === '1';
+
+  if (!alreadyInstalled) {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      showInstallCard();
+      // Android: also reveal the welcome screen and "More" menu install
+      // entries, so the offer to install stays reachable even after the
+      // bottom card is dismissed (Chrome only fires this event once it
+      // judges the visit "engaged enough" — timing it can't control from
+      // here).
+      installAvailable = true;
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      localStorage.setItem(PWA_INSTALLED_KEY, '1');
+      deferredInstallPrompt = null;
+      hideInstallCard();
+      installAvailable = false;
+      syncWelcomeInstallVisibility();
+      syncMoreInstallVisibility();
+    });
+  }
+
+  // iOS/Safari never fires beforeinstallprompt, so without this the
+  // install entries would simply never appear there. Show them upfront
+  // instead — triggerInstall() already knows to open the modal for it
+  // when tapped, since no native install dialog exists on iOS.
+  if (!alreadyInstalled && isIosDevice() && !isStandaloneDisplay()) {
+    installAvailable = true;
+  }
+
+  syncWelcomeInstallVisibility();
+  syncMoreInstallVisibility();
+}
+
+/* ============================================================
+   iOS "Add to Home Screen" modal (#iosInstallModal, static markup in
+   index.html) — Safari never fires beforeinstallprompt, so there is no
+   programmatic install dialog on iPhone/iPad. This is the ONLY place
+   the explanation is ever shown: not automatically, not at the bottom
+   of the page, not inside the FAQ — strictly on demand, the instant the
+   install button is tapped (see triggerInstall above).
+   ============================================================ */
+function isIosDevice() {
+  const ua = window.navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && 'ontouchend' in document);
+}
+
+function isStandaloneDisplay() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function showIosInstallModal() {
+  const modal = document.getElementById('iosInstallModal');
+  if (!modal) return;
+  modal.hidden = false;
+  requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function hideIosInstallModal() {
+  const modal = document.getElementById('iosInstallModal');
+  if (!modal) return;
+  modal.classList.remove('show');
+  setTimeout(() => { modal.hidden = true; }, 200);
+}
+
+function initIosInstallModal() {
+  const modal = document.getElementById('iosInstallModal');
+  const closeBtn = document.getElementById('iosModalCloseBtn');
+  if (!modal || !closeBtn) return;
+  closeBtn.addEventListener('click', hideIosInstallModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) hideIosInstallModal(); // tap on the backdrop itself
+  });
+}
+
+/* ============================================================
+   In-app browser detection (Facebook / Messenger / Instagram /
+   TikTok / Threads and similar embedded WebViews) — these don't
+   reliably support real PWA installation: Android in-app WebViews
+   generally never fire beforeinstallprompt, and iOS in-app browsers
+   don't expose a working "Add to Home Screen" the way Safari does.
+   Detecting this and helping the visitor reach a real browser is
+   what makes install actually work afterwards.
+
+   Behavior per platform/app, as requested:
+   - Android (any detected in-app browser): a clear "فتح في المتصفح"
+     button attempts Chrome via an Android intent:// URL; if Chrome
+     isn't available the intent's own browser_fallback_url hands off
+     to the device's default browser at the OS level.
+   - iOS + Instagram/Threads: a button attempts the "x-safari-https://"
+     handoff those two apps' WebViews are known to honor; if it
+     doesn't visibly leave the page, we fall back to the same
+     step-by-step guide used below.
+   - iOS + Facebook/Messenger/TikTok (or any other detected iOS
+     in-app browser): per Apple's WebView sandboxing there is no
+     reliable way to force Safari to open, so we go straight to a
+     clear instructional dialog: tap (⋯) then "Open in Safari".
+
+   Purely additive: does not change triggerInstall(),
+   initPwaInstallPrompt(), the existing iOS install modal, or any
+   other install entry point. Self-contained (styles injected via
+   JS) — does not touch index.html, app.css, style.css, or
+   Supabase/schema.
+   ============================================================ */
+const INAPP_DISMISSED_KEY = 'mustaqbali_inapp_browser_dismissed_at';
+const INAPP_DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // يوم واحد
+
+const INAPP_LABELS = {
+  facebook: 'فيسبوك',
+  messenger: 'ماسنجر',
+  instagram: 'إنستغرام',
+  threads: 'Threads',
+  tiktok: 'تيك توك',
+  line: 'Line',
+  wechat: 'WeChat',
+  snapchat: 'سناب شات',
+  twitter: 'X (Twitter)'
+};
+
+// Returns a short app key ('facebook', 'messenger', 'instagram',
+// 'threads', 'tiktok', ...) for the in-app browser hosting this page,
+// or null when the page is running in a normal browser. Order matters:
+// Instagram/Threads/Messenger user agents can also contain the generic
+// Facebook "FBAN/FBAV" tokens, so the more specific apps are checked
+// first.
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Instagram/i.test(ua)) return 'instagram';
+  if (/Threads|Barcelona/i.test(ua)) return 'threads';
+  if (/Messenger/i.test(ua)) return 'messenger';
+  if (/FBAN|FBAV|FB_IAB|FBIOS|FBSV/i.test(ua)) return 'facebook';
+  if (/musical_ly|BytedanceWebview|TikTok/i.test(ua)) return 'tiktok';
+  if (/Line\//i.test(ua)) return 'line';
+  if (/MicroMessenger/i.test(ua)) return 'wechat';
+  if (/Snapchat/i.test(ua)) return 'snapchat';
+  if (/Twitter/i.test(ua)) return 'twitter';
+  return null;
+}
+
+function isInAppBrowser() {
+  return detectInAppBrowser() !== null;
+}
+
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+// Builds an Android "intent://" URL that asks the OS to hand the
+// current page to Chrome specifically, while also carrying a
+// browser_fallback_url — if Chrome isn't installed/resolvable,
+// Android itself falls back to opening the URL in the device's
+// default browser, with no extra JS needed for that part.
+function buildAndroidChromeIntentUrl(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    const scheme = u.protocol.replace(':', '');
+    const withoutScheme = u.href.replace(/^https?:\/\//, '');
+    const fallback = encodeURIComponent(u.href);
+    return `intent://${withoutScheme}#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${fallback};end;`;
+  } catch {
+    return null;
+  }
+}
+
+function attemptOpenInExternalBrowserAndroid() {
+  const targetUrl = window.location.href;
+  const intentUrl = buildAndroidChromeIntentUrl(targetUrl);
+  if (!intentUrl) {
+    window.location.href = targetUrl;
+    return;
+  }
+
+  // Primary attempt: hand off to Chrome (with the OS-level fallback to
+  // the default browser described above).
+  window.location.href = intentUrl;
+
+  // Secondary, client-side safety net: some in-app WebViews block
+  // "intent://" navigation outright rather than letting the OS resolve
+  // it, in which case we're still on the same page a moment later. A
+  // plain reload of the https URL is the only remaining fallback
+  // reachable from JS in that case.
+  setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+      window.location.href = targetUrl;
+    }
+  }, 1200);
+}
+
+// Builds the "x-safari-https://" / "x-safari-http://" URL that
+// Instagram's and Threads' iOS WebViews are known to honor as a
+// handoff to Safari. Facebook, Messenger, and TikTok's iOS WebViews do
+// not reliably honor this, which is why they skip straight to the
+// manual instructions below instead.
+function buildIosSafariUrl(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    if (u.protocol === 'https:') return 'x-safari-https://' + u.href.slice('https://'.length);
+    if (u.protocol === 'http:') return 'x-safari-http://' + u.href.slice('http://'.length);
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+function attemptForceSafariIOS() {
+  const targetUrl = window.location.href;
+  const safariUrl = buildIosSafariUrl(targetUrl);
+  if (safariUrl) {
+    window.location.href = safariUrl;
+  }
+  // If the handoff didn't actually leave the page, fall back to the
+  // same clear step-by-step guide used for Facebook/Messenger/TikTok.
+  setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+      showIosManualOpenGuide();
+    }
+  }, 1200);
+}
+
+function injectInAppBrowserStyles() {
+  if (document.getElementById('inAppBrowserStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'inAppBrowserStyles';
+  style.textContent = `
+    #inAppBrowserCard {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      top: calc(env(safe-area-inset-top) + 12px);
+      z-index: 2147483000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--bg-deep, #fff);
+      color: var(--text, #263746);
+      box-shadow: var(--shadow-deep, 0 10px 28px -12px rgba(50,90,120,0.35));
+      border: 1px solid var(--surface-brd, #DCEAF3);
+      font-family: inherit;
+      direction: rtl;
+      transform: translateY(-140%);
+      transition: transform 0.3s ease;
+    }
+    #inAppBrowserCard.show { transform: translateY(0); }
+    #inAppBrowserCard .inapp-icon { flex-shrink: 0; font-size: 20px; line-height: 1; }
+    #inAppBrowserCard .inapp-text { flex: 1; min-width: 0; }
+    #inAppBrowserCard .inapp-text b { display: block; font-size: 14px; }
+    #inAppBrowserCard .inapp-text span { display: block; font-size: 12px; opacity: 0.75; margin-top: 2px; }
+    #inAppBrowserCard .inapp-open-btn {
+      flex-shrink: 0;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(180deg, var(--teal-soft, #4A90D9), var(--teal, #1D6FD1));
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #inAppBrowserCard .inapp-close-btn {
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      color: var(--text-faint, #8091A0);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    #inAppGuideBackdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483100;
+      background: rgba(10,20,35,0.55);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    #inAppGuideBackdrop.show { opacity: 1; pointer-events: auto; }
+    #inAppGuideBackdrop .inapp-guide-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-deep, #fff);
+      color: var(--text, #263746);
+      border-radius: 20px 20px 0 0;
+      padding: 22px 20px calc(env(safe-area-inset-bottom) + 20px);
+      direction: rtl;
+      font-family: inherit;
+      transform: translateY(20px);
+      transition: transform 0.25s ease;
+    }
+    #inAppGuideBackdrop.show .inapp-guide-card { transform: translateY(0); }
+    #inAppGuideBackdrop .inapp-guide-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+    #inAppGuideBackdrop .inapp-guide-head h3 { font-size: 16px; margin: 0; }
+    #inAppGuideBackdrop .inapp-guide-close {
+      border: none;
+      background: transparent;
+      font-size: 18px;
+      color: var(--text-faint, #8091A0);
+      cursor: pointer;
+      padding: 4px;
+      flex-shrink: 0;
+    }
+    #inAppGuideBackdrop ol { margin: 0; padding-inline-start: 20px; }
+    #inAppGuideBackdrop li { font-size: 14px; line-height: 1.9; margin-bottom: 6px; }
+    #inAppGuideBackdrop li b { color: var(--teal-text, #1D6FD1); }
+  `;
+  document.head.appendChild(style);
+}
+
+function hideInAppBrowserNotice() {
+  const card = document.getElementById('inAppBrowserCard');
+  if (!card) return;
+  card.classList.remove('show');
+  setTimeout(() => card.remove(), 300);
+}
+
+function hideIosManualOpenGuide() {
+  const backdrop = document.getElementById('inAppGuideBackdrop');
+  if (!backdrop) return;
+  backdrop.classList.remove('show');
+  setTimeout(() => backdrop.remove(), 250);
+}
+
+function showIosManualOpenGuide() {
+  if (document.getElementById('inAppGuideBackdrop')) return;
+  injectInAppBrowserStyles();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'inAppGuideBackdrop';
+  backdrop.innerHTML = `
+    <div class="inapp-guide-card">
+      <div class="inapp-guide-head">
+        <h3>لأفضل تجربة، افتح الرابط في Safari</h3>
+        <button type="button" class="inapp-guide-close" id="inAppGuideCloseBtn" aria-label="إغلاق">✕</button>
+      </div>
+      <ol>
+        <li>اضغط على زر <b>(⋯)</b> الظاهر أعلى الشاشة</li>
+        <li>اختر من القائمة <b>"Open in Safari"</b> (فتح في Safari)</li>
+        <li>بعد فتح الرابط في Safari، يمكنك تثبيت التطبيق من: مشاركة ← إضافة إلى الشاشة الرئيسية</li>
+      </ol>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  requestAnimationFrame(() => backdrop.classList.add('show'));
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) hideIosManualOpenGuide();
+  });
+  document.getElementById('inAppGuideCloseBtn').addEventListener('click', hideIosManualOpenGuide);
+}
+
+function showInAppBrowserNotice(app) {
+  const dismissedAt = Number(localStorage.getItem(INAPP_DISMISSED_KEY) || 0);
+  if (dismissedAt && Date.now() - dismissedAt < INAPP_DISMISS_COOLDOWN_MS) return;
+  if (document.getElementById('inAppBrowserCard')) return;
+
+  injectInAppBrowserStyles();
+
+  const android = isAndroidDevice();
+  const ios = isIosDevice();
+  const label = INAPP_LABELS[app] || 'هذا التطبيق';
+
+  let actionHtml = '';
+  let actionHandler = null;
+
+  if (android) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">فتح في المتصفح</button>`;
+    actionHandler = attemptOpenInExternalBrowserAndroid;
+  } else if (ios && (app === 'instagram' || app === 'threads')) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">فتح في Safari</button>`;
+    actionHandler = attemptForceSafariIOS;
+  } else if (ios) {
+    actionHtml = `<button type="button" class="inapp-open-btn" id="inAppOpenBtn">عرض التعليمات</button>`;
+    actionHandler = showIosManualOpenGuide;
+  }
+
+  const card = document.createElement('div');
+  card.id = 'inAppBrowserCard';
+  card.innerHTML = `
+    <span class="inapp-icon">⚠️</span>
+    <span class="inapp-text">
+      <b>افتح الرابط في متصفحك</b>
+      <span>أنت تتصفح من داخل تطبيق ${label} — لتجربة كاملة وتثبيت التطبيق بنجاح، يُرجى المتابعة عبر Chrome أو Safari</span>
+    </span>
+    ${actionHtml}
+    <button type="button" class="inapp-close-btn" id="inAppCloseBtn" aria-label="إغلاق">✕</button>
+  `;
+  document.body.appendChild(card);
+  requestAnimationFrame(() => card.classList.add('show'));
+
+  const openBtn = document.getElementById('inAppOpenBtn');
+  if (openBtn && actionHandler) {
+    openBtn.addEventListener('click', actionHandler);
+  }
+
+  document.getElementById('inAppCloseBtn').addEventListener('click', () => {
+    localStorage.setItem(INAPP_DISMISSED_KEY, String(Date.now()));
+    hideInAppBrowserNotice();
+  });
+}
+
+function initInAppBrowserNotice() {
+  const app = detectInAppBrowser();
+  if (!app) return;
+  showInAppBrowserNotice(app);
+}
+
+/* ============================================================
+   iOS keyboard / viewport handling
+   Uses the VisualViewport API (supported on iOS Safari 13+ and all
+   modern Android browsers) to detect the on-screen keyboard opening
+   and keep the focused field visible instead of letting it hide
+   behind the keyboard or the bottom sheet collapsing awkwardly.
+   ============================================================ */
+// FIX (bug #3 helper): scrolls a field into view using ONLY the app's
+// internal .sheet-scroll container, never window/document scroll — see
+// initViewportHandling() below for why. Shared by the keyboard-focus
+// handler and the "طلب" driver-list handler, which had the same
+// document-level scrollIntoView() call causing the same white-gap bug.
+function scrollFieldIntoSheetView(el) {
+  if (!el) return;
+  const scrollEl = el.closest('.sheet-scroll');
+  if (!scrollEl) return;
+  const fieldRect = el.getBoundingClientRect();
+  const boxRect = scrollEl.getBoundingClientRect();
+  const delta = (fieldRect.top - boxRect.top) - (boxRect.height / 2) + (fieldRect.height / 2);
+  scrollEl.scrollTop += delta;
+  if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+}
+
+function initViewportHandling() {
+  // --- Anti page-zoom guard ---------------------------------------------
+  // The viewport <meta> tag's user-scalable=no is NOT enough on its own:
+  // iOS Safari has ignored it since iOS 10 for accessibility reasons, so a
+  // two-finger touch anywhere (map, services panel, booking sheet) can
+  // still trigger the browser's native page zoom. Actively cancelling the
+  // Safari-only 'gesture*' events is what actually stops it there, while
+  // still letting Leaflet's own touch/pointer-based map pinch-zoom work
+  // normally (it doesn't use these events).
+  const cancelGesture = (e) => e.preventDefault();
+  document.addEventListener('gesturestart', cancelGesture, { passive: false });
+  document.addEventListener('gesturechange', cancelGesture, { passive: false });
+  document.addEventListener('gestureend', cancelGesture, { passive: false });
+
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  let baseHeight = vv.height;
+
+  // Self-healing fallback: if the page scale ever ends up above 1 anyway
+  // (e.g. an edge case the guard above missed), snap it back to normal
+  // immediately — no reload/close-and-reopen needed.
+  const resetZoomIfStuck = () => {
+    if (vv.scale && vv.scale > 1.01) {
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (meta) {
+        const original = meta.getAttribute('content');
+        meta.setAttribute('content', original + ', maximum-scale=1.0');
+        requestAnimationFrame(() => meta.setAttribute('content', original));
+      }
+    }
+  };
+
+  vv.addEventListener('resize', () => {
+    resetZoomIfStuck();
+    const keyboardLikelyOpen = vv.height < baseHeight * 0.75;
+    document.body.classList.toggle('kb-open', keyboardLikelyOpen);
+    if (keyboardLikelyOpen) {
+      // Keep the sheet tall enough that the focused field stays above
+      // the keyboard instead of being covered by it.
+      sheet.el.style.setProperty('--sheet-h', Math.round(vv.height * 0.94) + 'px');
+    } else {
+      sheet.setSnap(sheet.current, false);
+      baseHeight = vv.height;
+    }
+  });
+
+  // FIX (bug #3 — white gap / page jumps up when typing): html and
+  // body are position:fixed with overflow:hidden (see app.css) so the
+  // *document* can never scroll — but the old code still called
+  // e.target.scrollIntoView(...) directly on the focused input. On iOS
+  // Safari in particular, asking the browser to scroll an element
+  // "into view" can still nudge the outer page/visual viewport even
+  // when its fixed ancestors supposedly can't scroll, which is what
+  // left a blank strip above/below the fixed app shell. The fix scrolls
+  // ONLY the app's own internal scroll container (.sheet-scroll) by
+  // computing the offset manually, and never touches window/document
+  // scroll at all — so there's nothing for iOS to misinterpret.
+  document.addEventListener('focusin', (e) => {
+    if (e.target.matches('input, textarea')) {
+      setTimeout(() => scrollFieldIntoSheetView(e.target), 300);
+    }
+  });
+
+  // Same safety net on its own, independent of focus events — catches
+  // any stray scroll the OS/browser triggers on its own (e.g. while the
+  // keyboard is animating open/closed) rather than only right after a
+  // field is focused.
+  window.addEventListener('scroll', () => {
+    if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+  }, { passive: true });
+}
+
+/* ============================================================
+   "مساعد يمّك" — FAQ accordion (home view, index.html only).
+   The trigger button now lives in the top quick-access row
+   (#helpToggleBtn) and the FAQ content (#helpAccordionWrap) is a
+   separate sibling block — both get `open` toggled together by this
+   one click handler. Self-contained; touches no existing state, view,
+   or booking/request logic.
+   ============================================================ */
+function initHelpAccordion() {
+  const toggleBtn = document.getElementById('helpToggleBtn');
+  const wrapEl = document.getElementById('helpAccordionWrap');
+  if (toggleBtn && wrapEl) {
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = wrapEl.classList.toggle('open');
+      toggleBtn.classList.toggle('open', isOpen);
+      toggleBtn.setAttribute('aria-expanded', String(isOpen));
+      haptic();
+    });
+  }
+
+  const wrap = document.getElementById('helpAccordion');
+  if (!wrap) return;
+
+  wrap.addEventListener('click', (e) => {
+    const btn = e.target.closest('.help-q');
+    if (!btn) return;
+    const item = btn.closest('.help-item');
+    const wasOpen = item.classList.contains('open');
+
+    wrap.querySelectorAll('.help-item.open').forEach((el) => {
+      el.classList.remove('open');
+      el.querySelector('.help-q').setAttribute('aria-expanded', 'false');
+    });
+
+    if (!wasOpen) {
+      item.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    haptic();
+  });
+}
+
+/* ============================================================
+   Bottom navigation — الرئيسية / طلباتي / بياناتي / المزيد.
+   Fixed, always on top (see CSS), position never changes with the
+   sheet drag. Self-contained: does not touch request/driver/admin
+   logic. "طلباتي" reuses the exact same status view already used
+   right after a real submission (state.lastSubmission +
+   renderStatusView).
+   ============================================================ */
+/* ============================================================
+   Bottom navigation — الرئيسية / طلباتي / الدعم / بياناتي / المزيد.
+   Fixed, always on top (see CSS), position never changes with the
+   sheet (drag is disabled — see BottomSheet above). Self-contained:
+   does not touch request/driver/admin logic. "طلباتي" uses the real
+   get_customer_trip_history RPC (see migration_v1.3.sql) — current +
+   past requests, by phone, same trust model as get_trip_request_status.
+   ============================================================ */
+function setActiveNavTab(view) {
+  const map = { home: 'home', transport: 'home', 'svc-restaurants': 'home', 'svc-markets': 'home', 'svc-futureoffice': 'home', booking: 'home', submitting: 'requests', status: 'requests', orders: 'requests', support: 'support', more: 'more', profile: 'profile', market: 'market', marketCategory: 'market', marketProduct: 'market', marketMyAds: 'market', marketAdd: 'market', marketDone: 'market' };
+  const activeKey = map[view] || null;
+  document.querySelectorAll('.bnav-item[data-nav]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.nav === activeKey);
+  });
+}
+
+/* ============================================================
+   "طلباتي" — current + past requests, matched by the customer's own
+   phone number (from the last submission this session, or the saved
+   profile). Uses the real get_customer_trip_history RPC — no fake
+   data, no Math.random(); if that migration hasn't been applied yet,
+   the RPC call simply errors and the Empty State is shown, exactly
+   as if there were no orders (never a fabricated list).
+   ============================================================ */
+const ORDER_STATUS_LABELS = { new: 'جديد', assigned: 'تم التعيين', en_route: 'قيد التنفيذ', arrived: 'تم الوصول', completed: 'مكتملة', cancelled: 'ملغى' };
+const ORDER_STATUS_CLASS = { new: 'badge-live', assigned: 'badge-live', en_route: 'badge-live', arrived: 'badge-live', completed: 'badge-done', cancelled: 'badge-offline' };
+
+function formatOrderDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ar-IQ', { day: 'numeric', month: 'short' }) + ' — ' + d.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+async function loadOrdersTab() {
+  const wrap = document.getElementById('ordersList');
+  const empty = document.getElementById('ordersEmpty');
+  if (!wrap || !empty) return;
+
+  const phone = state.lastSubmission?.phone || getSavedProfile()?.phone || '';
+  wrap.innerHTML = '';
+  wrap.hidden = true;
+  empty.hidden = true;
+
+  if (!phone) { empty.hidden = false; return; }
+
+  try {
+    const { data, error } = await supabaseClient.rpc('get_customer_trip_history', { p_phone: phone, p_limit: 20 });
+    if (error || !data || data.length === 0) { empty.hidden = false; return; }
+
+    wrap.innerHTML = data.map((row) => {
+      const isOpen = !['completed', 'cancelled'].includes(row.status);
+      const statusCls = ORDER_STATUS_CLASS[row.status] || 'badge-live';
+      const statusLabel = ORDER_STATUS_LABELS[row.status] || row.status;
+      // Presentational-only restructuring below (adds a data-service
+      // attribute + reuses the SAME vehicle image already used
+      // elsewhere in the app — no new icon/asset). All original class
+      // names (order-card-top/-svc/-route/-time, order-track-btn) are
+      // kept exactly as before, so nothing that reads them elsewhere
+      // breaks; only the wrapping markup around them changed.
+      return `
+        <div class="order-card" data-service="${escapeHtmlAttr(row.service_type || '')}">
+          <div class="order-card-row">
+            <span class="order-card-icon"><img src="${VEHICLE_PHOTOS[row.service_type] || ''}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></span>
+            <div class="order-card-main">
+              <div class="order-card-top">
+                <span class="req-chip">#${escapeHtml(row.request_number || '')}</span>
+                <span class="${statusCls}">${escapeHtml(statusLabel)}</span>
+              </div>
+              <div class="order-card-svc">${escapeHtml(SERVICES[row.service_type]?.label || row.service_type)}</div>
+              <div class="order-card-route">
+                <span>${escapeHtml(row.pickup_location || '—')}</span>
+                ${row.dropoff_location ? `<span class="order-arrow">←</span><span>${escapeHtml(row.dropoff_location)}</span>` : ''}
+              </div>
+              <div class="order-card-time">${formatOrderDateTime(row.created_at)}</div>
+            </div>
+          </div>
+          ${isOpen ? `<button type="button" class="app-btn secondary order-track-btn" data-track-order="${escapeHtml(row.request_number || '')}">تتبع الطلب</button>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    wrap.hidden = false;
+
+    wrap.querySelectorAll('[data-track-order]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = data.find((r) => r.request_number === btn.dataset.trackOrder);
+        if (!row) return;
+        state.lastSubmission = {
+          id: null,
+          request_number: row.request_number,
+          phone,
+          service_type: row.service_type,
+          pickup: row.pickup_location,
+          dropoff: row.dropoff_location,
+          created_at: row.created_at,
+        };
+        state.lastKnownStatus = row.status;
+        renderStatusView();
+        showView('status');
+        startStatusPolling();
+        haptic();
+      });
+    });
+  } catch (err) {
+    console.error('loadOrdersTab failed', err);
+    empty.hidden = false;
+  }
+}
+
+function initBottomNav() {
+  const homeBtn = document.getElementById('bnavHome');
+  const requestsBtn = document.getElementById('bnavRequests');
+  const supportBtn = document.getElementById('bnavSupport');
+  const profileBtn = document.getElementById('bnavProfile');
+  const moreBtn = document.getElementById('bnavMore');
+
+  if (homeBtn) homeBtn.addEventListener('click', () => { backToHome(); haptic(); });
+
+  if (requestsBtn) {
+    requestsBtn.addEventListener('click', () => {
+      showView('orders');
+      loadOrdersTab();
+      haptic();
+    });
+  }
+
+  if (supportBtn) {
+    supportBtn.addEventListener('click', () => {
+      showView('support');
+      haptic();
+    });
+  }
+
+  if (profileBtn) {
+    profileBtn.addEventListener('click', () => {
+      loadProfileIntoForm();
+      showView('profile');
+      sheet.setSnap('full');
+      haptic();
+    });
+  }
+
+  if (moreBtn) {
+    moreBtn.addEventListener('click', () => {
+      showView('more');
+      sheet.setSnap('full');
+      haptic();
+    });
+  }
+}
+
+/* ============================================================
+   "More" view — accordion for About/Terms/Privacy, a direct shortcut
+   into the "الدعم" tab (where the FAQ + call/WhatsApp now live as
+   their own dedicated tab), and an install-app shortcut mirroring
+   the topbar button's own visibility logic.
+   ============================================================ */
+function initMoreView() {
+  const moreList = document.querySelector('.more-list');
+  if (moreList) {
+    moreList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-more-toggle]');
+      if (!btn) return;
+      const key = btn.dataset.moreToggle;
+      const panel = document.getElementById('morePanel-' + key);
+      if (!panel) return;
+      const wasOpen = !panel.hidden;
+      document.querySelectorAll('.more-panel').forEach((p) => { p.hidden = true; });
+      moreList.querySelectorAll('[data-more-toggle]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+      if (!wasOpen) {
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+      }
+      haptic();
+    });
+  }
+
+  const assistantBtn = document.getElementById('moreAssistantBtn');
+  if (assistantBtn) {
+    assistantBtn.addEventListener('click', () => {
+      const helpToggleBtn = document.getElementById('helpToggleBtn');
+      const helpAccordionWrap = document.getElementById('helpAccordionWrap');
+      showView('support');
+      if (helpToggleBtn && helpAccordionWrap && !helpAccordionWrap.classList.contains('open')) {
+        helpToggleBtn.click();
+      }
+      haptic();
+    });
+  }
+
+  const installMoreBtn = document.getElementById('moreInstallBtn');
+  if (installMoreBtn) {
+    installMoreBtn.addEventListener('click', () => { triggerInstall(); haptic(); });
+    syncMoreInstallVisibility();
+  }
+}
+
+// Keeps the "More" menu install entry in sync with the shared
+// installAvailable flag (see initPwaInstallPrompt / triggerInstall).
+function syncMoreInstallVisibility() {
+  const moreBtn = document.getElementById('moreInstallBtn');
+  if (!moreBtn) return;
+  moreBtn.hidden = !installAvailable;
+}
+
+/* ============================================================
+   Profile (بياناتي) — name + phone saved locally, used to
+   auto-fill the booking form's customerName/phone fields. Purely
+   client-side (localStorage): no Supabase table, no request/driver
+   logic touched.
+   ============================================================ */
+const PROFILE_STORAGE_KEY = 'mustaqbali_profile';
+
+function getSavedProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadProfileIntoForm() {
+  const profile = getSavedProfile();
+  const nameEl = document.getElementById('profileName');
+  const phoneEl = document.getElementById('profilePhone');
+  if (profile && nameEl) nameEl.value = profile.name || '';
+  if (profile && phoneEl) phoneEl.value = profile.phone || '';
+}
+
+function applyProfileToBookingForm() {
+  const profile = getSavedProfile();
+  if (!profile) return;
+  const nameField = document.getElementById('customerName');
+  const phoneField = document.getElementById('phone');
+  if (nameField && !nameField.value && profile.name) nameField.value = profile.name;
+  if (phoneField && !phoneField.value && profile.phone) phoneField.value = profile.phone;
+}
+
+function initProfile() {
+  loadProfileIntoForm();
+  applyProfileToBookingForm();
+
+  const saveBtn = document.getElementById('profileSaveBtn');
+  if (!saveBtn) return;
+
+  saveBtn.addEventListener('click', () => {
+    const name = document.getElementById('profileName').value.trim();
+    const phone = document.getElementById('profilePhone').value.trim();
+    const msgEl = document.getElementById('profileMsg');
+
+    try {
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ name, phone }));
+      applyProfileToBookingForm();
+      if (msgEl) {
+        msgEl.textContent = 'تم حفظ بياناتك بنجاح.';
+        msgEl.classList.remove('err');
+        msgEl.classList.add('show');
+        setTimeout(() => msgEl.classList.remove('show'), 2400);
+      }
+      haptic();
+    } catch {
+      if (msgEl) {
+        msgEl.textContent = 'تعذّر حفظ البيانات على هذا الجهاز.';
+        msgEl.classList.add('show', 'err');
+      }
+    }
+  });
+}
+
+/* ============================================================
+   Welcome screen — Step 1: simple local "login" (name + phone
+   required, region optional), saved ONLY to localStorage — never
+   sent to Supabase, never linked to the request/driver system.
+   Step 2 (install + notifications) shows once, immediately after
+   the first successful login on this device. On every later visit
+   where saved login data already exists, the whole welcome screen
+   is skipped and the app opens straight to the map.
+   The install button in Step 2 mirrors the shared installAvailable
+   flag (real Android PWA prompt when available, iOS "Add to Home
+   Screen" modal otherwise, hidden once already installed) — no
+   separate install logic lives here.
+   ============================================================ */
+const LOGIN_STORAGE_KEY = 'mustaqbali_login';
+
+function getSavedLogin() {
+  try {
+    const raw = localStorage.getItem(LOGIN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setWelcomeStep(step) {
+  const loginStep = document.getElementById('welcomeLoginStep');
+  const setupStep = document.getElementById('welcomeSetupStep');
+  if (loginStep) loginStep.hidden = step !== 1;
+  if (setupStep) setupStep.hidden = step !== 2;
+  document.querySelectorAll('#welcomeSteps .welcome-step-dot').forEach((dot) => {
+    dot.classList.toggle('active', Number(dot.dataset.step) === step);
+  });
+}
+
+function syncWelcomeInstallVisibility() {
+  const welcomeBtn = document.getElementById('welcomeInstallBtn');
+  if (!welcomeBtn) return;
+  welcomeBtn.hidden = !installAvailable;
+}
+
+function initWelcomeScreen() {
+  const screen = document.getElementById('welcomeScreen');
+  if (!screen) return;
+
+  function dismiss() {
+    screen.hidden = true;
+  }
+
+  const introStep = document.getElementById('welcomeIntroStep');
+  const authStep = document.getElementById('welcomeAuthStep');
+  const introBtn = document.getElementById('welcomeIntroBtn');
+
+  // شاشة الترحيب التعريفية (الشعار + العبارة + الخدمات) تظهر في كل
+  // مرة يُفتح فيها التطبيق، بصرف النظر عن وجود تسجيل دخول محفوظ من
+  // عدمه. القرار بشأن تخطي تسجيل الدخول يُتخذ فقط عند الضغط على
+  // «ابدأ الآن» أدناه، وليس هنا — بذلك تبقى الشاشة التعريفية أول ما
+  // يظهر دائماً، دون أي تغيير في منطق الحجز/السواق/Supabase.
+  screen.hidden = false;
+  if (introStep) introStep.hidden = false;
+  if (authStep) authStep.hidden = true;
+  setWelcomeStep(1);
+
+  if (introBtn) {
+    introBtn.addEventListener('click', () => {
+      haptic();
+      if (getSavedLogin()) {
+        // بيانات دخول محفوظة مسبقاً على هذا الجهاز → الانتقال مباشرة
+        // للرئيسية دون إعادة طلب تسجيل الدخول.
+        dismiss();
+        return;
+      }
+      // لا توجد بيانات محفوظة → عرض خطوة تسجيل الدخول الحالية
+      // (Step 1) كما هي، بدون أي تعديل على منطقها.
+      if (introStep) introStep.hidden = true;
+      if (authStep) authStep.hidden = false;
+      setWelcomeStep(1);
+    });
+  }
+
+  syncWelcomeInstallVisibility();
+
+  const loginBtn = document.getElementById('welcomeLoginBtn');
+  const errEl = document.getElementById('welcomeLoginError');
+
+  function showLoginError(message) {
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.classList.add('show');
+  }
+  function clearLoginError() {
+    if (!errEl) return;
+    errEl.textContent = '';
+    errEl.classList.remove('show');
+  }
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      const name = document.getElementById('loginName')?.value.trim() || '';
+      const phone = document.getElementById('loginPhone')?.value.trim() || '';
+      const region = document.getElementById('loginRegion')?.value || '';
+
+      if (!name || name.length < 2) {
+        showLoginError('يرجى إدخال الاسم الكامل');
+        haptic();
+        return;
+      }
+      if (!phone || !PHONE_RE.test(phone)) {
+        showLoginError('رقم غير صحيح — مثال: 07xxxxxxxxx');
+        haptic();
+        return;
+      }
+      clearLoginError();
+
+      try {
+        localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({ name, phone, region }));
+      } catch {
+        // Non-critical — still let the customer continue into the app
+        // even if this device can't persist the login locally.
+      }
+
+      const nameEl = document.getElementById('welcomeSetupName');
+      if (nameEl) nameEl.textContent = name;
+      syncWelcomeInstallVisibility();
+      setWelcomeStep(2);
+      haptic();
+    });
+  }
+
+  // Enter key in either login field submits, like a normal form.
+  ['loginName', 'loginPhone'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loginBtn?.click(); }
+    });
+  });
+
+  const installBtn = document.getElementById('welcomeInstallBtn');
+  const notifBtn = document.getElementById('welcomeEnableNotifBtn');
+  const continueBtn = document.getElementById('welcomeContinueBtn');
+
+  if (installBtn) {
+    // Install-only: does NOT dismiss the welcome screen. Entry into the
+    // app happens exclusively via "ابدأ الآن" below.
+    installBtn.addEventListener('click', () => {
+      triggerInstall();
+      haptic();
+    });
+  }
+  if (notifBtn) {
+    // Reuses the existing customer push-notification setup as-is —
+    // does NOT dismiss the welcome screen.
+    notifBtn.addEventListener('click', () => {
+      setupCustomerPushNotifications();
+      haptic();
+    });
+  }
+  if (continueBtn) {
+    continueBtn.addEventListener('click', () => { dismiss(); haptic(); });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildQuickServiceChips();
+  buildServiceSwitch();
+  initMap();
+  registerServiceWorker();
+  initPwaInstallPrompt();
+  initIosInstallModal();
+  initInAppBrowserNotice();
+  initHelpAccordion();
+  initBottomNav();
+  initProfile();
+  initMoreView();
+  initWelcomeScreen();
+  loadServicePrices();
+  loadCustomerAds();
+  loadFutureServices();
+  preloadCategoryPhotos();
+  document.getElementById('enableCustomerPushBtn')?.addEventListener('click', setupCustomerPushNotifications);
+  // "Recent locations" feature removed — clear any stale data from
+  // earlier sessions so nothing lingers unused.
+  try { localStorage.removeItem(RECENT_KEY); } catch { /* non-critical */ }
+
+  sheet = new BottomSheet(
+    document.getElementById('sheet'),
+    document.getElementById('sheetHandleArea'),
+    document.getElementById('sheetScroll')
+  );
+  sheet.setSnap('half', false);
+  initViewportHandling();
+
+  document.getElementById('whereToBtn')?.addEventListener('click', () => openBooking());
+  document.querySelectorAll('[data-back="home"]').forEach(b => b.addEventListener('click', () => { backToHome(); }));
+  document.getElementById('requestForm').addEventListener('submit', handleSubmit);
+  // Keep #bookSubmitBtn's disabled state in sync with the required
+  // fields + consent checkbox every time any of them changes, and set
+  // the correct initial state once on load (all empty → stays disabled).
+  ['pickup', 'customerName', 'phone'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateSubmitButtonState);
+  });
+  document.getElementById('consentCheck')?.addEventListener('change', updateSubmitButtonState);
+  updateSubmitButtonState();
+  document.getElementById('recenterBtn').addEventListener('click', () => { locateMe(false); haptic(); });
+  document.getElementById('locateBtnApp').addEventListener('click', () => { locateMe(false); haptic(); });
+  // "طلب" on any driver in the list doesn't submit anything by itself —
+  // it just records WHICH available driver was chosen (no-FIFO: only
+  // that exact driver, never an auto-picked one) and brings the real
+  // request form into view so the customer can fill it in and confirm.
+  // Only a real, successful submission (handleSubmit) actually sends
+  // the request to that driver. Event delegation (one listener on the
+  // container) since the driver list is rebuilt on every service switch.
+  document.getElementById('driversListApp').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-driver-action="request"]');
+    if (!btn) return;
+    state.featuredDriverId = btn.dataset.driverId;
+    state.featuredDriverPhone = btn.dataset.driverPhone || null;
+    sheet.setSnap('full');
+    const pickupEl = document.getElementById('pickup');
+    // FIX (bug #3): was pickupEl.scrollIntoView(...) — same document-
+    // level scroll trigger as the keyboard-focus handler above. Now
+    // scrolls only the internal .sheet-scroll panel via the shared
+    // helper, then focuses with preventScroll so the browser's own
+    // native "scroll focused field into view" behavior can't re-trigger
+    // a page-level scroll either.
+    scrollFieldIntoSheetView(pickupEl);
+    pickupEl.focus({ preventScroll: true });
+    haptic();
+  });
+  document.getElementById('newRequestBtn').addEventListener('click', () => {
+    stopStatusPolling();
+    document.getElementById('requestForm').reset();
+    ['pickup', 'customerName', 'phone'].forEach(id => setFieldError(id === 'customerName' ? 'customerName' : id, null));
+    clearMsg();
+    updateSubmitButtonState();
+    state.dropoffLatLng = null;
+    if (state.dropoffMarker) { state.map.removeLayer(state.dropoffMarker); state.dropoffMarker = null; }
+    document.getElementById('dropoffLat').value = '';
+    document.getElementById('dropoffLng').value = '';
+    backToHome();
+  });
+  document.getElementById('pickup').addEventListener('input', updatePriceBar);
+  document.getElementById('dropoff').addEventListener('input', () => {
+    state.dropoffLatLng = null; // typed text invalidates any previously map-picked coordinate
+    document.getElementById('dropoffLat').value = '';
+    document.getElementById('dropoffLng').value = '';
+    updatePriceBar();
+  });
+  document.getElementById('dropoff').addEventListener('blur', (e) => {
+    const q = e.target.value.trim();
+    if (q) geocodeDropoff(q);
+  });
+  document.getElementById('pickup').addEventListener('blur', () => validateField('pickup'));
+  document.getElementById('customerName').addEventListener('blur', () => validateField('customerName'));
+  document.getElementById('phone').addEventListener('blur', () => validateField('phone'));
+
+  document.querySelectorAll('.mt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mapTargetMode = btn.dataset.target;
+      document.querySelectorAll('.mt-btn').forEach(b => b.classList.toggle('active', b === btn));
+      haptic();
+    });
+  });
+
+  locateMe(true);
+});
+
+/* =========================================================================
+   مساعد يمّك — مدخل ذكي مختصر (Home) — إضافة معزولة بالكامل
+   -------------------------------------------------------------------------
+   قسم مستقل تماماً، مغلّف بدالة IIFE خاصة به، لا يعرّف أي متغير عام
+   جديد خارج prefix "ya", ولا يعيد تعريف أي دالة/متغير موجود
+   (SERVICES, ICONS, state, openBooking, showView, toast, haptic,
+   escapeHtmlText تُستخدم فقط كما هي — قراءة/استدعاء، بلا تعديل).
+
+   ما يفعله:
+     1) يطابق نص (مكتوب أو محوَّل من الصوت) مع أحد المسارات الموجودة
+        أصلاً عبر قاموس كلمات مفتاحية محلي بالكامل — بدون أي شبكة أو
+        Backend أو AI خارجي.
+     2) يعرض بطاقة "فهمت طلبك" للمراجعة.
+     3) الانتقال الفعلي لأي Flow لا يحدث إلا من ضغط صريح على زر
+        "تأكيد ومتابعة" — لا إرسال تلقائي من نص أو صوت في أي مسار.
+     4) الانتقال نفسه يتم فقط عبر استدعاء الدوال/الأزرار العامة
+        الموجودة أصلاً:
+          - openBooking(key) لخدمات النقل/الدليفري/الحمل الستة
+          - نقرة برمجية على #soonCardRestaurants/#soonCardMarkets/
+            #soonCardFutureOffice (نفس أزرار شاشة "المزيد" الحقيقية،
+            بنفس نمط التوجيه الإضافي المستخدم أصلاً في نهاية
+            index.html لـ #bnavMarket) — فتُشغَّل معالجات places.js/
+            market.js الحقيقية دون إعادة تعريفها هنا.
+     5) لا يقرأ GPS ولا ينشئ أي مراقبة موقع جديدة — فقط يقرأ (قراءة
+        فقط) القيمة الحالية لحقلي #pickup/#dropoff للعرض في بطاقة
+        المراجعة، دون أي كتابة على state.pickupLatLng/dropoffLatLng.
+   ========================================================================= */
+(function () {
+
+  // -------------------------------------------------------------
+  // تطبيع نص عربي بسيط (بدون مكتبات خارجية) لتحسين دقة المطابقة
+  // المحلية: توحيد الألف/الهمزات، الياء/الألف المقصورة، التاء
+  // المربوطة، وإزالة التشكيل — كل هذا محلي بحت، لا شبكة.
+  // -------------------------------------------------------------
+  function yaNormalize(s) {
+    return String(s || '')
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, '') // تشكيل + تطويل
+      .replace(/[إأآا]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .replace(/ة/g, 'ه')
+      .replace(/ؤ/g, 'و')
+      .replace(/ئ/g, 'ي')
+      .trim()
+      .toLowerCase();
+  }
+
+  // قاموس الكلمات المفتاحية لكل مسار — v1 محلي بالكامل، قابل للتوسعة
+  // لاحقاً بدون تغيير أي منطق. كل كلمة هنا مطبَّعة مسبقاً بنفس قواعد
+  // yaNormalize أعلاه.
+  // الكلمات تُكتب هنا بإملائها العربي الطبيعي (بلا حاجة لمطابقة قواعد
+  // yaNormalize يدوياً) — كل كلمة تُمرَّر عبر yaNormalize() نفسها عند
+  // البناء أدناه، فتبقى مطابقة لأي نص مُدخَل (مكتوب أو محوَّل من صوت)
+  // يُطبَّع بنفس الدالة، بلا أي احتمال تعارض إملائي بين القاموس والنص.
+  var YA_KEYWORDS_RAW = {
+    taxi: ['تكسي', 'تاكسي', 'سيارة', 'وصلني', 'امشي', 'مشوار', 'ارحل'],
+    private: ['خصوصي', 'سيارة خاصة', 'سيارة مريحة', 'فخمة'],
+    starx: ['نقل نفرات', 'نفرات', 'مجموعة اشخاص', 'فان نفرات', 'كام شخص'],
+    intercity: ['بين المحافظات', 'سفر لمحافظة', 'مسافة طويلة', 'خارج المدينة'],
+    cargo: ['حمل', 'نقل اثاث', 'اثاث', 'بضاعة', 'شحن اغراض', 'بيك اب'],
+    courier: ['دليفري', 'توصيل طرد', 'طرد', 'ارسال غرض', 'استلام غرض'],
+    restaurants: ['مطعم', 'مطاعم', 'اكل', 'وجبة', 'جوعان', 'جوع', 'طعام', 'برجر', 'بيتزا', 'دجاج', 'كباب', 'فطور', 'غداء', 'عشاء'],
+    markets: ['سوق', 'اسواق', 'تسوق', 'بقالة', 'ماركت', 'مواد غذائية', 'خضرة', 'فواكه'],
+    futureOffice: ['قرطاسية', 'طباعة', 'اطبع', 'طبعلي', 'مكتب', 'ورق', 'تصوير مستندات'],
+    other: ['خدمة اخرى', 'خدمات اخرى', 'شي ثاني', 'غير هذا']
+  };
+  var YA_KEYWORDS = {};
+  Object.keys(YA_KEYWORDS_RAW).forEach(function (key) {
+    YA_KEYWORDS[key] = YA_KEYWORDS_RAW[key].map(yaNormalize);
+  });
+
+  // أيقونات صغيرة زخرفية فقط لبطاقات الأماكن الثلاث (نفس مسار SVG
+  // المستخدم أصلاً في #soonCardRestaurants/#soonCardMarkets/
+  // #soonCardFutureOffice داخل index.html — منسوخة للعرض هنا فقط،
+  // لا علاقة لها بأي منطق). خدمات النقل الستة تستخدم ICONS[] الموجودة
+  // أصلاً في app.js أعلى هذا الملف.
+  var YA_PLACE_ICONS = {
+    restaurants: '<path d="M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+    markets: '<path d="M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
+    futureOffice: '<path d="M4 20V9.5L12 4l8 5.5V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M9 20v-6h6v6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/>'
+  };
+
+  // وصف كل مسار: أين يظهر اسمه (من SERVICES الموجودة فعلاً للخدمات
+  // الستة، أو نص ثابت لبقية المسارات)، هل يحتاج عرض "الوجهة"، وكيف
+  // يُنفَّذ الانتقال الفعلي عند التأكيد فقط.
+  function yaRouteMeta(key) {
+    if (typeof SERVICES !== 'undefined' && SERVICES[key]) {
+      return {
+        kind: 'service',
+        label: SERVICES[key].label,
+        icon: (typeof ICONS !== 'undefined' && ICONS[key]) ? ICONS[key] : '',
+        needsDropoff: true,
+        action: function () { if (typeof window.openBooking === 'function') window.openBooking(key); }
+      };
+    }
+    if (key === 'restaurants') {
+      return {
+        kind: 'place', label: 'المطاعم', icon: YA_PLACE_ICONS.restaurants, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardRestaurants'); if (b) b.click(); }
+      };
+    }
+    if (key === 'markets') {
+      return {
+        kind: 'place', label: 'الأسواق', icon: YA_PLACE_ICONS.markets, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardMarkets'); if (b) b.click(); }
+      };
+    }
+    if (key === 'futureOffice') {
+      return {
+        kind: 'place', label: 'مكتب المستقبل', icon: YA_PLACE_ICONS.futureOffice, needsDropoff: false,
+        action: function () { var b = document.getElementById('soonCardFutureOffice'); if (b) b.click(); }
+      };
+    }
+    // "other" — لا يوجد Flow حقيقي لها بعد: لا زر تأكيد، لا توجيه وهمي.
+    return { kind: 'other', label: 'خدمات أخرى', icon: '', needsDropoff: false, action: null };
+  }
+
+  // يطابق نصاً حراً مع كل المسارات، ويُرجع مصفوفة {key, score} مرتّبة
+  // تنازلياً حسب عدد الكلمات المفتاحية المطابقة (مطابقة substring
+  // محلية بسيطة — لا AI، لا شبكة).
+  function yaMatchRoutes(text) {
+    var norm = yaNormalize(text);
+    if (!norm) return [];
+    var results = [];
+    Object.keys(YA_KEYWORDS).forEach(function (key) {
+      var score = 0;
+      YA_KEYWORDS[key].forEach(function (kw) {
+        if (norm.indexOf(kw) !== -1) score += 1;
+      });
+      if (score > 0) results.push({ key: key, score: score });
+    });
+    results.sort(function (a, b) { return b.score - a.score; });
+    return results;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var wrap = document.getElementById('yaAssist');
+    var field = document.getElementById('yaField');
+    var input = document.getElementById('yaInput');
+    var micBtn = document.getElementById('yaMicBtn');
+    var suggestBar = document.getElementById('yaSuggest');
+    var confirmCard = document.getElementById('yaConfirm');
+    var confirmTitle = document.getElementById('yaConfirmTitle');
+    var confirmBody = document.getElementById('yaConfirmBody');
+    var confirmActions = document.getElementById('yaConfirmActions');
+    // العنصر الجديد كامل اختياري: إن غاب أي جزء أساسي منه لا نكسر
+    // بقية الصفحة، فقط نوقف تفعيل هذا القسم بصمت.
+    if (!wrap || !field || !input || !suggestBar || !confirmCard || !confirmBody || !confirmActions) return;
+
+    var esc = (typeof escapeHtmlText === 'function') ? escapeHtmlText : function (s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    };
+    var doHaptic = (typeof haptic === 'function') ? haptic : function () {};
+
+    function yaResetUI(clearInput) {
+      confirmCard.hidden = true;
+      suggestBar.hidden = true;
+      suggestBar.innerHTML = '';
+      field.hidden = false;
+      if (clearInput) input.value = '';
+    }
+
+    // -------- قراءة فقط: نص الموقع/الوجهة الحاليين من حقلي البحجز
+    // الموجودين أصلاً (#pickup/#dropoff) — لا استدعاء GPS جديد، لا
+    // كتابة على state.pickupLatLng/dropoffLatLng إطلاقاً. --------
+    function yaPickupText() {
+      var val = (document.getElementById('pickup') || {}).value;
+      val = val ? String(val).trim() : '';
+      if (val) return val;
+      if (state && state.pickupLatLng) return 'تم تحديد موقعك على الخريطة';
+      return 'سيُحدَّد تلقائياً عند المتابعة';
+    }
+    function yaDropoffText() {
+      var val = (document.getElementById('dropoff') || {}).value;
+      val = val ? String(val).trim() : '';
+      if (val) return val;
+      if (state && state.dropoffLatLng) return 'تم تحديدها على الخريطة';
+      return 'تُحدَّد في الخطوة التالية';
+    }
+
+    function yaRenderConfirm(key, sourceText) {
+      var meta = yaRouteMeta(key);
+      field.hidden = true;
+      suggestBar.hidden = true;
+      confirmCard.hidden = false;
+
+      if (meta.kind === 'other') {
+        confirmTitle.textContent = 'قريباً';
+        confirmBody.innerHTML =
+          '<div class="ya-confirm-note">هذه الخدمة ستكون متاحة قريباً — لا يمكن المتابعة بها الآن.</div>';
+        confirmActions.innerHTML = '';
+        var backBtn = document.createElement('button');
+        backBtn.type = 'button'; backBtn.className = 'ya-btn-edit'; backBtn.textContent = 'رجوع';
+        backBtn.addEventListener('click', function () { yaResetUI(false); input.focus(); });
+        confirmActions.appendChild(backBtn);
+        doHaptic();
+        return;
+      }
+
+      confirmTitle.textContent = 'فهمت طلبك';
+      var rows = '';
+      rows += '<div class="ya-confirm-row"><b>الخدمة:</b><span>' + esc(meta.label) + '</span></div>';
+      if (sourceText) {
+        rows += '<div class="ya-confirm-row"><b>طلبك:</b><span>«' + esc(sourceText) + '»</span></div>';
+      }
+      rows += '<div class="ya-confirm-row"><b>' + (meta.needsDropoff ? 'الانطلاق:' : 'الموقع:') + '</b><span>' + esc(yaPickupText()) + '</span></div>';
+      if (meta.needsDropoff) {
+        rows += '<div class="ya-confirm-row"><b>الوجهة:</b><span>' + esc(yaDropoffText()) + '</span></div>';
+      }
+      confirmBody.innerHTML = rows;
+
+      confirmActions.innerHTML = '';
+      var okBtn = document.createElement('button');
+      okBtn.type = 'button'; okBtn.className = 'ya-btn-confirm'; okBtn.textContent = 'تأكيد ومتابعة';
+      // النقطة الوحيدة في هذا الملف التي تنتقل فعلياً إلى Flow الأصلي —
+      // فقط عند نقرة صريحة هنا، لا من أي حدث نص/صوت آخر.
+      okBtn.addEventListener('click', function () {
+        doHaptic();
+        yaResetUI(true);
+        if (typeof meta.action === 'function') meta.action();
+      });
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button'; editBtn.className = 'ya-btn-edit'; editBtn.textContent = 'تعديل';
+      editBtn.addEventListener('click', function () {
+        confirmCard.hidden = true;
+        field.hidden = false;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+      confirmActions.appendChild(okBtn);
+      confirmActions.appendChild(editBtn);
+      doHaptic();
+    }
+
+    // حالة الغموض: لا تطابق واضح لمسار واحد — تُعرض أفضل 2-3 احتمالات
+    // كأزرار + خيار الرجوع لكل البطاقات، بدل أي تخمين صامت.
+    function yaRenderAmbiguous(candidates, sourceText) {
+      field.hidden = true;
+      suggestBar.hidden = true;
+      confirmCard.hidden = false;
+      confirmTitle.textContent = 'ما فهمت الطلب بالضبط';
+      confirmBody.innerHTML = '<p class="ya-confirm-row" style="margin:0 0 4px;"><span>تقصد وحدة من هذي؟</span></p>' +
+        '<div class="ya-guess-list" id="yaGuessList"></div>';
+      var list = document.getElementById('yaGuessList');
+      var top = candidates.slice(0, 3);
+      if (top.length === 0) {
+        // لا أي تطابق إطلاقاً — نعرض أشيع أربعة مسارات كنقطة انطلاق عامة
+        top = [{ key: 'taxi' }, { key: 'courier' }, { key: 'restaurants' }, { key: 'markets' }];
+      }
+      top.forEach(function (c) {
+        var meta = yaRouteMeta(c.key);
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'ya-guess-btn';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none">' + (meta.icon || '') + '</svg><span>' + esc(meta.label) + '</span>';
+        btn.addEventListener('click', function () { yaRenderConfirm(c.key, sourceText); });
+        list.appendChild(btn);
+      });
+      confirmActions.innerHTML = '';
+      var allBtn = document.createElement('button');
+      allBtn.type = 'button'; allBtn.className = 'ya-btn-edit'; allBtn.style.flex = '1 1 auto';
+      allBtn.textContent = 'اعرض كل الخدمات';
+      allBtn.addEventListener('click', function () {
+        yaResetUI(false);
+        // #quickServices صار داخل واجهة "خدمات النقل والتوصيل" — افتحها بدل التمرير.
+        if (typeof openTransportHub === 'function') { openTransportHub(); return; }
+        var qs = document.getElementById('quickServices');
+        if (qs && qs.scrollIntoView) qs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      confirmActions.appendChild(allBtn);
+    }
+
+    // -------- شريط الاقتراحات أثناء الكتابة (بعد أول حرفين) --------
+    function yaRenderSuggestChips(matches, sourceText) {
+      suggestBar.innerHTML = '';
+      if (!matches.length) { suggestBar.hidden = true; return; }
+      matches.slice(0, 5).forEach(function (m) {
+        var meta = yaRouteMeta(m.key);
+        var chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'ya-suggest-chip';
+        chip.innerHTML = '<svg viewBox="0 0 24 24" fill="none">' + (meta.icon || '') + '</svg><span>' + esc(meta.label) + '</span>';
+        chip.addEventListener('click', function () { yaRenderConfirm(m.key, sourceText); });
+        suggestBar.appendChild(chip);
+      });
+      suggestBar.hidden = false;
+    }
+
+    input.addEventListener('input', function () {
+      var text = input.value;
+      if (text.trim().length < 2) { suggestBar.hidden = true; suggestBar.innerHTML = ''; return; }
+      yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
+    });
+
+    function yaRunFullMatch() {
+      var text = input.value.trim();
+      if (!text) return;
+      var matches = yaMatchRoutes(text);
+      if (matches.length === 1 || (matches.length > 1 && matches[0].score > matches[1].score)) {
+        yaRenderConfirm(matches[0].key, text);
+      } else {
+        yaRenderAmbiguous(matches, text);
+      }
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); yaRunFullMatch(); }
+    });
+
+    // -------- الصوت (تحويل الكلام إلى نص) --------
+    // يستخدم Web Speech API الموجود (SpeechRecognition / webkitSpeechRecognition)
+    // فقط — لا تسجيل ولا تخزين ولا رفع للصوت، والنص المحوَّل يُكتب في نفس
+    // حقل الكتابة للمراجعة (لا إرسال تلقائي).
+    // الزر يبقى ظاهراً دائماً (لا يُخفى بتخمين من User-Agent). الفحص يتم عند
+    // الضغط: HTTPS، سياسة الموقع (Permissions-Policy)، وجود الـ API، ثم أي خطأ
+    // يصل من onerror يُعرض بسببه الحقيقي مع خطوات الحل حسب الجهاز.
+    var YA_MIC_BUILD = 'mic-20261002-1'; // للتحقق من أن النسخة المنشورة هي نفسها
+    var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    var yaUA = navigator.userAgent || '';
+    var yaIsIOS = /iPad|iPhone|iPod/.test(yaUA) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var yaIsAndroid = /Android/i.test(yaUA);
+    var yaIsStandalone = (navigator.standalone === true) ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    var yaIsInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|MicroMessenger|Telegram|; wv\)/i.test(yaUA);
+    var yaIsIOSOtherBrowser = yaIsIOS && /CriOS|FxiOS|EdgiOS|OPiOS|GSA\//i.test(yaUA);
+    var yaIsFramed = false;
+    try { yaIsFramed = window.top !== window.self; } catch (e) { yaIsFramed = true; }
+
+    // Permissions-Policy لا يُضبط من الصفحة؛ يُضبط بترويسة HTTP من الخادم.
+    // هنا نقرأ فقط هل الصفحة تسمح فعلياً بالمايك.
+    function yaMicPolicyBlocked() {
+      try {
+        var pp = document.permissionsPolicy || document.featurePolicy;
+        if (pp && typeof pp.allowsFeature === 'function' && pp.allowsFeature('microphone') === false) return true;
+      } catch (e) {}
+      return false;
+    }
+    // حالة إذن المايك (للرسالة فقط، لا تمنع المحاولة). لا يفتح المايك.
+    var yaMicPerm = null;
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'microphone' }).then(function (st) {
+          yaMicPerm = st.state;
+          st.onchange = function () { yaMicPerm = st.state; };
+        }).catch(function () {});
+      }
+    } catch (e) {}
+
+    var yaKeyboardHint = null;
+    function yaShowKeyboardHint() {
+      if (yaKeyboardHint || !yaIsIOS) return;
+      yaKeyboardHint = document.createElement('p');
+      yaKeyboardHint.id = 'yaMicHint';
+      yaKeyboardHint.textContent = 'للإملاء الصوتي استخدم مايك لوحة المفاتيح';
+      yaKeyboardHint.style.cssText = 'margin:4px 8px 0;font-size:12px;line-height:1.4;opacity:.7;text-align:center;';
+      field.parentNode.insertBefore(yaKeyboardHint, field.nextSibling);
+      // يتبع إخفاء الحقل (بطاقة التأكيد تحل محله)
+      var sync = function () { yaKeyboardHint.hidden = !!field.hidden; };
+      sync();
+      try { new MutationObserver(sync).observe(field, { attributes: true, attributeFilter: ['hidden'] }); } catch (e) {}
+    }
+
+    // رسائل واضحة لكل حالة/خطأ — تختلف حسب الجهاز (iPhone / Android) وحسب
+    // كون التطبيق مفتوحاً من الشاشة الرئيسية (PWA).
+    function yaSpeechMessage(code) {
+      switch (code) {
+        case 'insecure':
+          return 'المايك يعمل فقط عبر اتصال آمن HTTPS — افتح يمّك من رابط يبدأ بـ https://';
+        case 'policy':
+          return 'المايك محظور من إعدادات الموقع (Permissions-Policy) — يجب أن يسمح الخادم بـ microphone=(self)' +
+            (yaIsFramed ? '، ويلزم allow="microphone" على الـ iframe' : '');
+        case 'no-api':
+          if (yaIsIOS && yaIsStandalone) return 'المايك الصوتي غير متاح داخل التطبيق المثبّت على الشاشة الرئيسية في iPhone — افتح يمّك من Safari مباشرة، أو استخدم مايك لوحة المفاتيح';
+          if (yaIsInApp) return 'المتصفح الداخلي للتطبيقات لا يدعم المايك — افتح يمّك في Safari أو Chrome مباشرة';
+          if (yaIsIOSOtherBrowser) return 'على iPhone افتح يمّك في Safari لاستخدام المايك، أو استخدم مايك لوحة المفاتيح';
+          return 'هذا المتصفح لا يدعم التعرف على الصوت — استخدم Chrome على Android أو Safari على iPhone';
+        case 'not-allowed':
+          if (yaIsIOS && yaIsStandalone) return 'لم يُسمح بالمايك للتطبيق المثبّت — افتح يمّك من Safari (وليس من الشاشة الرئيسية) واضغط «سماح»';
+          if (yaIsIOS) return 'لم يُسمح بالمايك — اضغط aA في شريط عنوان Safari ← إعدادات الموقع ← المايكروفون ← سماح، ثم أعد المحاولة';
+          if (yaIsAndroid) return 'لم يُسمح بالمايك — اضغط أيقونة القفل بجانب الرابط ← الأذونات ← المايكروفون ← سماح، ثم أعد المحاولة';
+          return 'المايكروفون غير مسموح — اسمح له من إعدادات المتصفح/الموقع ثم أعد المحاولة';
+        case 'service-not-allowed':
+          if (yaIsIOS && yaIsStandalone) return 'خدمة الصوت غير متاحة في التطبيق المثبّت على الشاشة الرئيسية — افتح يمّك من Safari، أو استخدم مايك لوحة المفاتيح';
+          if (yaIsIOS) return 'خدمة الإملاء غير مفعّلة — من الإعدادات ← عام ← لوحة المفاتيح ← فعّل «الإملاء»، ثم أعد المحاولة';
+          if (yaIsAndroid) return 'خدمة التعرف على الصوت غير متاحة — حدّث Chrome وخدمات Google وتأكد أن الإدخال الصوتي من Google مفعّل';
+          return 'خدمة التعرف على الصوت غير مفعّلة أو غير متاحة في هذا المتصفح';
+        case 'network': return 'التعرف على الصوت يحتاج اتصالاً بالإنترنت — تأكد من الشبكة وأعد المحاولة';
+        case 'no-speech': return 'لم يُسمع أي كلام — اضغط المايك وتحدّث بوضوح';
+        case 'audio-capture': return 'لم يُعثر على مايكروفون يعمل — تأكد أن تطبيقاً آخر لا يستخدمه';
+        case 'language-not-supported': return 'اللغة العربية غير مدعومة للتعرف على الصوت في هذا المتصفح';
+        case 'bad-grammar': return 'خطأ في إعداد التعرف على الصوت';
+        case 'aborted': return 'انقطع التعرف على الصوت — أعد المحاولة';
+        default: return 'تعذّر التعرف على الصوت';
+      }
+    }
+    function yaSpeechNotify(msg) {
+      try { if (typeof toast === 'function') toast(msg, 7000); } catch (e) {}
+    }
+    // فحص ما قبل التشغيل: يرجع رمز السبب أو null إن كان كل شيء سليماً.
+    function yaSpeechPreflight() {
+      if (window.isSecureContext === false) return 'insecure';
+      if (yaMicPolicyBlocked()) return 'policy';
+      if (!SpeechRecognitionCtor) return 'no-api';
+      return null;
+    }
+    try {
+      console.info('[Yammak speech] build=' + YA_MIC_BUILD, {
+        api: !!SpeechRecognitionCtor, secure: window.isSecureContext, policyBlocked: yaMicPolicyBlocked(),
+        ios: yaIsIOS, android: yaIsAndroid, standalone: !!yaIsStandalone, inApp: yaIsInApp, framed: yaIsFramed
+      });
+    } catch (e) {}
+
+    if (micBtn) {
+      micBtn.hidden = false; // لا يُخفى أبداً: عند عدم الإمكان تظهر رسالة توجيه واضحة عند الضغط
+      micBtn.setAttribute('data-mic-build', YA_MIC_BUILD);
+      micBtn.setAttribute('aria-pressed', 'false');
+
+      // العربية العراقية أولاً (Android)، وعلى iPhone ar-SA أولاً. يُنتقل للتالية
+      // تلقائياً فقط عند language-not-supported ويُحفظ آخر خيار اشتغل.
+      var YA_SPEECH_LANGS = yaIsIOS ? ['ar-SA', 'ar', 'ar-IQ'] : ['ar-IQ', 'ar-SA', 'ar'];
+      var recognition = null;
+      var active = false;        // بين الضغط ونهاية الجلسة
+      var stoppedByUser = false;
+      var gotText = false;
+      var finalHandled = false;
+      var lastText = '';
+      var pendingLangRetry = false;
+      var sessionError = false;
+      var langIndex = 0;
+      // --- إدارة دورة الجلسات المتكررة ---
+      // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل.
+      // مؤقّت الحماية: بعض المتصفحات لا تُطلق onend بعد stop() أو بعد النتيجة
+      // النهائية أو بعد الخطأ، فيبقى الزر «ميتاً». عند انقضاء المهلة تُنهى
+      // الجلسة قسراً ويتحرر الزر.
+      var sessionId = 0;
+      var stopping = false;      // طُلب الإيقاف وننتظر onend
+      var guardTimer = null;
+      var guardDue = 0;
+
+      function yaSpeechClearGuard() {
+        if (guardTimer) { clearTimeout(guardTimer); guardTimer = null; }
+        guardDue = 0;
+      }
+      function yaSpeechIdle() {
+        yaSpeechClearGuard();
+        active = false;
+        stopping = false;
+        micBtn.classList.remove('ya-listening');
+        micBtn.setAttribute('aria-pressed', 'false');
+      }
+      function yaSpeechFinish(text) {
+        if (finalHandled || !text) return;
+        finalHandled = true;
+        input.value = text;
+        input.focus();
+        yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
+      }
+
+      // نهاية الجلسة (من onend أو من إنهاء قسري) — منطق واحد للحالتين.
+      function yaSpeechHandleEnd(sid) {
+        if (sid !== sessionId) return;
+        yaSpeechClearGuard();
+        recognition = null;
+        if (pendingLangRetry && !stoppedByUser) {
+          pendingLangRetry = false;
+          try { yaSpeechStart(); return; } catch (e) {
+            try { console.error('[Yammak speech] retry failed', e); } catch (e2) {}
+            yaSpeechNotify(yaSpeechMessage((e && e.name === 'NotAllowedError') ? 'not-allowed' : 'default') + ' [' + ((e && e.name) || 'start-failed') + ']');
+            sessionError = true;
+          }
+        }
+        pendingLangRetry = false;
+        // انتهت الجلسة دون onresult نهائي لكن وصل نص مؤقت: اعتمده
+        if (lastText && !finalHandled) yaSpeechFinish(lastText);
+        // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
+        if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
+        yaSpeechIdle();
+      }
+      // إنهاء قسري: فصل معالجات الجلسة (لا يصل منها أي حدث بعد الآن) ثم abort.
+      function yaSpeechForceEnd() {
+        var old = recognition;
+        var sid = sessionId;
+        if (old) {
+          old.onstart = old.onresult = old.onerror = old.onend = old.onspeechend = old.onaudioend = null;
+          try { old.abort(); } catch (e) {}
+        }
+        yaSpeechHandleEnd(sid);
+      }
+      function yaSpeechArmGuard(ms) {
+        // لا نمدّد مهلة أقصر معلّقة: الأقرب موعداً يبقى
+        if (guardTimer && guardDue <= Date.now() + ms) return;
+        yaSpeechClearGuard();
+        guardDue = Date.now() + ms;
+        var sid = sessionId;
+        guardTimer = setTimeout(function () {
+          guardTimer = null;
+          if (sid !== sessionId || !active) return;
+          try { console.warn('[Yammak speech] لم يصل onend خلال ' + ms + 'ms — إنهاء قسري للجلسة'); } catch (e) {}
+          yaSpeechForceEnd();
+        }, ms);
+      }
+      // إيقاف صامت (تغيّبت الصفحة/التطبيق): لا نترك المايك مفتوحاً ولا الزر معلّقاً.
+      function yaSpeechAbortAll() {
+        if (!active) return;
+        stoppedByUser = true;
+        yaSpeechForceEnd();
+      }
+      document.addEventListener('visibilitychange', function () { if (document.hidden) yaSpeechAbortAll(); });
+      window.addEventListener('pagehide', yaSpeechAbortAll);
+
+      function yaSpeechStart() {
+        var rec = new SpeechRecognitionCtor();
+        var sid = ++sessionId;
+        recognition = rec;
+        rec.lang = YA_SPEECH_LANGS[langIndex];
+        rec.continuous = false;
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = function () {
+          if (sid !== sessionId) return;
+          micBtn.classList.add('ya-listening');
+          micBtn.setAttribute('aria-pressed', 'true');
+        };
+        rec.onresult = function (ev) {
+          if (sid !== sessionId) return;
+          var text = '';
+          var isFinal = false;
+          for (var i = 0; i < ev.results.length; i++) {
+            var r = ev.results[i];
+            if (r && r[0]) text += r[0].transcript;
+            if (r && r.isFinal) isFinal = true;
+          }
+          text = text.trim();
+          if (!text) return;
+          gotText = true;
+          lastText = text;
+          if (isFinal) {
+            yaSpeechFinish(text);
+            yaSpeechArmGuard(2500); // continuous=false: onend يتبع النتيجة النهائية
+          } else {
+            input.value = text; // نص مؤقت أثناء الكلام
+          }
+        };
+        rec.onspeechend = rec.onaudioend = function () {
+          if (sid !== sessionId) return;
+          yaSpeechArmGuard(5000);
+        };
+        rec.onerror = function (ev) {
+          if (sid !== sessionId) return;
+          var code = (ev && ev.error) ? ev.error : 'unknown';
+          try { console.error('[Yammak speech] error=' + code, 'lang=' + rec.lang, 'perm=' + yaMicPerm, (ev && ev.message) || ''); } catch (e) {}
+          if (code === 'aborted' && (stoppedByUser || stopping)) return;
+          sessionError = true;
+          if (code === 'language-not-supported' && langIndex < YA_SPEECH_LANGS.length - 1) {
+            sessionError = false;
+            langIndex++;
+            pendingLangRetry = true; // يُعاد التشغيل عند onend باللغة التالية
+            yaSpeechArmGuard(1500);
+            return;
+          }
+          if (code === 'language-not-supported') langIndex = 0; // فشلت كل اللغات: ابدأ من الأولى في المحاولة القادمة
+          var msg = yaSpeechMessage(code);
+          // إذن مرفوض فعلاً من إعدادات المتصفح: وجّه لتغييره بدل «أعد المحاولة»
+          if (code === 'not-allowed' && yaMicPerm === 'prompt') msg += ' (إن ظهر طلب الإذن اضغط «سماح»)';
+          yaSpeechNotify(msg + ' [' + code + ']');
+          // iPhone: لوحة المفاتيح تبقى طريقة الإملاء المتاحة (تلميح دائم تحت الحقل)
+          if (code === 'service-not-allowed' || (code === 'not-allowed' && yaIsIOS && yaIsStandalone)) yaShowKeyboardHint();
+          yaSpeechArmGuard(1500); // بعض المتصفحات لا تُطلق onend بعد الخطأ
+        };
+        rec.onend = function () {
+          yaSpeechHandleEnd(sid);
+        };
+        rec.start();
+      }
+
+      micBtn.addEventListener('click', function () {
+        // فحص قبل أي شيء: السبب يُعرض برسالة واضحة بدل زر «ميّت»
+        if (!active) {
+          var pre = yaSpeechPreflight();
+          if (pre) {
+            try { console.warn('[Yammak speech] preflight=' + pre); } catch (e) {}
+            yaSpeechNotify(yaSpeechMessage(pre));
+            if (pre === 'no-api') yaShowKeyboardHint();
+            return;
+          }
+        }
+        if (active) {
+          if (stopping) { // ضغطة أخرى أثناء انتظار الإيقاف: أنهِ قسراً بدل الانتظار
+            stoppedByUser = true;
+            yaSpeechForceEnd();
+            return;
+          }
+          // ضغطة ثانية = إيقاف التسجيل (يُسلِّم ما التقطه)
+          stoppedByUser = true;
+          stopping = true;
+          try { recognition.stop(); } catch (e) {}
+          yaSpeechArmGuard(2000);
+          return;
+        }
+        active = true;
+        stoppedByUser = false;
+        gotText = false;
+        finalHandled = false;
+        lastText = '';
+        pendingLangRetry = false;
+        sessionError = false;
+        stopping = false;
+        try {
+          yaSpeechStart();
+          doHaptic();
+        } catch (err) {
+          yaSpeechIdle();
+          try { console.error('[Yammak speech] start() threw', err); } catch (e) {}
+          var nm = (err && err.name) || 'start-failed';
+          yaSpeechNotify(yaSpeechMessage(nm === 'NotAllowedError' ? 'not-allowed' : 'default') + ' [' + nm + ']');
+        }
+      });
+    }
+  });
+})();
+
+/* =========================================================================
+   نظام الرسائل الديناميكي (Home) — إضافة معزولة بالكامل
+   -------------------------------------------------------------------------
+   يستبدل الرسائل الترويجية الثابتة السابقة (زر "إلى أين تذهب؟" وبانر
+   "رحلتك تبدأ من هنا" وبطاقة "وصول سريع خلال دقائق" — حُذفت من
+   index.html) بشريط واحد ديناميكي #yaMsgBar، تتبدل رسالته تلقائياً حسب:
+   فتح التطبيق (+ وقت اليوم)، الخدمة/المسار الذي يختاره الزبون، العودة
+   للصفحة الرئيسية، وإتمام الطلب.
+
+   المصدر الوحيد لكل نص هو كائن YA_MESSAGES أدناه — لإضافة أو تعديل أي
+   رسالة مستقبلاً (بما فيها تنبيهات/عروض جديدة)، عدّل فقط داخل هذا
+   الكائن؛ لا حاجة لأي تعديل على HTML أو على أي بطاقة خدمة.
+
+   لا تعديل هنا على GPS، منطق الطلبات، Supabase/RPC، أو الخدمات الستة —
+   هذا القسم فقط "يستمع" لاستدعاءات الدوال العامة الموجودة أصلاً
+   (openBooking, showView) عبر تغليف غير-تدخّلي (نفس أسلوب الإضافات
+   الأخرى في هذا الملف)، ثم يكتب نصاً في عنصر HTML واحد. لا إرسال لأي
+   جهة خارج التطبيق — مجرد نص داخل الواجهة.
+   ========================================================================= */
+(function () {
+
+  var YA_MESSAGES = {
+    // رسائل فتح التطبيق — تُختار حسب وقت اليوم؛ أكثر من رسالة لكل وقت
+    // فتُعرض بالتناوب في كل فتح جديد للتطبيق.
+    appOpen: {
+      morning: ['صباح الخير — جاهزين نخدمك اليوم.', 'يم صباحك زين، اختر خدمتك وابدأ.'],
+      afternoon: ['أهلاً بيك بيمّك — شنو تحتاج اليوم؟', 'وقتك ثمين — اطلب بضغطة وحدة.'],
+      evening: ['مسا الخير — جاهزين نوصّلك بسرعة.', 'أهلاً بيك، اختر خدمتك وكمّل طلبك.'],
+      night: ['نشتغل حتى بالساعات المتأخرة — اطلب وقتما تريد.', 'موجودين طول الليل لخدمتك.'],
+    },
+    // رسالة عند اختيار كل خدمة من الخدمات الستة (openBooking)
+    service: {
+      taxi: 'اختر موقعك وخلّينا نوصّلك بسرعة.',
+      private: 'رحلة خاصة ومريحة — أكمل بياناتك للتأكيد.',
+      courier: 'حدّد نقطة الاستلام والتسليم لنبدأ التوصيل.',
+      intercity: 'مشوار بين المحافظات؟ حدد وجهتك وكمّل الحجز.',
+      cargo: 'وضّح تفاصيل الحمل لنجهزلك السيارة المناسبة.',
+      starx: 'مجموعة أشخاص؟ اختر عدد الركاب وكمّل الطلب.',
+    },
+    // رسالة عند اختيار مسار مكان (مطاعم/أسواق/مكتب المستقبل)
+    place: {
+      restaurants: 'تصفح المطاعم القريبة واطلب وجبتك.',
+      markets: 'تسوّق من الأسواق القريبة وخلّها توصلك.',
+      futureOffice: 'قرطاسية وطباعة — بيانات الفرع بين إيديك.',
+    },
+    // رسائل العودة للصفحة الرئيسية — تتبدل بالتناوب في كل عودة
+    returnHome: ['أهلاً من جديد — شنو نساعدك بيه؟', 'رجعت للصفحة الرئيسية — اختر خدمتك.', 'جاهزين لطلبك التالي.'],
+    // رسالة بعد إرسال/تأكيد الطلب بنجاح (عند فتح شاشة "status")
+    orderComplete: 'تم استلام طلبك — تابع حالته من هذه الشاشة.',
+    // تنبيهات/عروض تُضاف مستقبلاً من هنا فقط — إن وُجد عنصر بهذه
+    // المصفوفة يُعرض بأولوية أعلى من رسالة فتح التطبيق العادية.
+    // مثال: { text: 'عرض اليوم: توصيل مجاني داخل المدينة', type: 'offer' }
+    alerts: [],
+  };
+
+  // المرحلة 2: إتاحة الكائن للقراءة فقط لمحتوى المساحات (alerts = تنبيهات/عروض حقيقية تُضاف هنا).
+  window.YA_MESSAGES = YA_MESSAGES;
+
+  var yaMsgRotate = { appOpen: 0, returnHome: 0 };
+
+  function yaTimeSlot() {
+    var h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'morning';
+    if (h >= 12 && h < 17) return 'afternoon';
+    if (h >= 17 && h < 22) return 'evening';
+    return 'night';
+  }
+
+  function yaPickRotating(list, key) {
+    if (!list || !list.length) return '';
+    if (list.length === 1) return list[0];
+    var i = (yaMsgRotate[key] || 0) % list.length;
+    yaMsgRotate[key] = i + 1;
+    return list[i];
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var bar = document.getElementById('yaMsgBar');
+    var textEl = document.getElementById('yaMsgBarText');
+    // إن غاب الشريط من الصفحة لا نكسر شيئاً — نتوقف بصمت، بقية
+    // التطبيق يعمل كالمعتاد (بلا رسائل فقط).
+    if (!bar || !textEl) return;
+
+    function yaShowMessage(text, type) {
+      if (!text) return;
+      textEl.textContent = text;
+      bar.classList.remove('ya-msg-info', 'ya-msg-success', 'ya-msg-warning', 'ya-msg-offer');
+      bar.classList.add('ya-msg-' + (type || 'info'));
+    }
+    window.yaShowMessage = yaShowMessage;
+
+    function yaShowAppOpenMessage() {
+      if (YA_MESSAGES.alerts && YA_MESSAGES.alerts.length) {
+        var a = YA_MESSAGES.alerts[0];
+        yaShowMessage(a.text, a.type || 'offer');
+        return;
+      }
+      yaShowMessage(yaPickRotating(YA_MESSAGES.appOpen[yaTimeSlot()], 'appOpen'), 'info');
+    }
+
+    // 1) عند فتح التطبيق
+    yaShowAppOpenMessage();
+
+    // 2) عند اختيار إحدى الخدمات الستة — تغليف غير-تدخّلي لـ
+    // openBooking() الحقيقية (لا تعديل على تعريفها ولا على منطقها؛
+    // فقط نلتقط اسم الخدمة المُختارة قبل تمرير الاستدعاء لها كما هو).
+    var realOpenBooking = window.openBooking;
+    if (typeof realOpenBooking === 'function') {
+      window.openBooking = function (serviceKey) {
+        if (serviceKey && YA_MESSAGES.service[serviceKey]) {
+          yaShowMessage(YA_MESSAGES.service[serviceKey], 'success');
+        }
+        return realOpenBooking.apply(this, arguments);
+      };
+    }
+
+    // 3) عند اختيار مسار مكان (مطاعم/أسواق/مكتب المستقبل) — نفس أزرار
+    // شاشة "المزيد" الحقيقية (#soonCardRestaurants إلخ)، بلا أي تعديل
+    // على places.js أو أزرارها.
+    [['soonCardRestaurants', 'restaurants'], ['soonCardMarkets', 'markets'], ['soonCardFutureOffice', 'futureOffice']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.addEventListener('click', function () { yaShowMessage(YA_MESSAGES.place[pair[1]], 'success'); });
+    });
+
+    // 4) العودة للصفحة الرئيسية + 5) إتمام الطلب — تغليف غير-تدخّلي
+    // لـ showView() الحقيقية (لا تعديل على تعريفها). name === 'home'
+    // لا يُحتسب "عودة" أول مرة عند تحميل الصفحة (الرئيسية مفعّلة
+    // أصلاً بالـ HTML، بلا استدعاء showView('home') عندها).
+    var realShowView = window.showView;
+    var yaHomeShownBefore = false;
+    if (typeof realShowView === 'function') {
+      window.showView = function (name) {
+        var result = realShowView.apply(this, arguments);
+        if (name === 'home') {
+          if (yaHomeShownBefore) yaShowMessage(yaPickRotating(YA_MESSAGES.returnHome, 'returnHome'), 'info');
+          yaHomeShownBefore = true;
+        } else if (name === 'status') {
+          yaShowMessage(YA_MESSAGES.orderComplete, 'success');
+        }
+        return result;
+      };
+    }
+  });
+})();
+
+
+/* =========================================================================
+   المرحلة 2 — محتوى المساحات الست (الصفحة الرئيسية)
+   -------------------------------------------------------------------------
+   يملأ عناصر .space-content[data-space-content] داخل كل مساحة في index.html.
+   المصادر حقيقية فقط — لا Mock ولا Demo ولا أسعار/أرقام/أسماء مكتوبة هنا:
+     • النقل والتوصيل : SERVICES + VEHICLE_PHOTOS + SERVICE_TAGLINES (الموجودة أعلاه)،
+                        والعروض من YA_MESSAGES.alerts و adsState.ads (get_active_customer_ads).
+     • المطاعم/الأسواق/مكتب المستقبل : نفس استعلام places.js (قراءة فقط) على
+                        restaurants / markets / future_office.
+     • خدمات يمّك     : local_service_sections (كما في yammak-services.js).
+     • بيع وشراء      : market_listings الفعّالة (كما في loadMarketLatest في market.js).
+   كل قسم فارغ/يفشل تحميله يعرض حالة صريحة (قريباً / تعذّر التحميل + إعادة المحاولة)
+   — لا تُخترع أي بيانات بديلة. لا كتابة على أي جدول، ولا RPC جديد، ولا GPS، ولا طلبات.
+   الدخول لكل قسم يمرّ عبر نفس الدوال/الأزرار القائمة (openPlaces, openFutureOffice,
+   openPlaceDetail, openMarket, openMarketProduct, openYammakServices, openBooking).
+   التحميل كسول: عند ظهور المساحة لأول مرة (IntersectionObserver)، وتُحدَّث بصمت إن
+   مرّت 5 دقائق عند العودة إليها.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  var LIMIT = 6;            // أقصى عدد عناصر في مساحة (الباقي عبر «عرض الكل»)
+  var TILE_LIMIT = 12;      // أقسام خدمات يمّك المعروضة
+  var PROMO_LIMIT = 3;
+  var STALE_MS = 5 * 60 * 1000;
+
+  // مسار الدخول الكامل لكل مساحة: نفس الأزرار القائمة (تبقى رسائل #yaMsgBar تعمل)
+  var LEGACY_TARGET = {
+    restaurants: 'soonCardRestaurants',
+    markets: 'soonCardMarkets',
+    futureoffice: 'soonCardFutureOffice',
+    yservices: 'soonCardYammakServices',
+    ymarket: 'marketBannerBtn'
+  };
+
+  var SPACES = {
+    transport:    { title: 'اختر خدمتك' },
+    restaurants:  { title: 'المطاعم المتاحة',   kind: 'places', placeKind: 'restaurants',  table: 'restaurants',   noun: 'مطاعم' },
+    markets:      { title: 'الأسواق المتاحة',   kind: 'places', placeKind: 'markets',      table: 'markets',       noun: 'أسواق' },
+    yservices:    { title: 'أقسام الخدمات',     kind: 'tiles' },
+    futureoffice: { title: 'فروع مكتب المستقبل', kind: 'places', placeKind: 'futureOffice', table: 'future_office', noun: 'فروع' },
+    ymarket:      { title: 'أحدث الإعلانات',    kind: 'listings' }
+  };
+
+  var CHEV = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CLOCK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var PIN = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z" stroke="currentColor" stroke-width="2"/></svg>';
+
+  var cache = {};       // key -> rows
+  var loadedAt = {};    // key -> timestamp
+  var inflight = {};    // key -> true
+  var hosts = {};       // key -> .space-content element
+  var built = {};       // key -> skeleton الجاهز
+
+  function esc(t) { return escapeHtmlText(t); }
+  function attr(t) { return escapeHtmlAttr(t); }
+
+  /* ---------- هيكل القسم: عنوان + عدّاد حقيقي + «عرض الكل» + منطقة القائمة ---------- */
+  function buildSection(key) {
+    var host = hosts[key];
+    if (!host || built[key]) return;
+    var cfg = SPACES[key];
+    host.innerHTML =
+      '<div class="sp-head">' +
+        '<h4 class="sp-title">' + esc(cfg.title) + '</h4>' +
+        '<span class="sp-count" data-sp-count hidden></span>' +
+        (key === 'transport' ? '' : '<button type="button" class="sp-more" data-sp-more="' + key + '" hidden><span>عرض الكل</span>' + CHEV + '</button>') +
+      '</div>' +
+      '<div class="sp-body" data-sp-body></div>';
+    built[key] = true;
+  }
+  function bodyOf(key) { return hosts[key] && hosts[key].querySelector('[data-sp-body]'); }
+  function setCount(key, n) {
+    var el = hosts[key] && hosts[key].querySelector('[data-sp-count]');
+    if (!el) return;
+    if (n > 0) { el.textContent = String(n); el.hidden = false; } else { el.hidden = true; }
+  }
+  function setMore(key, show) {
+    var b = hosts[key] && hosts[key].querySelector('[data-sp-more]');
+    if (b) b.hidden = !show;
+  }
+  function skeleton(key) {
+    var body = bodyOf(key);
+    if (!body) return;
+    var n = SPACES[key].kind === 'tiles' ? 6 : 3;
+    var cls = SPACES[key].kind === 'tiles' ? 'sp-skel sp-skel-tile' : (SPACES[key].kind === 'listings' ? 'sp-skel sp-skel-card' : 'sp-skel sp-skel-row');
+    var h = '';
+    for (var i = 0; i < n; i++) h += '<span class="' + cls + '"></span>';
+    body.className = 'sp-body sp-body-skel sp-skel-' + SPACES[key].kind;
+    body.innerHTML = h;
+  }
+  function showEmpty(key, text) {
+    var body = bodyOf(key);
+    if (!body) return;
+    body.className = 'sp-body';
+    body.innerHTML = '<p class="sp-empty">' + esc(text) + '</p>';
+    setCount(key, 0); setMore(key, false);
+  }
+  // تصنيف الخطأ الحقيقي: «تحقق من الإنترنت» فقط عند فشل الشبكة فعلاً؛ أي خطأ من
+  // Supabase/PostgREST (عمود/جدول غير موجود، صلاحيات RLS …) يُعرض بكوده ورسالته الحقيقية.
+  function errInfo(err) {
+    var msg = String((err && (err.message || err.details)) || err || '');
+    var net = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      /failed to fetch|networkerror|network request failed|load failed/i.test(msg);
+    var parts = [];
+    if (err && err.code) parts.push(err.code);
+    if (msg) parts.push(msg);
+    if (err && err.hint) parts.push('hint: ' + err.hint);
+    return { net: net, detail: parts.join(' — ') };
+  }
+  function showError(key, err) {
+    var body = bodyOf(key);
+    if (!body) return;
+    var info = errInfo(err);
+    body.className = 'sp-body';
+    body.innerHTML =
+      '<div class="sp-error" role="alert"><p>' +
+        (info.net ? 'تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.'
+                  : 'تعذّر تحميل البيانات من الخادم.') + '</p>' +
+      (!info.net && info.detail ? '<p class="sp-error-detail" dir="ltr" style="font-size:12px;opacity:.8;word-break:break-word">' + esc(info.detail) + '</p>' : '') +
+      '<button type="button" class="sp-retry" data-sp-retry="' + key + '">إعادة المحاولة</button></div>';
+    setCount(key, 0); setMore(key, false);
+  }
+
+  /* ---------- النقل والتوصيل: الخدمات الستة (بدون أي سعر) + العروض ---------- */
+  function svcPhoto(key) {
+    var src = (typeof VEHICLE_PHOTOS !== 'undefined' && VEHICLE_PHOTOS[key]) || '';
+    var svg = (typeof ICONS !== 'undefined' && SERVICES[key] && ICONS[SERVICES[key].icon]) || '';
+    return '<span class="sp-svc-ph" data-sp-svg="' + attr(svg) + '">' +
+      (src ? '<img src="' + attr(src) + '" alt="' + attr(SERVICES[key].label) + '" loading="lazy">' : '') + '</span>';
+  }
+  function renderTransport() {
+    buildSection('transport');
+    var body = bodyOf('transport');
+    if (!body || typeof SERVICES === 'undefined') return;
+    body.className = 'sp-body sp-svc-grid';
+    body.innerHTML = Object.keys(SERVICES).map(function (key) {
+      var tag = (typeof SERVICE_TAGLINES !== 'undefined' && SERVICE_TAGLINES[key]) || '';
+      return '<button type="button" class="sp-svc" data-sp-service="' + attr(key) + '">' +
+        svcPhoto(key) +
+        '<span class="sp-svc-txt"><b>' + esc(SERVICES[key].label) + '</b>' + (tag ? '<span>' + esc(tag) + '</span>' : '') + '</span>' +
+      '</button>';
+    }).join('');
+    renderPromos();
+  }
+
+  // العروض: YA_MESSAGES.alerts + إعلانات العملاء الفعّالة (adsState.ads) فقط
+  function renderPromos() {
+    var host = hosts.transport;
+    if (!host) return;
+    var box = host.querySelector('[data-sp-promos]');
+    var items = [];
+    var alerts = (window.YA_MESSAGES && window.YA_MESSAGES.alerts) || [];
+    alerts.forEach(function (a) { if (a && a.text) items.push({ title: '', body: a.text }); });
+    var ads = (typeof adsState !== 'undefined' && adsState.ads) || [];
+    ads.forEach(function (ad) { if (ad && (ad.title || ad.body || ad.image_url)) items.push(ad); });
+    items = items.slice(0, PROMO_LIMIT);
+    if (!items.length) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'sp-promos';
+      box.setAttribute('data-sp-promos', '');
+      host.insertBefore(box, host.firstChild);
+    }
+    box.innerHTML = items.map(function (ad) {
+      var tag = ad.link_url ? 'a' : 'div';
+      var href = ad.link_url ? ' href="' + attr(ad.link_url) + '" target="_blank" rel="noopener noreferrer"' : '';
+      return '<' + tag + ' class="sp-promo"' + href + '>' +
+        (ad.image_url ? '<span class="sp-promo-img"><img src="' + attr(ad.image_url) + '" alt="" loading="lazy"></span>' : '') +
+        '<span class="sp-promo-txt">' +
+          (ad.title ? '<b>' + esc(ad.title) + '</b>' : '') +
+          (ad.body ? '<span>' + esc(ad.body) + '</span>' : '') +
+        '</span>' +
+      '</' + tag + '>';
+    }).join('');
+  }
+  window.ySpacesRenderPromos = renderPromos;
+
+  /* ---------- المطاعم / الأسواق / مكتب المستقبل ---------- */
+  function placeRow(cfg, row) {
+    var img = row.image_url
+      ? '<img src="' + attr(row.image_url) + '" alt="" loading="lazy">' : '';
+    return '<button type="button" class="sp-row" data-sp-id="' + attr(row.id) + '">' +
+      '<span class="sp-row-img sp-ph-' + cfg.placeKind + (img ? '' : ' is-noimg') + '">' + img + '</span>' +
+      '<span class="sp-row-body">' +
+        '<b class="sp-row-title">' + esc(row.name) + '</b>' +
+        (row.category ? '<span class="sp-row-cat">' + esc(row.category) + '</span>' : '') +
+        (row.hours_text ? '<span class="sp-row-meta">' + CLOCK + '<span>' + esc(row.hours_text) + '</span></span>' : '') +
+      '</span>' +
+      '<span class="sp-row-chev">' + CHEV + '</span>' +
+    '</button>';
+  }
+  async function loadPlaces(key) {
+    var cfg = SPACES[key];
+    var res = await supabaseClient
+      .from(cfg.table)
+      .select('*', { count: 'exact' })
+      .eq('active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(LIMIT);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'قريباً — لا توجد ' + cfg.noun + ' مضافة بعد'); return; }
+    body.className = 'sp-body sp-list';
+    body.innerHTML = rows.map(function (r) { return placeRow(cfg, r); }).join('');
+    var total = typeof res.count === 'number' ? res.count : rows.length;
+    setCount(key, total);
+    setMore(key, key !== 'futureoffice' ? total > rows.length : total > 1);
+  }
+
+  /* ---------- خدمات يمّك: أقسام local_service_sections ---------- */
+  async function loadTiles(key) {
+    var res = await supabaseClient
+      .from('local_service_sections')
+      .select('id, key, label, icon')
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'قريباً — لا توجد خدمات مضافة بعد'); return; }
+    body.className = 'sp-body sp-tiles';
+    body.innerHTML = rows.slice(0, TILE_LIMIT).map(function (r) {
+      return '<button type="button" class="sp-tile" data-sp-id="' + attr(r.id) + '">' +
+        '<span class="sp-tile-ic">' + esc(r.icon || '🧰') + '</span>' +
+        '<span class="sp-tile-lb">' + esc(r.label) + '</span></button>';
+    }).join('');
+    setCount(key, rows.length);
+    setMore(key, rows.length > TILE_LIMIT);
+  }
+
+  /* ---------- بيع وشراء: أحدث إعلانات market_listings ---------- */
+  async function loadListings(key) {
+    var res = await supabaseClient
+      .from('market_listings')
+      .select('*', { count: 'exact' })
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(LIMIT);
+    if (res.error) throw res.error;
+    var rows = res.data || [];
+    cache[key] = rows;
+    var body = bodyOf(key);
+    if (!rows.length) { showEmpty(key, 'لا توجد إعلانات بعد — كن أول من يضيف إعلاناً'); return; }
+    body.className = 'sp-body mkt-grid sp-listings';
+    body.innerHTML = rows.map(renderListingCard).join('');   // نفس بطاقة market.js (السعر بـ formatIQD)
+    if (typeof wireListingCards === 'function') wireListingCards(body, rows);
+    var total = typeof res.count === 'number' ? res.count : rows.length;
+    setCount(key, total);
+    setMore(key, total > rows.length);
+  }
+
+  var LOADERS = { places: loadPlaces, tiles: loadTiles, listings: loadListings };
+
+  async function load(key, silent) {
+    var cfg = SPACES[key];
+    if (!cfg || key === 'transport' || inflight[key]) return;
+    buildSection(key);
+    inflight[key] = true;
+    if (!silent || !cache[key]) skeleton(key);
+    try {
+      if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('supabaseClient unavailable');
+      await LOADERS[cfg.kind](key);
+      loadedAt[key] = Date.now();
+    } catch (err) {
+      console.error('space content failed: ' + key, err);
+      if (!silent || !cache[key]) { delete cache[key]; showError(key, err); }
+    } finally {
+      inflight[key] = false;
+    }
+  }
+
+  function onVisible(key) {
+    if (key === 'transport') return;
+    var t = loadedAt[key];
+    if (!t) load(key, false);
+    else if (Date.now() - t > STALE_MS) load(key, true);
+  }
+
+  /* ---------- النقرات (تفويض واحد) ---------- */
+  function openPlace(key, row) {
+    var cfg = SPACES[key];
+    // التفاصيل تفتح من الرئيسية وترجع لها (نفس آلية openFutureOffice للفرع الوحيد)
+    placesState.detailBackTarget = 'home';
+    document.querySelectorAll('#plcTabs [data-plc-kind]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.plcKind === cfg.placeKind);
+    });
+    openPlaceDetail(cfg.placeKind, row);
+  }
+
+  function wire() {
+    document.getElementById('spacesViewport').addEventListener('click', function (e) {
+      var t = e.target.closest('[data-sp-service],[data-sp-more],[data-sp-retry],.sp-row,.sp-tile');
+      if (!t || !e.currentTarget.contains(t)) return;
+      var host = t.closest('[data-space-content]');
+      var key = host && host.getAttribute('data-space-content');
+
+      if (t.hasAttribute('data-sp-service')) { openBooking(t.getAttribute('data-sp-service')); return; }
+      if (t.hasAttribute('data-sp-retry')) { load(t.getAttribute('data-sp-retry'), false); return; }
+      if (t.hasAttribute('data-sp-more')) {
+        var legacy = document.getElementById(LEGACY_TARGET[t.getAttribute('data-sp-more')]);
+        if (legacy) legacy.click();
+        return;
+      }
+      if (!key) return;
+      var id = t.getAttribute('data-sp-id');
+      var row = (cache[key] || []).find(function (r) { return String(r.id) === String(id); });
+      if (!row) return;
+      if (t.classList.contains('sp-row')) { openPlace(key, row); if (typeof haptic === 'function') haptic(); return; }
+      if (t.classList.contains('sp-tile')) {
+        openYammakServices();
+        ysvcState.section = row; ysvcState.category = null;
+        ysvcShowLevel('categories');
+        ysvcLoadCategories(row.id);
+      }
+    });
+
+    // صور فاشلة (الحدث لا يفور فنلتقطه بالـ capture): الصورة تُزال ويظهر البديل المعرَّف في CSS
+    document.getElementById('spacesViewport').addEventListener('error', function (e) {
+      var img = e.target;
+      if (!img || img.tagName !== 'IMG') return;
+      var ph = img.closest('.sp-row-img');
+      if (ph) { ph.classList.add('is-noimg'); img.remove(); return; }
+      var svc = img.closest('.sp-svc-ph');
+      if (svc) {
+        var svg = svc.getAttribute('data-sp-svg');
+        svc.classList.add('is-noimg');
+        svc.innerHTML = svg ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + svg + '</svg>' : '';
+        return;
+      }
+      var pr = img.closest('.sp-promo-img');
+      if (pr) pr.remove();
+    }, true);
+  }
+
+  function init() {
+    var viewport = document.getElementById('spacesViewport');
+    if (!viewport) return;
+    viewport.querySelectorAll('[data-space-content]').forEach(function (el) {
+      hosts[el.getAttribute('data-space-content')] = el;
+    });
+    wire();
+    renderTransport();
+
+    var panels = Array.prototype.slice.call(viewport.querySelectorAll('.space-panel'));
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) onVisible(en.target.getAttribute('data-space'));
+        });
+      }, { root: viewport, threshold: 0.55 });
+      panels.forEach(function (p) { io.observe(p); });
+    } else {
+      panels.forEach(function (p) { onVisible(p.getAttribute('data-space')); });
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+/* =========================================================================
+   خارطة يمّك — صفحة الخريطة المستقلة (المرحلة 2: الخارطة)
+   -------------------------------------------------------------------------
+   إضافة معزولة: لا تُنشئ خريطة ثانية ولا GPS جديداً ولا RPC. تستخدم نفس
+   state.map/Leaflet ونفس الدوال القائمة: locateMe, setPickup/setDropoff
+   (عبر نقرة الخريطة الأصلية), selectService, openBooking, haversineKm,
+   SERVICES (الأسعار من service_prices) و ROAD_DISTANCE_FACTOR.
+   المسافة/السعر تُحسب بنفس معادلة updatePriceBar؛ لا يوجد مصدر حقيقي للزمن
+   (لا Routing API) فلا يُعرض زمن. البحث عن مكان = Nominatim الذي يستخدمه
+   التطبيق أصلاً (عند الضغط على بحث/Enter فقط).
+   ========================================================================= */
+(function () {
+  'use strict';
+  var isOpen = false, tick = null, lastRoute = '', hooked = false;
+  function $(id) { return document.getElementById(id); }
+  function shell() { return document.querySelector('.app-shell'); }
+  function val(id) { var e = $(id); return e ? String(e.value || '').trim() : ''; }
+  function key() { return state.currentService || 'taxi'; }
+
+  function buildSvcs() {
+    var wrap = $('ymSvcs'); if (!wrap) return;
+    wrap.innerHTML = '';
+    Object.keys(SERVICES).forEach(function (k) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'ym-svc'; b.setAttribute('data-k', k);
+      var img = document.createElement('img');
+      img.alt = ''; img.src = VEHICLE_PHOTOS[k];
+      img.onerror = function () {
+        var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        s.setAttribute('viewBox', '0 0 24 24'); s.innerHTML = ICONS[SERVICES[k].icon] || '';
+        if (img.parentNode) img.parentNode.replaceChild(s, img);
+      };
+      var t = document.createElement('span'); t.textContent = SERVICES[k].label;
+      b.appendChild(img); b.appendChild(t);
+      b.addEventListener('click', function () { selectService(k); refresh(); });
+      wrap.appendChild(b);
+    });
+  }
+
+  function setMode(m) {
+    state.mapTargetMode = m;
+    $('ymFromRow').classList.toggle('act', m === 'pickup');
+    $('ymToRow').classList.toggle('act', m === 'dropoff');
+    document.querySelectorAll('.mt-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.target === m); });
+  }
+
+  function refresh() {
+    var p = state.pickupLatLng, d = state.dropoffLatLng, k = key(), svc = SERVICES[k];
+    var from = val('pickup') || (p ? 'تم تحديد موقعك' : '');
+    $('ymFrom').textContent = from || 'من أين؟ حدّد على الخريطة أو اضغط «موقعي»';
+    $('ymLocT').textContent = from || 'لم يُحدَّد بعد';
+    var to = $('ymTo');
+    if (d && document.activeElement !== to && val('dropoff')) to.value = val('dropoff');
+    document.querySelectorAll('.ym-svc').forEach(function (b) { b.classList.toggle('act', b.getAttribute('data-k') === k); });
+    var stats = $('ymStats'), go = $('ymGo');
+    if (p && d && svc) {
+      var km = haversineKm(p.lat, p.lng, d.lat, d.lng) * ROAD_DISTANCE_FACTOR;
+      var total = svc.base + km * svc.perKm;
+      $('ymKm').textContent = km.toFixed(1) + ' كم';
+      $('ymPrice').textContent = Math.round(total).toLocaleString('en-US') + ' دينار';
+      stats.hidden = false; $('ymHint').hidden = false;
+      go.textContent = 'تابع طلب ' + svc.label; go.classList.remove('off');
+      var rk = [p.lat, p.lng, d.lat, d.lng].join(',');
+      if (rk !== lastRoute && state.map) {
+        lastRoute = rk;
+        state.map.fitBounds(L.latLngBounds([[p.lat, p.lng], [d.lat, d.lng]]),
+          { paddingTopLeft: [36, 210], paddingBottomRight: [36, 340], maxZoom: 16 });
+      }
+    } else {
+      lastRoute = ''; stats.hidden = true; $('ymHint').hidden = true;
+      go.textContent = 'اختر وجهتك'; go.classList.add('off');
+    }
+  }
+
+  function search() {
+    var t = val('ymTo'), res = $('ymRes');
+    if (t.length < 2) return;
+    res.innerHTML = '<div class="ym-note">جارٍ البحث…</div>';
+    fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&accept-language=ar&countrycodes=iq&q=' + encodeURIComponent(t))
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        res.innerHTML = '';
+        if (!list || !list.length) { res.innerHTML = '<div class="ym-note">لا نتائج — جرّب اسماً آخر أو حدّد الوجهة على الخريطة</div>'; return; }
+        list.forEach(function (it) {
+          var b = document.createElement('button'); b.type = 'button';
+          b.textContent = String(it.display_name || '').split(',').slice(0, 3).join('، ');
+          b.addEventListener('click', function () {
+            var label = b.textContent;
+            $('dropoff').value = label; $('ymTo').value = label; res.innerHTML = '';
+            $('ymTo').blur(); $('yMap').classList.remove('srch');
+            setDropoff(parseFloat(it.lat), parseFloat(it.lon), { reverseGeocode: false, fly: false });
+            setMode('pickup'); refresh();
+          });
+          res.appendChild(b);
+        });
+      })
+      .catch(function () { res.innerHTML = '<div class="ym-note">تعذّر البحث — تحقق من الاتصال بالإنترنت</div>'; });
+  }
+
+  function inv() { if (state.map) state.map.invalidateSize(); }
+
+  window.openYMap = function () {
+    var sh = shell(), root = $('yMap');
+    if (isOpen || !sh || !root || sh.classList.contains('is-fullscreen-view')) return;
+    if (!state.map) { toast('تعذّر تحميل الخريطة الآن — حاول لاحقاً'); return; }
+    isOpen = true; buildSvcs(); setMode('pickup');
+    if (!hooked) {   // أي نقرة على الخريطة تُنهي وضع البحث (تُظهر البطاقة السفلية) بعد أن يعالجها المعالج الأصلي
+      hooked = true;
+      state.map.on('click', function () {
+        if (!isOpen) return;
+        $('ymTo').blur(); $('ymRes').innerHTML = ''; $('yMap').classList.remove('srch');
+      });
+    }
+    sh.classList.add('ymap-on'); root.classList.add('on'); root.setAttribute('aria-hidden', 'false');
+    setTimeout(function () {
+      inv();
+      if (state.pickupLatLng) state.map.setView([state.pickupLatLng.lat, state.pickupLatLng.lng], 15);
+    }, 60);
+    if (!state.pickupLatLng) locateMe(true);
+    refresh(); tick = setInterval(refresh, 700);
+    haptic();
+  };
+
+  window.closeYMap = function () {
+    var sh = shell(), root = $('yMap');
+    if (!isOpen) return;
+    isOpen = false; clearInterval(tick); tick = null;
+    setMode('pickup');
+    $('ymRes').innerHTML = '';
+    root.classList.remove('srch'); root.classList.remove('on'); root.setAttribute('aria-hidden', 'true');
+    if (sh) sh.classList.remove('ymap-on');
+    setTimeout(inv, 60);
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!$('yMap')) return;
+    $('ymBack').addEventListener('click', function () { closeYMap(); });
+    $('ymFromRow').addEventListener('click', function () { setMode('pickup'); $('ymRes').innerHTML = ''; $('yMap').classList.remove('srch'); });
+    $('ymTo').addEventListener('focus', function () { setMode('dropoff'); $('yMap').classList.add('srch'); });
+    $('ymTo').addEventListener('blur', function () { setTimeout(function () { if (!$('ymRes').children.length) $('yMap').classList.remove('srch'); }, 150); });
+    $('ymTo').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+    $('ymTo').addEventListener('input', function () {
+      $('ymRes').innerHTML = '';
+      if (state.dropoffLatLng) {            // نص جديد يُلغي الوجهة السابقة (كما يفعل حقل #dropoff الأصلي)
+        state.dropoffLatLng = null; $('dropoffLat').value = ''; $('dropoffLng').value = ''; $('dropoff').value = '';
+        if (state.map) {
+          if (state.dropoffMarker) { state.map.removeLayer(state.dropoffMarker); state.dropoffMarker = null; }
+          if (state.decorLine) { state.map.removeLayer(state.decorLine); state.decorLine = null; }
+        }
+        updatePriceBar(); refresh();
+      }
+    });
+    $('ymSearch').addEventListener('click', search);
+    $('ymZoomIn').addEventListener('click', function () { if (state.map) state.map.zoomIn(); });
+    $('ymZoomOut').addEventListener('click', function () { if (state.map) state.map.zoomOut(); });
+    $('ymLocate').addEventListener('click', function () {
+      var b = $('ymLocate'); b.classList.add('locating');
+      locateMe(false); haptic();
+      setTimeout(function () { b.classList.remove('locating'); }, 1800);
+    });
+    $('ymGo').addEventListener('click', function () {
+      if (!state.pickupLatLng || !state.dropoffLatLng) { setMode(state.pickupLatLng ? 'dropoff' : 'pickup'); if (state.pickupLatLng) $('ymTo').focus(); else toast('حدّد نقطة الانطلاق أولاً'); return; }
+      var k = key();
+      closeYMap();
+      openBooking(k);   // نفس مسار الطلب الحالي بلا أي تغيير (يقرأ #pickup/#dropoff والإحداثيات)
+    });
+  });
+})();
+
+
+/* =========================================================================
+   المرحلة 3 — صفحات الخدمات المستقلة (المطاعم / الأسواق / مكتب المستقبل)
+   -------------------------------------------------------------------------
+   كل قسم من هذه الأقسام الثلاثة كان يفتح شاشة places مشتركة بتبويبات (تخلط
+   المطاعم والأسواق). هنا لكل قسم صفحته المستقلة data-view="svc-<key>" ببياناته فقط.
+   - المصدر: نفس جداول places.js وبنفس الشروط (restaurants / markets / future_office،
+     active = true، ترتيب sort_order ثم created_at) — قراءة فقط، بلا RPC جديد، بلا كتابة.
+   - لا Mock ولا Demo: فارغ → «قريباً…»، فشل → «تعذّر التحميل» + إعادة المحاولة.
+   - التفاصيل: openPlaceDetail القائم (places.js) كما في المرحلة 2، والرجوع من التفاصيل
+     يعود إلى هذه الصفحة (placesState.detailBackTarget = 'svc-<key>').
+   - النقل والتوصيل / خدمات يمّك / بيع وشراء كانت أصلاً صفحات مستقلة (transport،
+     yammakServices، market) فتبقى كما هي مع نفس الهيرو والتصميم الموحّد (CSS + HTML فقط).
+   - لا يمسّ الطلبات ولا GPS ولا الخارطة ولا السائقين ولا التسعير ولا الصوت.
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  var PAGE = 24;
+  var CFG = {
+    restaurants:  { table: 'restaurants',   placeKind: 'restaurants',  noun: 'مطاعم',  one: 'مطعم',  msg: 'restaurants' },
+    markets:      { table: 'markets',       placeKind: 'markets',      noun: 'أسواق',  one: 'سوق',   msg: 'markets' },
+    futureoffice: { table: 'future_office', placeKind: 'futureOffice', noun: 'فروع',   one: 'فرع',   msg: 'futureOffice' }
+  };
+  var LEGACY_IDS = { soonCardRestaurants: 'restaurants', soonCardMarkets: 'markets', soonCardFutureOffice: 'futureoffice' };
+
+  var rowsBy = {};     // key -> rows المحمّلة
+  var totalBy = {};    // key -> العدد الكلي الحقيقي
+  var busy = {};       // key -> جاري التحميل
+  var loadedAt = {};
+  var STALE_MS = 5 * 60 * 1000;
+
+  function esc(t) { return escapeHtmlText(t); }
+  function attr(t) { return escapeHtmlAttr(t); }
+  function pageEl(key) { return document.querySelector('.svc-page[data-svc="' + key + '"]'); }
+  function q(key, sel) { var p = pageEl(key); return p && p.querySelector(sel); }
+
+  var CLOCK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHEV = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function card(cfg, row) {
+    var img = row.image_url ? '<img src="' + attr(row.image_url) + '" alt="" loading="lazy">' : '';
+    return '<button type="button" class="svc-card" data-svc-id="' + attr(row.id) + '">' +
+      '<span class="svc-card-img sp-ph-' + cfg.placeKind + (img ? '' : ' is-noimg') + '">' + img + '</span>' +
+      '<span class="svc-card-body">' +
+        '<b class="svc-card-title">' + esc(row.name) + '</b>' +
+        (row.category ? '<span class="svc-card-cat">' + esc(row.category) + '</span>' : '') +
+        (row.hours_text ? '<span class="svc-card-meta">' + CLOCK + '<span>' + esc(row.hours_text) + '</span></span>' : '') +
+      '</span>' +
+      '<span class="svc-card-chev">' + CHEV + '</span>' +
+    '</button>';
+  }
+
+  function setCount(key, n) {
+    var el = q(key, '[data-svc-count]');
+    if (!el) return;
+    if (n > 0) { el.textContent = String(n); el.hidden = false; } else { el.hidden = true; }
+  }
+  function setMore(key, show) { var b = q(key, '[data-svc-more]'); if (b) b.hidden = !show; }
+  function skeleton(key) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    body.className = 'svc-body svc-body-skel';
+    body.innerHTML = '<span class="svc-skel"></span><span class="svc-skel"></span><span class="svc-skel"></span><span class="svc-skel"></span>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function showEmpty(key) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    body.className = 'svc-body';
+    body.innerHTML = '<p class="svc-empty">قريباً — لا توجد ' + esc(CFG[key].noun) + ' مضافة بعد</p>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function errInfo(err) {
+    var msg = String((err && (err.message || err.details)) || err || '');
+    var net = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      /failed to fetch|networkerror|network request failed|load failed/i.test(msg);
+    var parts = [];
+    if (err && err.code) parts.push(err.code);
+    if (msg) parts.push(msg);
+    if (err && err.hint) parts.push('hint: ' + err.hint);
+    return { net: net, detail: parts.join(' — ') };
+  }
+  function showError(key, err) {
+    var body = q(key, '[data-svc-body]'); if (!body) return;
+    var info = errInfo(err);
+    body.className = 'svc-body';
+    body.innerHTML = '<div class="svc-error" role="alert"><p>' +
+      (info.net ? 'تعذّر التحميل الآن. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.'
+                : 'تعذّر تحميل البيانات من الخادم.') + '</p>' +
+      (!info.net && info.detail ? '<p dir="ltr" style="font-size:12px;opacity:.8;word-break:break-word">' + esc(info.detail) + '</p>' : '') +
+      '<button type="button" class="svc-retry" data-svc-retry>إعادة المحاولة</button></div>';
+    setCount(key, 0); setMore(key, false);
+  }
+  function paint(key) {
+    var cfg = CFG[key], rows = rowsBy[key] || [], body = q(key, '[data-svc-body]');
+    if (!body) return;
+    if (!rows.length) { showEmpty(key); return; }
+    body.className = 'svc-body svc-list';
+    body.innerHTML = rows.map(function (r) { return card(cfg, r); }).join('');
+    setCount(key, totalBy[key] || rows.length);
+    setMore(key, rows.length < (totalBy[key] || rows.length));
+  }
+
+  async function load(key, opts) {
+    opts = opts || {};
+    var cfg = CFG[key];
+    if (!cfg || busy[key]) return;
+    busy[key] = true;
+    var more = !!opts.more;
+    var from = more ? (rowsBy[key] || []).length : 0;
+    if (!more && (!opts.silent || !rowsBy[key])) skeleton(key);
+    var moreBtn = q(key, '[data-svc-more]');
+    if (more && moreBtn) { moreBtn.disabled = true; moreBtn.textContent = 'جارٍ التحميل…'; }
+    try {
+      if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('supabaseClient unavailable');
+      var res = await supabaseClient
+        .from(cfg.table)
+        .select('*', { count: 'exact' })
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (res.error) throw res.error;
+      var data = res.data || [];
+      rowsBy[key] = more ? (rowsBy[key] || []).concat(data) : data;
+      totalBy[key] = typeof res.count === 'number' ? res.count : rowsBy[key].length;
+      loadedAt[key] = Date.now();
+      paint(key);
+    } catch (err) {
+      console.error('svc page failed: ' + key, err);
+      if (more) { /* نُبقي ما عُرض ونتيح إعادة الضغط */ }
+      else if (!opts.silent || !rowsBy[key]) { delete rowsBy[key]; showError(key, err); }
+    } finally {
+      busy[key] = false;
+      if (moreBtn) { moreBtn.disabled = false; moreBtn.textContent = 'عرض المزيد'; }
+    }
+  }
+
+  window.openSvcPage = function (key) {
+    var cfg = CFG[key];
+    if (!cfg || !pageEl(key)) return false;
+    showView('svc-' + key);
+    if (typeof sheet !== 'undefined' && sheet && sheet.setSnap) sheet.setSnap('full');
+    if (typeof haptic === 'function') haptic();
+    // رسالة التوجيه نفسها التي كانت تُعرض عند ضغط البطاقة القديمة (شريط الرئيسية)
+    if (typeof window.yaShowMessage === 'function' && window.YA_MESSAGES && YA_MESSAGES.place) {
+      window.yaShowMessage(YA_MESSAGES.place[cfg.msg], 'success');
+    }
+    if (!rowsBy[key] || Date.now() - (loadedAt[key] || 0) > STALE_MS) load(key, { silent: !!rowsBy[key] });
+    return true;
+  };
+
+  function openDetail(key, row) {
+    var cfg = CFG[key];
+    placesState.detailBackTarget = 'svc-' + key;
+    document.querySelectorAll('#plcTabs [data-plc-kind]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.plcKind === cfg.placeKind);
+    });
+    openPlaceDetail(cfg.placeKind, row);
+  }
+
+  function init() {
+    // نقرات الصفحات الثلاث (تفويض)
+    document.querySelectorAll('.svc-page[data-svc]').forEach(function (page) {
+      var key = page.getAttribute('data-svc');
+      page.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-svc-id],[data-svc-retry],[data-svc-more]');
+        if (!t || !page.contains(t)) return;
+        if (t.hasAttribute('data-svc-retry')) { load(key, {}); return; }
+        if (t.hasAttribute('data-svc-more')) { load(key, { more: true }); return; }
+        var id = t.getAttribute('data-svc-id');
+        var row = (rowsBy[key] || []).find(function (r) { return String(r.id) === String(id); });
+        if (!row) return;
+        openDetail(key, row);
+        if (typeof haptic === 'function') haptic();
+      });
+      // صورة فاشلة: تُزال ويظهر البديل (صورة التصنيف الحقيقية من assets/places + تدرّج) — بلا صورة مكسورة
+      page.addEventListener('error', function (e) {
+        var img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        var ph = img.closest('.svc-card-img');
+        if (ph) { ph.classList.add('is-noimg'); img.remove(); }
+      }, true);
+    });
+
+    // أي دخول قديم إلى المطاعم/الأسواق/المكتب (المساعد، «عرض الكل»، شاشة المزيد) يفتح الآن الصفحة المستقلة
+    // بدل شاشة places المشتركة. التقاط مبكر على document؛ لا نمسّ places.js.
+    document.addEventListener('click', function (e) {
+      var el = e.target && e.target.closest && e.target.closest('#soonCardRestaurants,#soonCardMarkets,#soonCardFutureOffice');
+      if (el && LEGACY_IDS[el.id] && pageEl(LEGACY_IDS[el.id])) {
+        e.preventDefault(); e.stopPropagation();
+        window.openSvcPage(LEGACY_IDS[el.id]);
+        return;
+      }
+      // رجوع صفحة التفاصيل: إن فُتحت من إحدى هذه الصفحات يعود إليها بدل الرئيسية
+      var back = e.target && e.target.closest && e.target.closest('#plcDetailBackBtn');
+      if (back && typeof placesState !== 'undefined' && String(placesState.detailBackTarget || '').indexOf('svc-') === 0) {
+        var target = placesState.detailBackTarget;
+        e.preventDefault(); e.stopPropagation();
+        showView(target);
+        if (typeof sheet !== 'undefined' && sheet && sheet.setSnap) sheet.setSnap('full');
+      }
+    }, true);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
