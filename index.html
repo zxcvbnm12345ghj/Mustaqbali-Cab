@@ -288,11 +288,34 @@
 <script>
 (function () {
   var root = document.documentElement;
+  // FIX (iPhone PWA white strip at the bottom): on iOS the visualViewport can stay
+  // "stuck" at the shorter on-screen-keyboard height after the keyboard closes or after
+  // returning from the app switcher, WITHOUT any resize event firing — and this script
+  // only re-measured on resize/load/pageshow, so --app-1vh kept the stale short value and
+  // the shell stopped above the real bottom. window.innerHeight (layout viewport) does not
+  // shrink for the keyboard on iOS, so when no text field is focused (keyboard cannot be
+  // open) the height must never be shorter than it. While a field IS focused we keep using
+  // visualViewport.height exactly as before (shell shrinks above the keyboard).
+  function isEditing() {
+    var a = document.activeElement;
+    return !!a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable === true);
+  }
   function setAppVh() {
-    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    var ih = window.innerHeight;
+    var h = (window.visualViewport && window.visualViewport.height) || ih;
+    if (!isEditing() && ih > h) h = ih;
     root.style.setProperty('--app-1vh', (h * 0.01) + 'px');
   }
   setAppVh();
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    setAppVh();
+    [100, 300, 700].forEach(function (delay) { setTimeout(setAppVh, delay); });
+  });
+  window.addEventListener('focus', setAppVh);
+  document.addEventListener('focusout', function () {
+    [60, 250, 600, 1000].forEach(function (delay) { setTimeout(setAppVh, delay); });
+  });
   window.addEventListener('resize', setAppVh);
   window.addEventListener('orientationchange', setAppVh);
   if (window.visualViewport) {
@@ -2180,7 +2203,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
-<script src="app.js?v=20261002-mic2"></script>
+<script src="app.js?v=20261003-mic3-vh1"></script>
 <script src="market.js"></script>
 <script src="places.js"></script>
 <script src="yammak-services.js"></script>

@@ -3,7 +3,10 @@
 // Deliberately does NOT cache Supabase, map tiles, or geocoding requests —
 // trip data must always be live/network, never served stale from cache.
 
-const CACHE_NAME = 'yammak-shell-v3';
+// v5: رفع الرقم يجعل المتصفح يثبّت هذا الـ SW كنسخة جديدة، ويحذف activate كل
+// الكاشات القديمة (yammak-shell-v4 وما قبله). v5 = إصلاح notificationclick
+// (التركيز على نافذة يمّك المفتوحة بدل فتح نافذة ثانية).
+const CACHE_NAME = 'yammak-shell-v5';
 // Flat repo layout: style.css, app.css, app.js, config.js, and the icon
 // PNGs all live in the project root — no css/, js/, or icons/ subfolders.
 const SHELL_ASSETS = [
@@ -20,7 +23,10 @@ const SHELL_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => {})
+    // cache:'reload' = لا تُملأ الكاش المسبق من كاش HTTP الخاص بالمتصفح (قد يحمل نسخة قديمة).
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(SHELL_ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .catch(() => {})
   );
   self.skipWaiting();
 });
@@ -91,16 +97,62 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/index.html';
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if (client.url.includes('index.html') && 'focus' in client) {
-          return client.focus();
+  // الرابط المطلوب من الإشعار (الافتراضي: الصفحة الرئيسية للتطبيق).
+  const rawUrl = (event.notification.data && event.notification.data.url) || '/index.html';
+  let target;
+  try {
+    target = new URL(rawUrl, self.location.origin);
+  } catch (_) {
+    target = new URL('/index.html', self.location.origin);
+  }
+
+  // سبب فتح نافذة ثانية سابقًا: التطبيق المثبّت يُفتح على "/" (start_url في
+  // manifest) فلا يحتوي رابطه على index.html فكان الفحص القديم يفشل دائمًا.
+  // الآن نعتبر أي نافذة من نفس الأصل مسارها "/" أو ينتهي بـ index.html نافذة
+  // يمّك (ولا نلمس نوافذ driver.html/admin.html إن كانت مفتوحة).
+  const isCustomerApp = (c) => {
+    try {
+      const u = new URL(c.url);
+      return u.origin === self.location.origin &&
+        (u.pathname === '/' || u.pathname.endsWith('/index.html'));
+    } catch (_) {
+      return false;
+    }
+  };
+
+  // رابط الإشعار الافتراضي = "افتح التطبيق فقط": نركّز النافذة ولا نعيد
+  // تحميلها كي لا يضيع ما يكتبه الزبون في طلب قيد التعبئة. أي رابط مخصص
+  // مختلف (مسار/استعلام/hash) نوجّه إليه النافذة الموجودة.
+  const isDefaultTarget =
+    target.origin === self.location.origin &&
+    (target.pathname === '/' || target.pathname.endsWith('/index.html')) &&
+    !target.search && !target.hash;
+
+  event.waitUntil((async () => {
+    // رابط خارجي (أصل مختلف): لا يمكن توجيه نافذة يمّك إليه، نفتحه كما كان.
+    if (target.origin !== self.location.origin) {
+      return self.clients.openWindow(target.href);
+    }
+
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const candidates = all.filter(isCustomerApp);
+    // الأفضل: النافذة الظاهرة/المركَّز عليها حاليًا.
+    const score = (c) => (c.focused ? 2 : 0) + (c.visibilityState === 'visible' ? 1 : 0);
+    candidates.sort((a, b) => score(b) - score(a));
+
+    const existing = candidates[0];
+    if (existing) {
+      try {
+        const focused = await existing.focus();
+        if (!isDefaultTarget && focused && 'navigate' in focused) {
+          try { await focused.navigate(target.href); } catch (_) { /* نبقى على النافذة المركّزة */ }
         }
+        return focused;
+      } catch (_) {
+        // فشل التركيز (مثلاً نافذة أُغلقت للتو) → نكمل ونفتح نافذة.
       }
-      return self.clients.openWindow(targetUrl);
-    })
-  );
+    }
+    return self.clients.openWindow(target.href);
+  })());
 });

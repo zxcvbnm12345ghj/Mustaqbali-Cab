@@ -2854,6 +2854,21 @@ function initViewportHandling() {
     }
   });
 
+  // FIX (iPhone PWA): iOS may never fire the closing visualViewport 'resize' after the
+  // keyboard is dismissed, leaving body.kb-open set (map collapsed, sheet height stuck) and
+  // baseHeight stale. Once no text field is focused the keyboard cannot be open, so clear it.
+  document.addEventListener('focusout', () => {
+    [120, 400, 900].forEach((delay) => setTimeout(() => {
+      const a = document.activeElement;
+      if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable === true)) return;
+      if (document.body.classList.contains('kb-open')) {
+        document.body.classList.remove('kb-open');
+        if (sheet && typeof sheet.setSnap === 'function') sheet.setSnap(sheet.current, false);
+      }
+      baseHeight = Math.max(vv.height, window.innerHeight);
+    }, delay));
+  });
+
   // FIX (bug #3 — white gap / page jumps up when typing): html and
   // body are position:fixed with overflow:hidden (see app.css) so the
   // *document* can never scroll — but the old code still called
@@ -3780,7 +3795,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // الزر يبقى ظاهراً دائماً (لا يُخفى بتخمين من User-Agent). الفحص يتم عند
     // الضغط: HTTPS، سياسة الموقع (Permissions-Policy)، وجود الـ API، ثم أي خطأ
     // يصل من onerror يُعرض بسببه الحقيقي مع خطوات الحل حسب الجهاز.
-    var YA_MIC_BUILD = 'mic-20261002-2'; // للتحقق من أن النسخة المنشورة هي نفسها
+    var YA_MIC_BUILD = 'mic-20261003-2'; // للتحقق من أن النسخة المنشورة هي نفسها
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     var yaUA = navigator.userAgent || '';
     var yaIsIOS = /iPad|iPhone|iPod/.test(yaUA) ||
@@ -3893,6 +3908,9 @@ document.addEventListener('DOMContentLoaded', () => {
       var lastText = '';
       var pendingLangRetry = false;
       var sessionError = false;
+      var audioStarted = false;  // وصل onaudiostart: المتصفح فتح المايك فعلاً
+      var speechStarted = false; // وصل onspeechstart: سمع المتصفح كلاماً
+      var silentRetries = 0;     // محاولات تبديل اللغة بعد جلسة انتهت صامتة (بلا نص ولا خطأ) في نفس الضغطة
       var langIndex = 0;
       // --- إدارة دورة الجلسات المتكررة ---
       // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل.
@@ -3942,7 +3960,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // انتهت الجلسة دون onresult نهائي لكن وصل نص مؤقت: اعتمده
         if (lastText && !finalHandled) yaSpeechFinish(lastText);
         // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
-        if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
+        if (!lastText && !sessionError && !stoppedByUser) {
+          // تلميح فقط (ليس فشلاً) + المرحلة التي انقطعت عندها الجلسة فعلاً
+          var stage = !audioStarted ? 'no-audio' : (!speechStarted ? 'no-speech-detected' : 'no-result');
+          // الإصلاح: Chrome/Safari ينهيان الجلسة بصمت (onend بلا onresult ولا onerror) عندما
+          // لا يعمل محرّك التعرف باللغة الأولى أو لا يفهم اللهجة. كان الكود يعرض التلميح فوراً
+          // ولا يجرّب لغة أخرى أبداً (التبديل كان فقط عند language-not-supported). الآن: إن لم يبدأ
+          // الصوت أصلاً أو سُمع كلام بلا نص، نجرّب اللغة التالية تلقائياً (حدّ أقصى: عدد اللغات - 1).
+          // إن سُمع صمت فقط (no-speech-detected) فلا إعادة: المستخدم لم يتكلم.
+          if ((stage === 'no-audio' || stage === 'no-result') && silentRetries < YA_SPEECH_LANGS.length - 1) {
+            silentRetries++;
+            langIndex = (langIndex + 1) % YA_SPEECH_LANGS.length;
+            try { console.warn('[Yammak speech] جلسة صامتة (' + stage + ') — إعادة تلقائية باللغة ' + YA_SPEECH_LANGS[langIndex]); } catch (e) {}
+            try { yaSpeechStart(); return; } catch (e) {
+              try { console.error('[Yammak speech] silent retry failed', e); } catch (e2) {}
+              sessionError = true;
+              yaSpeechNotify(yaSpeechMessage((e && e.name === 'NotAllowedError') ? 'not-allowed' : 'default') + ' [' + ((e && e.name) || 'start-failed') + ']');
+            }
+          }
+          if (!sessionError && silentRetries > 0) langIndex = 0; // فشلت كل اللغات بصمت: ابدأ من الأولى في الضغطة القادمة
+          try { console.warn('[Yammak speech] انتهت الجلسة بلا نص — stage=' + stage); } catch (e) {}
+          if (!sessionError) yaSpeechNotify(
+            (stage === 'no-audio' ? 'لم يبدأ التقاط الصوت — تأكد من إذن المايك وأن تطبيقاً آخر لا يستخدمه، ثم أعد المحاولة'
+              : stage === 'no-speech-detected' ? 'المايك يعمل لكن لم يُسمع كلام — تحدّث بصوت أوضح وقريب من الجهاز'
+              : 'سُمع كلام لكن لم يصل نص — تأكد من الإنترنت ثم أعد المحاولة') + ' [' + stage + ']');
+        }
         yaSpeechIdle();
         // الجلسة انتهت فعلاً: الآن فقط نركّز الحقل ليراجع المستخدم النص
         if (finalHandled && !document.hidden) { try { input.focus({ preventScroll: true }); } catch (e) {} }
@@ -3952,7 +3994,7 @@ document.addEventListener('DOMContentLoaded', () => {
         var old = recognition;
         var sid = sessionId;
         if (old) {
-          old.onstart = old.onresult = old.onerror = old.onend = old.onspeechend = old.onaudioend = null;
+          old.onstart = old.onresult = old.onerror = old.onend = old.onspeechend = old.onaudioend = old.onaudiostart = old.onspeechstart = null;
           try { old.abort(); } catch (e) {}
         }
         yaSpeechHandleEnd(sid);
@@ -3984,7 +4026,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (recognition) {
           var stale = recognition;
           recognition = null;
-          stale.onstart = stale.onresult = stale.onerror = stale.onend = stale.onspeechend = stale.onaudioend = null;
+          stale.onstart = stale.onresult = stale.onerror = stale.onend = stale.onspeechend = stale.onaudioend = stale.onaudiostart = stale.onspeechstart = null;
           try { stale.abort(); } catch (e) {}
         }
         var rec = new SpeechRecognitionCtor();
@@ -3994,7 +4036,17 @@ document.addEventListener('DOMContentLoaded', () => {
         rec.continuous = false;
         rec.interimResults = true;
         rec.maxAlternatives = 1;
+        audioStarted = false;
+        speechStarted = false;
 
+        rec.onaudiostart = function () {
+          if (sid !== sessionId) return;
+          audioStarted = true;
+        };
+        rec.onspeechstart = function () {
+          if (sid !== sessionId) return;
+          speechStarted = true;
+        };
         rec.onstart = function () {
           if (sid !== sessionId) return;
           micBtn.classList.add('ya-listening');
@@ -4091,6 +4143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastText = '';
         pendingLangRetry = false;
         sessionError = false;
+        silentRetries = 0;
         stopping = false;
         try {
           yaSpeechStart();
