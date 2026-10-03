@@ -6497,7 +6497,11 @@ body #inAppGuideBackdrop li b{ color: var(--purple-text); }
   border:none; border-radius:50%;
   background: var(--purple-dim); color: var(--purple);
   transition: background .2s, color .2s;
+
+  cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
 }
+/* display:flex أعلاه يلغي سمة hidden الافتراضية، فنعيد احترامها صراحةً */
+.ya-mic[hidden]{ display:none; }
 .ya-mic svg{ width:18px; height:18px; }
 .ya-mic:active{ transform: scale(0.94); }
 .ya-mic.ya-listening{
@@ -8808,3 +8812,763 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
   .svc-card{ transition: none; }
 }
 
+
+/* =========================================================================
+   Welcome intro — Premium Onboarding (#welcomeIntroStep)
+   -------------------------------------------------------------------------
+   تنسيق بصري فقط لشاشة الترحيب الأولى. كل الأيقونات SVG مرسومة محلياً داخل
+   index.html (بلا صور ولا روابط خارجية). مقيّد بالكامل بـ #welcomeIntroStep
+   فلا يمس خطوة تسجيل الدخول (#welcomeAuthStep) ولا أي منطق.
+   الألوان: بنفسجي أساسي، والأخضر/البرتقالي/الذهبي لمسات فقط (لا وردي ولا سماوي).
+   ========================================================================= */
+#welcomeScreen #welcomeIntroStep{
+  --wi-h: calc(100vh - max(24px, env(safe-area-inset-top, 0px)) - max(24px, env(safe-area-inset-bottom, 0px)));
+  display: flex; flex-direction: column; align-items: stretch;
+  /* 34px = ارتفاع تذييل حقوق النشر .welcome-footer الموجود تحت الخطوة */
+  min-height: calc(var(--wi-h) - 34px);
+  padding-bottom: 10px;
+  animation: wiFade .4s ease both;
+}
+@supports (height: 100dvh){
+  #welcomeScreen #welcomeIntroStep{
+    --wi-h: calc(100dvh - max(24px, env(safe-area-inset-top, 0px)) - max(24px, env(safe-area-inset-bottom, 0px)));
+  }
+}
+#welcomeScreen #welcomeIntroStep[hidden]{ display: none; }
+@keyframes wiFade{ from{ opacity: 0; } to{ opacity: 1; } }
+
+/* المحتوى يلتصق بأعلى الشاشة (الخطوة نفسها بطول المساحة المتاحة) فلا يُقص الجزء العلوي
+   عند الشاشات القصيرة. مقيّد بوجود الخطوة التعريفية ظاهرة فقط. */
+@supports selector(:has(*)){
+  #welcomeScreen:has(#welcomeIntroStep:not([hidden])){ align-items: flex-start; }
+}
+
+/* ---- Hero: الشعار + العنوان + الوصف ---- */
+#welcomeIntroStep .wi-hero{
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px 0 18px;
+}
+#welcomeIntroStep .wi-mark{
+  position: relative;
+  width: 112px; height: 112px;
+  display: grid; place-items: center;
+  margin-bottom: 20px;
+}
+#welcomeIntroStep .wi-mark::before{            /* هالة بنفسجية ناعمة خلف الشعار */
+  content: ""; position: absolute; inset: -30px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(139,92,246,0.30), rgba(139,92,246,0) 74%);
+  pointer-events: none;
+}
+#welcomeIntroStep .wi-mark::after{             /* إطار مائل رفيع يعطي عمقاً */
+  content: ""; position: absolute; inset: 4px; border-radius: 34px;
+  border: 1px solid rgba(109,40,217,0.20);
+  background: linear-gradient(145deg, rgba(255,255,255,0.55), rgba(139,92,246,0.06));
+  transform: rotate(9deg);
+  pointer-events: none;
+}
+#welcomeScreen #welcomeIntroStep .welcome-logo-intro{
+  position: relative; z-index: 1;
+  width: 88px; height: 88px; margin: 0;
+  border-radius: 28px;
+  background: #fff;
+  border: 1px solid rgba(76,29,149,0.10);
+  box-shadow: 0 22px 36px -18px rgba(91,33,182,0.65), 0 0 0 7px rgba(139,92,246,0.10);
+}
+
+#welcomeScreen #welcomeIntroStep .welcome-intro-title{
+  margin: 0 0 10px;
+  font-size: clamp(27px, 8.6vw, 34px);
+  font-weight: 900; line-height: 1.3; letter-spacing: 0;
+  color: var(--ui-ink);
+  text-align: center;
+}
+#welcomeIntroStep .wi-brand{
+  background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 55%, #8B5CF6 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+#welcomeScreen #welcomeIntroStep .welcome-intro-dots{ color: var(--orange); -webkit-text-fill-color: currentColor; }
+#welcomeScreen #welcomeIntroStep .welcome-intro-sub{
+  margin: 0; padding: 0; max-width: 290px;
+  font-size: 14.5px; line-height: 1.75; font-weight: 600;
+  color: var(--ui-muted); text-align: center;
+}
+
+/* ---- شبكة البطاقات 2×2 ---- */
+#welcomeIntroStep .wi-grid{
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+#welcomeIntroStep .wi-card{
+  --wi-accent: #7C3AED; --wi-ink: #4C1D95; --wi-tint: #E9DFFF; --wi-glow: rgba(124,58,237,0.20);
+  position: relative; overflow: hidden;
+  min-height: 118px; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 14px 8px 15px;
+  border-radius: 26px 26px 26px 12px;
+  background:
+    radial-gradient(180px 130px at 92% -14%, var(--wi-glow), transparent 100%),
+    linear-gradient(165deg, rgba(255,255,255,0.92) 0%, var(--wi-wash) 100%);
+  border: 1px solid rgba(255,255,255,0.92);
+  box-shadow:
+    0 0 0 1px var(--wi-line),
+    0 16px 28px -20px var(--wi-shadow),
+    0 2px 6px -3px rgba(76,29,149,0.10),
+    inset 0 1px 0 #fff;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+/* إبراز بسيط عند اللمس: انخفاض خفيف + هالة بلون البطاقة */
+#welcomeIntroStep .wi-card:active{
+  transform: scale(0.972);
+  border-color: var(--wi-accent);
+  box-shadow:
+    0 0 0 1px var(--wi-accent),
+    0 0 0 5px var(--wi-glow),
+    0 10px 20px -14px var(--wi-shadow),
+    inset 0 1px 0 #fff;
+}
+#welcomeIntroStep .wi-card:active .wi-ic{ transform: scale(1.05); }
+#welcomeIntroStep .wi-card::after{              /* خط لمسة لوني صغير أسفل كل بطاقة */
+  content: ""; position: absolute; bottom: 7px; left: 50%;
+  width: 22px; height: 3px; margin-left: -11px; border-radius: 3px;
+  background: var(--wi-accent); opacity: .85;
+}
+#welcomeIntroStep .wi-c1{ --wi-accent: #7C3AED; --wi-ink: #4C1D95; --wi-tint: #E9DFFF; --wi-glow: rgba(124,58,237,0.20); --wi-wash: rgba(124,58,237,0.075); --wi-line: rgba(124,58,237,0.14); --wi-shadow: rgba(91,33,182,0.50); }
+#welcomeIntroStep .wi-c2{ --wi-accent: #FF7A29; --wi-ink: #9A3F0A; --wi-tint: #FFE3CF; --wi-glow: rgba(255,122,41,0.20); --wi-wash: rgba(255,122,41,0.075); --wi-line: rgba(255,122,41,0.17); --wi-shadow: rgba(212,92,16,0.45); }
+#welcomeIntroStep .wi-c3{ --wi-accent: #22C55E; --wi-ink: #14703A; --wi-tint: #D5F5E1; --wi-glow: rgba(34,197,94,0.20); --wi-wash: rgba(34,197,94,0.075); --wi-line: rgba(34,197,94,0.17); --wi-shadow: rgba(21,128,61,0.42); }
+#welcomeIntroStep .wi-c4{ --wi-accent: #F0B429; --wi-ink: #7A4E00; --wi-tint: #FFF0C2; --wi-glow: rgba(240,180,41,0.26); --wi-wash: rgba(240,180,41,0.09); --wi-line: rgba(240,180,41,0.24); --wi-shadow: rgba(168,123,46,0.45); }
+
+#welcomeIntroStep .wi-ic{
+  width: 78px; height: 78px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 24px;
+  background: linear-gradient(150deg, #FFFFFF 0%, var(--wi-tint) 140%);
+  transition: transform .16s ease;
+  border: 1px solid rgba(76,29,149,0.08);
+  box-shadow: 0 10px 18px -12px var(--wi-accent), inset 0 1px 0 #fff;
+}
+#welcomeIntroStep .wi-ic svg{ width: 60px; height: 60px; display: block; overflow: visible; }
+#welcomeIntroStep .wi-ic svg *{
+  fill: none; stroke: var(--wi-ink); stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+#welcomeIntroStep .wi-ic svg .t{ fill: var(--wi-tint); }
+#welcomeIntroStep .wi-ic svg .a{ fill: var(--wi-accent); }
+#welcomeIntroStep .wi-ic svg .w{ fill: #fff; }
+#welcomeIntroStep .wi-ic svg .n{ fill: none; }
+#welcomeIntroStep .wi-ic svg .hl{ stroke: #fff; stroke-width: 2.4; opacity: .95; }
+#welcomeIntroStep .wi-ic svg .sm{ stroke-width: 1.8; opacity: .55; }
+
+#welcomeIntroStep .wi-label{
+  font-size: 14px; font-weight: 800; line-height: 1.35;
+  color: var(--ui-ink); text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ---- زر «ابدأ الآن»: ثابت أسفل الشاشة ---- */
+#welcomeScreen #welcomeIntroStep .welcome-intro-btn{
+  flex: none; width: 100%; margin: 20px 0 0;
+  min-height: 58px; padding: 0 22px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  border: 0; border-radius: 20px;
+  font-family: inherit; font-size: 17px; font-weight: 900; color: #fff;
+  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%);
+  box-shadow:
+    0 20px 32px -16px rgba(91,33,182,0.75),
+    0 0 0 1px rgba(255,255,255,0.14) inset,
+    0 1px 0 rgba(255,255,255,0.35) inset;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+#welcomeIntroStep .wi-btn-arrow{
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.20);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+}
+#welcomeIntroStep .wi-btn-arrow svg{ width: 18px; height: 18px; }
+#welcomeScreen #welcomeIntroStep .welcome-intro-btn:active{ transform: scale(0.98); }
+#welcomeScreen #welcomeIntroStep .welcome-intro-btn:focus-visible{ outline: 3px solid rgba(240,180,41,0.9); outline-offset: 3px; }
+
+/* ---- حركة الدخول: ظهور هادئ متتابع، مرة واحدة ---- */
+@keyframes wiRise{
+  from{ opacity: 0; transform: translateY(14px) scale(.97); }
+  to{ opacity: 1; transform: none; }
+}
+#welcomeIntroStep .wi-a{
+  animation: wiRise .6s cubic-bezier(.22,.8,.24,1) backwards;   /* backwards: بعد انتهاء الحركة تعود الحالة الطبيعية فيعمل تأثير اللمس */
+  animation-delay: calc(var(--i, 0) * 70ms + 60ms);
+}
+@media (prefers-reduced-motion: reduce){
+  #welcomeScreen #welcomeIntroStep{ animation: none; }
+  #welcomeIntroStep .wi-a{ animation: none !important; opacity: 1; transform: none; }
+  #welcomeScreen #welcomeIntroStep .welcome-intro-btn{ transition: none; }
+  #welcomeIntroStep .wi-card, #welcomeIntroStep .wi-ic{ transition: none; }
+}
+
+/* ---- الشاشات الطويلة: عناصر أكبر قليلاً بدل فراغ كبير ---- */
+@media (min-height: 800px){
+  #welcomeIntroStep .wi-mark{ width: 124px; height: 124px; margin-bottom: 24px; }
+  #welcomeScreen #welcomeIntroStep .welcome-logo-intro{ width: 98px; height: 98px; border-radius: 31px; }
+  #welcomeIntroStep .wi-mark::after{ border-radius: 38px; }
+  #welcomeIntroStep .wi-card{ min-height: 136px; gap: 12px; }
+}
+
+/* ---- الشاشات القصيرة: ضغط المسافات حتى لا تحتاج scroll قدر الإمكان ---- */
+@media (max-height: 760px){
+  #welcomeIntroStep .wi-mark{ width: 96px; height: 96px; margin-bottom: 14px; }
+  #welcomeScreen #welcomeIntroStep .welcome-logo-intro{ width: 76px; height: 76px; border-radius: 24px; }
+  #welcomeIntroStep .wi-mark::after{ border-radius: 30px; }
+  #welcomeScreen #welcomeIntroStep .welcome-intro-title{ font-size: clamp(25px, 7.6vw, 30px); margin-bottom: 8px; }
+  #welcomeIntroStep .wi-hero{ padding-bottom: 12px; }
+  #welcomeIntroStep .wi-card{ min-height: 104px; gap: 8px; padding: 12px 8px 14px; }
+  #welcomeIntroStep .wi-ic{ width: 64px; height: 64px; border-radius: 21px; }
+  #welcomeIntroStep .wi-ic svg{ width: 47px; height: 47px; }
+  #welcomeScreen #welcomeIntroStep .welcome-intro-btn{ margin-top: 16px; min-height: 54px; }
+}
+@media (max-height: 640px){
+  #welcomeIntroStep .wi-mark{ width: 80px; height: 80px; margin-bottom: 10px; }
+  #welcomeScreen #welcomeIntroStep .welcome-logo-intro{ width: 64px; height: 64px; border-radius: 20px; }
+  #welcomeScreen #welcomeIntroStep .welcome-intro-sub{ font-size: 13.5px; line-height: 1.6; }
+  #welcomeIntroStep .wi-card{ min-height: 92px; gap: 6px; padding: 10px 8px 12px; }
+  #welcomeIntroStep .wi-ic{ width: 52px; height: 52px; border-radius: 17px; }
+  #welcomeIntroStep .wi-ic svg{ width: 38px; height: 38px; }
+  #welcomeIntroStep .wi-label{ font-size: 13px; }
+  #welcomeIntroStep .wi-hero{ padding-bottom: 8px; }
+  #welcomeScreen #welcomeIntroStep .welcome-intro-btn{ margin-top: 12px; min-height: 52px; }
+}
+
+/* ============================================================
+   Driver roster cards (booking step 1) — shown BEFORE «طلب الآن».
+   Additive block: new .drv-* classes only, scoped to the booking view.
+   Purple primary, green = available, orange = busy, gold accents,
+   neutral grey = unavailable. SVG icons only, no emoji.
+   ============================================================ */
+.app-shell .sheet-view[data-view="booking"] .drivers-list-app{
+  display: flex; flex-direction: column; gap: 12px;
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  overflow: visible; padding: 0; margin: 0 0 14px;
+  min-width: 0; max-width: 100%;
+}
+.app-shell .sheet-view[data-view="booking"] .drivers-list-app > .section-label{
+  margin: 2px 2px 0; padding: 0; background: transparent; border: 0;
+}
+.app-shell .sheet-view[data-view="booking"] .drivers-list-app > .drv-unavail-label{ margin-top: 8px; color: var(--ui-muted); }
+
+.drv-head{ display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.drv-head .section-label{ margin: 2px 2px 0 !important; }
+.drv-count{
+  flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #14803D;
+  background: rgba(34,197,94,0.14); padding: 4px 11px; border-radius: 100px; white-space: nowrap;
+}
+
+.drv-card{
+  position: relative; box-sizing: border-box; min-width: 0; max-width: 100%;
+  background: linear-gradient(180deg, rgba(109,40,217,0.07) 0, #fff 78px);
+  border: 1px solid var(--ui-line); border-radius: 24px;
+  box-shadow: var(--ui-shadow); padding: 16px 16px 14px;
+  display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+}
+.drv-card::before{
+  content: ""; position: absolute; inset-block-start: 0; inset-inline: 0; height: 4px;
+  background: var(--ui-grad);
+}
+.drv-card.drv-st-active{ border-color: rgba(34,197,94,0.38); }
+.drv-card.drv-st-active::before{ background: linear-gradient(90deg, #22C55E, #6D28D9); }
+.drv-card.drv-st-busy::before{ background: linear-gradient(90deg, #FF7A29, #F0B429); }
+.drv-card.drv-st-busy{ background: linear-gradient(180deg, rgba(255,122,41,0.08) 0, #fff 78px); }
+.drv-card.drv-st-offline{ background: #F6F5FA; box-shadow: none; }
+.drv-card.drv-st-offline::before{ background: #B9B6CC; }
+.drv-card.drv-st-offline .drv-name,
+.drv-card.drv-st-offline .drv-phone-num{ color: var(--ui-muted); }
+.drv-card.drv-st-offline .drv-avatar{ background: #DDDAEA; box-shadow: 0 0 0 3px #fff; }
+
+.drv-top{ display: flex; align-items: center; gap: 13px; min-width: 0; padding-top: 2px; }
+.drv-avatar{
+  position: relative; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ui-grad); color: #fff;
+  box-shadow: 0 0 0 3px #fff, 0 10px 18px -8px rgba(109,40,217,0.55);
+}
+.drv-avatar svg{ width: 28px; height: 28px; }
+.drv-avatar-dot{
+  position: absolute; inset-block-end: 0; inset-inline-end: -1px; width: 16px; height: 16px;
+  border-radius: 50%; border: 3px solid #fff; background: #22C55E; box-sizing: border-box;
+}
+.drv-card.drv-st-busy .drv-avatar-dot{ background: #FF7A29; }
+.drv-card.drv-st-offline .drv-avatar-dot{ background: #A29EBC; }
+
+.drv-id{ flex: 1 1 auto; min-width: 0; }
+.drv-name{
+  margin: 0; font-size: 18px; line-height: 1.3; font-weight: 800; color: var(--ui-ink);
+  overflow-wrap: anywhere;
+}
+.drv-sub{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; min-width: 0; }
+.drv-vehicle{
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+  padding: 3px 10px 3px 8px; border-radius: 100px;
+  background: rgba(240,180,41,0.16); color: var(--gold-text);
+  font-size: 12.5px; font-weight: 800;
+}
+.drv-vehicle svg{ width: 16px; height: 16px; flex: 0 0 auto; }
+.drv-vehicle > span{ overflow-wrap: anywhere; }
+
+.drv-status{
+  flex: 0 0 auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 100px; font-size: 12.5px; font-weight: 800; white-space: nowrap;
+}
+.drv-dot{ width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+.drv-status.drv-st-active{ background: rgba(34,197,94,0.14); color: #14803D; }
+.drv-status.drv-st-busy{ background: var(--orange-dim); color: var(--orange-text); }
+.drv-status.drv-st-offline{ background: #E6E4EF; color: #5F5B80; }
+
+.drv-phone{
+  display: flex; align-items: center; gap: 12px; min-width: 0; box-sizing: border-box;
+  padding: 10px 14px 10px 12px; border-radius: 16px;
+  background: #fff; border: 1.5px dashed rgba(109,40,217,0.30);
+}
+.drv-phone-ic{
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--purple-dim); color: var(--purple);
+}
+.drv-phone-ic svg{ width: 19px; height: 19px; }
+.drv-phone-body{ display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.drv-phone-label{ font-size: 11.5px; font-weight: 700; color: var(--ui-muted); line-height: 1.2; }
+.drv-phone-num{
+  font-size: 19px; line-height: 1.2; font-weight: 800; letter-spacing: .6px; color: var(--purple-text);
+  font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: start;
+  overflow-wrap: anywhere; user-select: text; -webkit-user-select: text;
+}
+.drv-card.drv-st-offline .drv-phone{ background: transparent; border-color: rgba(76,29,149,0.16); }
+.drv-card.drv-st-offline .drv-phone-ic{ background: #E6E4EF; color: #8D89AA; }
+
+.drv-actions{ display: flex; gap: 8px; min-width: 0; }
+.drv-btn{
+  flex: 1 1 0; min-width: 0; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 48px; padding: 8px 8px; border-radius: 15px;
+  font: inherit; font-size: 13.5px; font-weight: 800; line-height: 1;
+  text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease;
+}
+.drv-btn:active{ transform: scale(0.96); }
+.drv-btn svg{ width: 18px; height: 18px; flex: 0 0 auto; }
+.drv-btn > span{ white-space: nowrap; }
+.drv-btn-call{ background: #fff; color: var(--purple-text); border: 1.5px solid var(--ui-line-strong); }
+.drv-btn-wa{ background: rgba(34,197,94,0.12); color: #14803D; border: 1.5px solid rgba(34,197,94,0.42); }
+.drv-btn-request{ background: var(--ui-grad); color: #fff; border: 1.5px solid transparent; box-shadow: 0 10px 18px -10px rgba(109,40,217,0.75); }
+.drv-card.drv-st-offline .drv-btn-call,
+.drv-card.drv-st-offline .drv-btn-wa{ background: #fff; color: var(--ui-muted); border-color: rgba(76,29,149,0.14); }
+
+.drv-notice{
+  display: flex; align-items: center; gap: 10px; box-sizing: border-box; min-width: 0;
+  padding: 13px 14px; border-radius: 16px;
+  background: rgba(240,180,41,0.14); color: var(--gold-text);
+  border: 1px solid rgba(240,180,41,0.35); font-size: 14px; font-weight: 800;
+}
+.drv-notice svg{ width: 22px; height: 22px; flex: 0 0 auto; }
+
+@media (max-width: 340px){
+  .drv-card{ padding: 14px 12px 12px; border-radius: 20px; }
+  .drv-top{ gap: 10px; }
+  .drv-avatar{ width: 46px; height: 46px; }
+  .drv-avatar svg{ width: 23px; height: 23px; }
+  .drv-avatar-dot{ width: 14px; height: 14px; }
+  .drv-name{ font-size: 15.5px; }
+  .drv-status{ padding: 4px 9px; font-size: 12px; gap: 5px; }
+  .drv-phone{ padding: 8px 10px; gap: 9px; }
+  .drv-phone-ic{ width: 32px; height: 32px; }
+  .drv-phone-num{ font-size: 17px; letter-spacing: .3px; }
+  .drv-actions{ flex-wrap: wrap; }
+  .drv-btn{ font-size: 13px; gap: 5px; padding-inline: 6px; }
+  .drv-btn-request{ flex: 1 1 100%; order: 3; }
+}
+@media (prefers-reduced-motion: reduce){ .drv-btn{ transition: none; } }
+
+/* ============================================================
+   الواجهة الرئيسية — توحيد تصميم الأقسام الستة (Premium)
+   إضافة نهائية فقط (تصميم): نفس الأزرار/المعالجات/السحب الأصلي.
+   • لكل قسم لون مميّز من هوية يمّك: بنفسجي / برتقالي / أخضر / ذهبي
+     (+ بنفسجي عميق + دافئ برتقالي-ذهبي) — بلا وردي ولا سماوي.
+   • صورة المشروع الحقيقية فوق، وتحتها أيقونة SVG ثم تدرّج احتياطي:
+     إن فُقد الملف تظهر بطاقة أنيقة بدل مربع فارغ — بلا اختلاق محتوى.
+   ============================================================ */
+.space-tab[data-space-tab="transport"],   .hub-transport{   --s-a:#5B21B6; --s-b:#8B5CF6; --s-ink:#4C1D95; --s-tint:rgba(109,40,217,0.11); --s-fg:#fff; }
+.space-tab[data-space-tab="restaurants"], .hub-restaurants{ --s-a:#EA580C; --s-b:#FF9A4D; --s-ink:#B94E0F; --s-tint:rgba(255,122,41,0.13); --s-fg:#fff; }
+.space-tab[data-space-tab="markets"],     .hub-markets{     --s-a:#15803D; --s-b:#34D399; --s-ink:#15803D; --s-tint:rgba(34,197,94,0.13);  --s-fg:#fff; }
+.space-tab[data-space-tab="yservices"],   .hub-yservices{   --s-a:#B7791F; --s-b:#F5C451; --s-ink:#7A5A12; --s-tint:rgba(240,180,41,0.18); --s-fg:#3B2A00; }
+.space-tab[data-space-tab="futureoffice"],.hub-futureoffice{--s-a:#3B1380; --s-b:#7C3AED; --s-ink:#3B1380; --s-tint:rgba(76,29,149,0.10);  --s-fg:#fff; }
+.space-tab[data-space-tab="ymarket"],     .hub-ymarket{     --s-a:#F97316; --s-b:#F5C451; --s-ink:#9A4A0A; --s-tint:rgba(249,115,22,0.12); --s-fg:#3B2A00; }
+
+/* ---- شريط الأقسام الستة: بلاطات موحّدة ---- */
+.spaces-bar{ gap: 5px; }
+.space-tab{ --tab-accent: var(--s-a); --tab-fg: var(--s-fg); gap: 6px; padding-top: 4px; }
+.space-tab .space-tab-ic{
+  width: 100%; max-width: 50px; height: 46px; border-radius: 16px;
+  background: var(--s-tint); color: var(--s-ink);
+  border: 1px solid color-mix(in srgb, var(--s-a) 22%, transparent);
+  box-shadow: none;
+}
+.space-tab .space-tab-ic svg{ width: 24px; height: 24px; }
+.space-tab .space-tab-label{ color: #5E5A7E; font-weight: 800; }
+.space-tab.is-active .space-tab-ic{
+  background: linear-gradient(135deg, var(--s-a) 0%, var(--s-b) 100%);
+  color: var(--s-fg); border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 18px -10px color-mix(in srgb, var(--s-a) 70%, transparent);
+}
+.space-tab.is-active .space-tab-label{ color: var(--s-ink); font-weight: 900; }
+
+/* ---- بطاقة القسم النشط: نفس البنية، هوية لونية لكل قسم ---- */
+.space-card{
+  background: linear-gradient(135deg, var(--s-tint) 0%, #fff 62%);
+  border: 1px solid color-mix(in srgb, var(--s-a) 20%, transparent);
+  border-radius: 22px;
+  box-shadow: 0 16px 30px -22px color-mix(in srgb, var(--s-a) 55%, transparent);
+}
+.space-card::before{ width: 5px; background: linear-gradient(180deg, var(--s-a), var(--s-b)); }
+.space-panel .space-hero{
+  flex: 0 0 74px; min-height: 66px; margin: 9px;
+  border-radius: 18px;
+  box-shadow: 0 0 0 3px #fff, 0 12px 18px -10px color-mix(in srgb, var(--s-a) 65%, transparent);
+}
+.space-title{ font-size: 16px; font-weight: 900; color: var(--text); }
+.space-msg{ color: #5E5A7E; font-weight: 600; }
+.space-cta{
+  background: linear-gradient(135deg, var(--s-a) 0%, var(--s-b) 100%);
+  color: var(--s-fg);
+  box-shadow: 0 10px 18px -12px color-mix(in srgb, var(--s-a) 80%, transparent);
+}
+.space-cta:focus-visible{ outline-color: var(--s-a); }
+@media (max-height: 740px){
+  .space-panel .space-hero{ flex-basis: 64px; min-height: 58px; margin: 8px; }
+}
+
+/* ---- صورة المشروع الحقيقية → أيقونة SVG → تدرّج (الستة بنفس الآلية) ---- */
+.hub-transport .hub-media,
+.hub-restaurants .hub-media,
+.hub-markets .hub-media,
+.hub-yservices .hub-media,
+.hub-futureoffice .hub-media,
+.hub-ymarket .hub-media{
+  background-repeat: no-repeat;
+  background-position: center, center, center;
+}
+.hub-transport .hub-media{
+  background-image:
+    url("assets/vehicles/taxi.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M5 16v-5l1.7-4.3A2 2 0 0 1 8.6 5.4h6.8a2 2 0 0 1 1.9 1.3L19 11v5M4 16h16v2.6a.9.9 0 0 1-.9.9h-1.7a.9.9 0 0 1-.9-.9V16M7.5 19.5H5.9a.9.9 0 0 1-.9-.9V16' stroke='white' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/><circle cx='8' cy='13' r='1' fill='white'/><circle cx='16' cy='13' r='1' fill='white'/></svg>"),
+    linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #8B5CF6 100%);
+  background-size: cover, 54% auto, cover;
+}
+.hub-restaurants .hub-media{
+  background-image:
+    url("assets/places/restaurants.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 3v7a2.5 2.5 0 0 0 2 2.45V21M6 3v6M8.5 3v6M6 9h2.5M17.5 3c-1.4 0-2.5 1.7-2.5 4.5S16.1 12 17.5 12 20 10.3 20 7.5 18.9 3 17.5 3Zm0 9v9' stroke='white' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+    linear-gradient(135deg, #EA580C 0%, #FF7A29 55%, #FFB07A 100%);
+  background-size: cover, 50% auto, cover;
+}
+.hub-markets .hub-media{
+  background-image:
+    url("assets/places/markets.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M4 8h16l-1.4 10.1a2 2 0 0 1-2 1.9H7.4a2 2 0 0 1-2-1.9L4 8Z' stroke='white' stroke-width='1.3' stroke-linejoin='round'/><path d='M8 8V6a4 4 0 0 1 8 0v2' stroke='white' stroke-width='1.3' stroke-linecap='round'/></svg>"),
+    linear-gradient(135deg, #15803D 0%, #22C55E 60%, #6EE7B7 100%);
+  background-size: cover, 50% auto, cover;
+}
+.hub-yservices .hub-media{
+  background-image:
+    url("assets/places/other-services.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M14.7 6.3a3.5 3.5 0 0 1-4.44 4.44L4.5 16.5a1.5 1.5 0 0 0 2.12 2.12L12.4 12.9M14.7 6.3l3.5-1 1 1-1 3.5-3.5 1-2-2 2-2.5Z' stroke='white' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+    linear-gradient(135deg, #8A5A00 0%, #D99A1E 55%, #F5C451 100%);
+  background-size: cover, 50% auto, cover;
+}
+.hub-futureoffice .hub-media{
+  background-image:
+    url("assets/places/future-office.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7v-7Z' stroke='white' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+    linear-gradient(135deg, #3B1380 0%, #5B21B6 55%, #7C3AED 100%);
+  background-size: cover, 48% auto, cover;
+}
+.hub-ymarket .hub-media{
+  background-image:
+    url("assets/places/yammak-market.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><path d='M3.5 12.2V4.5h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-4.7 4.7a1.5 1.5 0 0 1-2.1 0l-9.2-7.4Z' stroke='white' stroke-width='1.3' stroke-linejoin='round'/><circle cx='8' cy='9' r='1.3' fill='white'/></svg>"),
+    linear-gradient(135deg, #EA580C 0%, #F97316 50%, #F5C451 100%);
+  background-size: cover, 50% auto, cover;
+}
+
+/* ---- حالات الفراغ/الخطأ: بطاقة بيضاء بحد منقّط بلون القسم (بدون خلفية وردية) ---- */
+.sp-empty, .sp-error{
+  background: #fff;
+  border: 1.5px dashed color-mix(in srgb, var(--sp-acc, #6C3CE0) 55%, transparent);
+  color: var(--sp-acc-ink, #4C1D95);
+  box-shadow: 0 10px 22px -20px rgba(76,29,149,0.4);
+  font-weight: 800; text-align: center;
+}
+
+@media (max-width: 340px){
+  .spaces-bar{ gap: 3px; }
+  .space-tab .space-tab-ic{ height: 42px; border-radius: 14px; }
+  .space-tab .space-tab-ic svg{ width: 22px; height: 22px; }
+  .space-tab .space-tab-label{ font-size: 9.5px; }
+  .space-panel .space-hero{ flex-basis: 58px; margin: 8px; }
+  .space-title{ font-size: 14.5px; }
+}
+@media (prefers-reduced-motion: reduce){ .space-tab-ic{ transition: none; } }
+
+/* تصحيح درجة اللون: الدمج مع الأبيض (لا مع الخلفية البنفسجية) يمنع ميل البرتقالي للوردي */
+.space-tab .space-tab-ic{ background: color-mix(in srgb, var(--s-a) 13%, #fff); }
+.space-tab.is-active .space-tab-ic{ background: linear-gradient(135deg, var(--s-a) 0%, var(--s-b) 100%); }
+.space-card{ background: linear-gradient(135deg, color-mix(in srgb, var(--s-a) 11%, #fff) 0%, #fff 62%); }
+
+/* شاشات قصيرة: نحافظ على نفس المساحة الظاهرة للمحتوى كما كانت قبل إعادة التصميم */
+@media (max-height: 700px){
+  .space-tab{ gap: 4px; padding-top: 3px; }
+  .space-tab .space-tab-ic{ height: 42px; }
+  .space-panel .space-hero{ flex-basis: 58px; min-height: 52px; margin: 7px; }
+}
+@media (max-height: 600px){
+  .space-tab{ gap: 3px; padding-top: 2px; }
+  .space-tab .space-tab-ic{ height: 38px; border-radius: 13px; }
+  .space-tab .space-tab-ic svg{ width: 21px; height: 21px; }
+  .space-tab .space-tab-label{ font-size: 9px; min-height: 22px; }
+  .space-panel .space-hero{ flex-basis: 52px; min-height: 48px; margin: 6px; border-radius: 15px; }
+  .space-body{ padding-block: 4px; }
+  .space-title{ font-size: 14px; }
+}
+
+/* شاشات قصيرة جداً (≈568px): ضغط عمودي لطيف للشريط الإرشادي وحقل المساعد والفراغات
+   كي تظهر بطاقة القسم كاملة مع بداية المحتوى — الأحجام تبقى مريحة للّمس (≥44px). */
+@media (max-height: 600px){
+  .ya-msgbar{ min-height: 32px; padding: 5px 14px; }
+  .ya-field{ min-height: 48px; height: auto; padding: 7px 14px; }
+  .ya-mic{ width: 36px; height: 36px; }
+  .hub{ gap: 8px; }
+  .spaces{ gap: 6px; }
+}
+
+/* 568px: بطاقة القسم مدمجة — الزر دائري (السهم) بجانب العنوان، والتعريف سطران بعرض كامل.
+   اسم الزر يبقى في الصفحة لقارئات الشاشة (مخفي بصرياً فقط) */
+@media (max-height: 600px){
+  .space-body{
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "t c" "m m";
+    column-gap: 8px; row-gap: 2px; padding: 5px 12px 5px 4px;
+  }
+  .space-title{ font-size: 14px; line-height: 1.3; align-self: center; }
+  .space-msg{ font-size: 11.5px; line-height: 1.4; -webkit-line-clamp: 2; }
+  .space-cta{ width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; justify-content: center; }
+  .space-cta > span{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .space-cta svg{ width: 19px; height: 19px; }
+  .space-panel .space-hero{ flex-basis: 50px; min-height: 44px; margin: 6px; }
+}
+
+/* ============================================================
+   أيقونات الأقسام الستة — النسخة النهائية (Premium) — شبكة 24×24
+   • سماكة خط واحدة (1.7) لكل الأيقونات، أطراف ووصلات مستديرة، وحدود حيّة 3.5→20.5.
+   • طبقتان فقط: خط بلون القسم (::after) + تعبئة ناعمة من نفس اللون (::before)
+     مزاحة نصف بكسل لعمق خفيف بلا ظلال ثقيلة.  بلا دائرة خلف الأيقونة.
+   • غير النشط: خط بلون القسم الداكن على بلاطة فاتحة بحدّ واضح.
+     النشط: أيقونة بيضاء/داكنة على تدرّج القسم + مؤشّر سفلي.
+   • SVG فقط (قناع CSS) — الأيقونات المضمّنة في الصفحة تبقى مخفيّة بصرياً (aria-hidden)،
+     ولا يُمسّ أي منطق أو بيانات أو Supabase.
+   ============================================================ */
+.space-tab{ position: relative; }
+/* بلاطة مربّعة بزوايا مستديرة (وليست دائرة) */
+.space-tab .space-tab-ic{ position: relative; border-radius: 14px; }
+.space-tab .space-tab-ic > svg{ display: none; }
+.space-tab .space-tab-ic::before,
+.space-tab .space-tab-ic::after{
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 32px; height: 32px; pointer-events: none;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+  transition: transform .2s ease, background-color .2s ease;
+}
+/* غير نشط: وضوح عالٍ */
+.space-tab .space-tab-ic{
+  background: color-mix(in srgb, var(--s-a) 11%, #fff);
+  border: 1px solid color-mix(in srgb, var(--s-a) 32%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 6px 12px -9px color-mix(in srgb, var(--s-a) 45%, transparent);
+}
+.space-tab .space-tab-ic::before{ background: color-mix(in srgb, var(--s-b) 50%, transparent); transform: translate(.5px, .7px); }
+.space-tab .space-tab-ic::after{ background: var(--s-ink); }
+/* نشط: تدرّج القسم (طرفه الفاتح مخفّف لوضوح الأيقونة) + حلقة داخلية خفيفة */
+.space-tab.is-active .space-tab-ic{
+  background: linear-gradient(135deg, var(--s-a) 0%, color-mix(in srgb, var(--s-a) 42%, var(--s-b)) 100%);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 12px 18px -10px color-mix(in srgb, var(--s-a) 78%, transparent);
+}
+.space-tab.is-active .space-tab-ic::before{ background: color-mix(in srgb, var(--s-fg) 34%, transparent); transform: translate(.5px, .7px) scale(1.06); }
+.space-tab.is-active .space-tab-ic::after{ background: var(--s-fg); transform: scale(1.06); }
+/* الذهبي: الأيقونة الداكنة تحتاج خلفية أفتح لتبقى واضحة جداً */
+.space-tab[data-space-tab="yservices"].is-active .space-tab-ic{ background: linear-gradient(135deg, #E3A52C 0%, #F5C451 100%); }
+/* مؤشّر القسم النشط تحت الاسم */
+.space-tab::after{
+  content: ""; position: absolute; left: 50%; bottom: -6px;
+  width: 20px; height: 3px; margin-left: -10px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--s-a), var(--s-b));
+  opacity: 0; transform: scaleX(.3); transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+}
+.space-tab.is-active::after{ opacity: 1; transform: none; }
+
+.space-tab[data-space-tab="transport"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M6.5 11.4 8 8.9a1 1 0 0 1 .9-.5h6.2a1 1 0 0 1 .9.5l1.5 2.5Z'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M6.5 11.4 8 8.9a1 1 0 0 1 .9-.5h6.2a1 1 0 0 1 .9.5l1.5 2.5Z'/></g></svg>"); }
+.space-tab[data-space-tab="transport"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5.4 17.4h-.7a1.2 1.2 0 0 1-1.2-1.2v-3.1c0-.55.17-1.08.49-1.53l1.9-2.7A2.3 2.3 0 0 1 7.76 7.2h8.48a2.3 2.3 0 0 1 1.87.97l1.9 2.7c.32.45.49.98.49 1.53v3.1a1.2 1.2 0 0 1-1.2 1.2h-.7'/><path d='M9.4 17.4h5.2'/><circle cx='7.4' cy='17.4' r='1.9'/><circle cx='16.6' cy='17.4' r='1.9'/><path d='M4 11.57h16'/><rect x='10.2' y='4.7' width='3.6' height='2.5' rx='.9'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M5.4 17.4h-.7a1.2 1.2 0 0 1-1.2-1.2v-3.1c0-.55.17-1.08.49-1.53l1.9-2.7A2.3 2.3 0 0 1 7.76 7.2h8.48a2.3 2.3 0 0 1 1.87.97l1.9 2.7c.32.45.49.98.49 1.53v3.1a1.2 1.2 0 0 1-1.2 1.2h-.7'/><path d='M9.4 17.4h5.2'/><circle cx='7.4' cy='17.4' r='1.9'/><circle cx='16.6' cy='17.4' r='1.9'/><path d='M4 11.57h16'/><rect x='10.2' y='4.7' width='3.6' height='2.5' rx='.9'/></g></svg>"); }
+.space-tab[data-space-tab="restaurants"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0Z'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0Z'/></g></svg>"); }
+.space-tab[data-space-tab="restaurants"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0'/><path d='M3 15.6h18'/><path d='M5.6 19.3h12.8'/><circle cx='12' cy='6.7' r='1.3'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0'/><path d='M3 15.6h18'/><path d='M5.6 19.3h12.8'/><circle cx='12' cy='6.7' r='1.3'/></g></svg>"); }
+.space-tab[data-space-tab="markets"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g transform='translate(0.7 0)'><g fill='black'><path d='M6.64 8H19.6l-1.55 5.4a1.6 1.6 0 0 1-1.55 1.2H9.3a1.6 1.6 0 0 1-1.6-1.3Z'/></g></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g transform='translate(0.7 0)'><g fill='black'><path d='M6.64 8H19.6l-1.55 5.4a1.6 1.6 0 0 1-1.55 1.2H9.3a1.6 1.6 0 0 1-1.6-1.3Z'/></g></g></svg>"); }
+.space-tab[data-space-tab="markets"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g transform='translate(0.7 0)'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4.5h2.1a1 1 0 0 1 1 .8l1.6 8a1.6 1.6 0 0 0 1.6 1.3h7.2a1.6 1.6 0 0 0 1.55-1.2L19.6 8H6.5'/><circle cx='9.6' cy='18.8' r='1.4'/><circle cx='16.4' cy='18.8' r='1.4'/></g></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g transform='translate(0.7 0)'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4.5h2.1a1 1 0 0 1 1 .8l1.6 8a1.6 1.6 0 0 0 1.6 1.3h7.2a1.6 1.6 0 0 0 1.55-1.2L19.6 8H6.5'/><circle cx='9.6' cy='18.8' r='1.4'/><circle cx='16.4' cy='18.8' r='1.4'/></g></g></svg>"); }
+.space-tab[data-space-tab="yservices"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/></g></svg>"); }
+.space-tab[data-space-tab="yservices"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/><rect x='13.5' y='3.5' width='7' height='7' rx='2'/><rect x='3.5' y='13.5' width='7' height='7' rx='2'/><path d='M17 14.2v5.6M14.2 17h5.6'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/><rect x='13.5' y='3.5' width='7' height='7' rx='2'/><rect x='3.5' y='13.5' width='7' height='7' rx='2'/><path d='M17 14.2v5.6M14.2 17h5.6'/></g></svg>"); }
+.space-tab[data-space-tab="futureoffice"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M7.2 13.5h9.6v7H7.2Z'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M7.2 13.5h9.6v7H7.2Z'/></g></svg>"); }
+.space-tab[data-space-tab="futureoffice"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M7.2 9V4.2a.7.7 0 0 1 .7-.7h8.2a.7.7 0 0 1 .7.7V9'/><path d='M7.2 17H5.4a1.9 1.9 0 0 1-1.9-1.9v-4.2A1.9 1.9 0 0 1 5.4 9h13.2a1.9 1.9 0 0 1 1.9 1.9v4.2a1.9 1.9 0 0 1-1.9 1.9h-1.8'/><path d='M7.2 13.5h9.6v7H7.2Z'/><path d='M9.8 16.9h4.4'/><path d='M17.2 11.9h.01'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M7.2 9V4.2a.7.7 0 0 1 .7-.7h8.2a.7.7 0 0 1 .7.7V9'/><path d='M7.2 17H5.4a1.9 1.9 0 0 1-1.9-1.9v-4.2A1.9 1.9 0 0 1 5.4 9h13.2a1.9 1.9 0 0 1 1.9 1.9v4.2a1.9 1.9 0 0 1-1.9 1.9h-1.8'/><path d='M7.2 13.5h9.6v7H7.2Z'/><path d='M9.8 16.9h4.4'/><path d='M17.2 11.9h.01'/></g></svg>"); }
+.space-tab[data-space-tab="ymarket"] .space-tab-ic::before{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='black'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/></g></svg>"); }
+.space-tab[data-space-tab="ymarket"] .space-tab-ic::after{ -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/><circle cx='8.1' cy='8.1' r='1.3'/><path d='M11.2 15.4l4.2-4.2'/></g></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/><circle cx='8.1' cy='8.1' r='1.3'/><path d='M11.2 15.4l4.2-4.2'/></g></svg>"); }
+
+/* احتياطي صورة البطاقة (صورة المشروع ← أيقونة العائلة ← تدرّج) */
+.hub-transport .hub-media{
+  background-image:
+    url("assets/vehicles/taxi.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='white' fill-opacity='.34'><path d='M6.5 11.4 8 8.9a1 1 0 0 1 .9-.5h6.2a1 1 0 0 1 .9.5l1.5 2.5Z'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><path d='M5.4 17.4h-.7a1.2 1.2 0 0 1-1.2-1.2v-3.1c0-.55.17-1.08.49-1.53l1.9-2.7A2.3 2.3 0 0 1 7.76 7.2h8.48a2.3 2.3 0 0 1 1.87.97l1.9 2.7c.32.45.49.98.49 1.53v3.1a1.2 1.2 0 0 1-1.2 1.2h-.7'/><path d='M9.4 17.4h5.2'/><circle cx='7.4' cy='17.4' r='1.9'/><circle cx='16.6' cy='17.4' r='1.9'/><path d='M4 11.57h16'/><rect x='10.2' y='4.7' width='3.6' height='2.5' rx='.9'/></g></svg>"),
+    linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #8B5CF6 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+.hub-restaurants .hub-media{
+  background-image:
+    url("assets/places/restaurants.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='white' fill-opacity='.34'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0Z'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><path d='M4.4 15.6a7.6 7.6 0 0 1 15.2 0'/><path d='M3 15.6h18'/><path d='M5.6 19.3h12.8'/><circle cx='12' cy='6.7' r='1.3'/></g></svg>"),
+    linear-gradient(135deg, #EA580C 0%, #FF7A29 55%, #FFB07A 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+.hub-markets .hub-media{
+  background-image:
+    url("assets/places/markets.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g transform='translate(0.7 0)'><g fill='white' fill-opacity='.34'><path d='M6.64 8H19.6l-1.55 5.4a1.6 1.6 0 0 1-1.55 1.2H9.3a1.6 1.6 0 0 1-1.6-1.3Z'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4.5h2.1a1 1 0 0 1 1 .8l1.6 8a1.6 1.6 0 0 0 1.6 1.3h7.2a1.6 1.6 0 0 0 1.55-1.2L19.6 8H6.5'/><circle cx='9.6' cy='18.8' r='1.4'/><circle cx='16.4' cy='18.8' r='1.4'/></g></g></svg>"),
+    linear-gradient(135deg, #15803D 0%, #22C55E 60%, #6EE7B7 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+.hub-yservices .hub-media{
+  background-image:
+    url("assets/places/other-services.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='white' fill-opacity='.34'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><rect x='3.5' y='3.5' width='7' height='7' rx='2'/><rect x='13.5' y='3.5' width='7' height='7' rx='2'/><rect x='3.5' y='13.5' width='7' height='7' rx='2'/><path d='M17 14.2v5.6M14.2 17h5.6'/></g></svg>"),
+    linear-gradient(135deg, #8A5A00 0%, #D99A1E 55%, #F5C451 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+.hub-futureoffice .hub-media{
+  background-image:
+    url("assets/places/future-office.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='white' fill-opacity='.34'><path d='M7.2 13.5h9.6v7H7.2Z'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><path d='M7.2 9V4.2a.7.7 0 0 1 .7-.7h8.2a.7.7 0 0 1 .7.7V9'/><path d='M7.2 17H5.4a1.9 1.9 0 0 1-1.9-1.9v-4.2A1.9 1.9 0 0 1 5.4 9h13.2a1.9 1.9 0 0 1 1.9 1.9v4.2a1.9 1.9 0 0 1-1.9 1.9h-1.8'/><path d='M7.2 13.5h9.6v7H7.2Z'/><path d='M9.8 16.9h4.4'/><path d='M17.2 11.9h.01'/></g></svg>"),
+    linear-gradient(135deg, #3B1380 0%, #5B21B6 55%, #7C3AED 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+.hub-ymarket .hub-media{
+  background-image:
+    url("assets/places/yammak-market.jpg?v=2026100201"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='white' fill-opacity='.34'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/></g><g fill='none' stroke='white' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'><path d='M3.8 5.6A1.8 1.8 0 0 1 5.6 3.8h5.3c.48 0 .94.19 1.27.53l7.6 7.6a1.8 1.8 0 0 1 0 2.55l-5.3 5.3a1.8 1.8 0 0 1-2.55 0l-7.6-7.6c-.33-.33-.52-.79-.52-1.27Z'/><circle cx='8.1' cy='8.1' r='1.3'/><path d='M11.2 15.4l4.2-4.2'/></g></svg>"),
+    linear-gradient(135deg, #EA580C 0%, #F97316 50%, #F5C451 100%);
+  background-size: cover, 54% auto, cover;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+}
+@media (max-width: 340px){
+  .space-tab .space-tab-ic{ border-radius: 12px; }
+  .space-tab .space-tab-ic::before, .space-tab .space-tab-ic::after{ width: 28px; height: 28px; }
+}
+@media (max-height: 600px){
+  .space-tab .space-tab-ic::before, .space-tab .space-tab-ic::after{ width: 27px; height: 27px; }
+  .space-tab::after{ bottom: -4px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .space-tab .space-tab-ic::before, .space-tab .space-tab-ic::after, .space-tab::after{ transition: none; }
+}
+
+/* ============================================================
+   بطاقة «ثبّت تطبيق يمّك» (#yammakInstallCard) — شاشة «المزيد».
+   إضافة بحتة: لا تغيّر أي قاعدة قائمة، وتستخدم نفس متغيرات الألوان.
+   ============================================================ */
+.yinst-card{
+  margin: 0 0 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--surface-brd, #E6ECF5);
+  box-shadow: 0 14px 30px -20px rgba(16,27,45,0.28);
+  direction: rtl;
+  text-align: start;
+}
+.yinst-card [hidden], .yinst-card[hidden]{ display: none !important; }
+.yinst-head{ display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.yinst-logo{
+  width: 46px; height: 46px; flex-shrink: 0;
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface-hi, #F0F4FA);
+  display: flex;
+  box-shadow: 0 6px 14px -8px rgba(16,27,45,0.35);
+}
+.yinst-logo img{ width:100%; height:100%; object-fit:cover; display:block; }
+.yinst-head-text{ flex:1; min-width:0; }
+.yinst-head h3{ margin:0; font-size:16px; font-weight:800; color: var(--text, #101B2D); }
+.yinst-head p{ margin:3px 0 0; font-size:12.5px; line-height:1.55; color: var(--text-muted, #5C6B84); }
+.yinst-block{ display:flex; flex-direction:column; gap:12px; }
+.yinst-chip{
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  color: var(--teal-text, #12408A);
+  background: var(--teal-dim, rgba(47,111,228,0.12));
+}
+.yinst-chip-ok{
+  color: var(--green-text, #15803D);
+  background: var(--green-dim, rgba(34,197,94,0.14));
+}
+.yinst-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.yinst-steps li{
+  display:flex; align-items:flex-start; gap:10px;
+  font-size:13px; line-height:1.6; color: var(--text, #101B2D);
+}
+.yinst-steps b{ color: var(--teal-text, #12408A); font-weight:700; }
+.yinst-num{
+  width:22px; height:22px; flex-shrink:0; margin-top:1px;
+  border-radius:50%;
+  background: var(--brand-grad, linear-gradient(135deg,#1D6FD1,#1CAE72));
+  color:#fff; font-size:12px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.yinst-card .app-btn{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; text-decoration:none;
+}
+.yinst-note{
+  margin: 12px 0 0; padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12.5px; line-height: 1.65;
+  color: var(--text-muted, #5C6B84);
+  background: var(--surface-hi, #F0F4FA);
+}
+.yinst-note[data-kind="warn"]{
+  color: #8A5A00;
+  background: rgba(240,180,41,0.16);
+}
+.yinst-note[data-kind="ok"]{
+  color: var(--green-text, #15803D);
+  background: var(--green-dim, rgba(34,197,94,0.14));
+}
+.yinst-share{ margin-top: 12px; }

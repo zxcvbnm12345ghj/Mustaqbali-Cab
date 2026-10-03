@@ -922,27 +922,25 @@ const CALL_ICON_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="non
 const WA_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.06-1.33A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm0 18a7.9 7.9 0 0 1-4.03-1.1l-.29-.17-3 .79.8-2.93-.19-.3A7.93 7.93 0 1 1 12 20Zm4.4-5.9c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.44-1.34-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg>';
 const REQUEST_ICON_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-// Exactly two states shown to the customer, per the no-FIFO design:
-// 🟢 متاح (status === 'active' — selectable) or 🔴 مشغول (anything
-// else — busy or offline both read as simply "not available right
-// now"; the customer never sees a third "بانتظار الدور" queue state).
-//
-// FIX (سائقون/خدمات تظهر "مشغول" خطأً): الشرط القديم كان
-// `String(status||'').toLowerCase() === 'active'` — أي قيمة status لا
-// تساوي 'active' حرفياً، بما فيها الفارغة/null (سائق لم تُحدَّث حالته
-// بعد)، كانت تُصنَّف "مشغول" تلقائياً. هذا يعاكس ما وثّقه هذا الملف
-// نفسه سابقاً ("تعود افتراضياً إلى متاح عند غياب القيمة"). التعديل
-// الوحيد هنا: القيمة الفارغة/null تبقى "متاح" كما كان يُفترض أصلاً؛
-// "active" تبقى "متاح"؛ أي قيمة أخرى غير فارغة (وهي فعلياً ما ترجعه
-// get_service_driver_roster لسائق مشغول/غير متاح) تبقى "مشغول" كما
-// كانت. لا تغيير على الـ RPC ولا على canRequest (شرط زر "طلب" أدناه)،
-// ولا على أي منطق تعيين سائق.
+// Three real states, straight from get_service_driver_roster().status
+// (computed server-side — nothing hardcoded here):
+//   active  → «متاح»      (can be requested)
+//   busy    → «مشغول»     (has an accepted / en_route / arrived trip)
+//   offline → «غير متاح»  (drivers.active = false) — NEVER shown as busy
+// An empty/null status keeps the earlier documented fallback («متاح»), so
+// a driver the roster returned is never wrongly shown as busy; any other
+// unknown value stays «مشغول» exactly as before. No emoji — styling is
+// done in CSS (.drv-status / .drv-dot).
+const ROSTER_STATUS = {
+  active:  { key: 'active',  label: 'متاح',     cls: 'drv-st-active' },
+  busy:    { key: 'busy',    label: 'مشغول',    cls: 'drv-st-busy' },
+  offline: { key: 'offline', label: 'غير متاح', cls: 'drv-st-offline' },
+};
 function rosterStatusInfo(status) {
   const normalized = String(status || '').trim().toLowerCase();
-  const isAvailable = normalized === '' || normalized === 'active';
-  return isAvailable
-    ? { dot: '🟢', label: 'متاح', cls: 'badge-live' }
-    : { dot: '🔴', label: 'مشغول', cls: 'badge-onjob' };
+  if (normalized === '' || normalized === 'active') return ROSTER_STATUS.active;
+  if (normalized === 'offline') return ROSTER_STATUS.offline;
+  return ROSTER_STATUS.busy;
 }
 
 // Renders EVERY driver for this service, each in its own card (no
@@ -981,6 +979,59 @@ function sortRosterByDistance(roster, customerLat, customerLng) {
   return enriched.map((e) => e.row);
 }
 
+const DRV_PHONE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6" stroke="currentColor" stroke-width="1.7"/><path d="M11 18.5h2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const DRV_VEHICLE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16V11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 16h17v2.2a.8.8 0 0 1-.8.8H18a.8.8 0 0 1-.8-.8V17M6.8 17v1.2a.8.8 0 0 1-.8.8H4.3a.8.8 0 0 1-.8-.8V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="13" r="1" fill="currentColor"/><circle cx="16" cy="13" r="1" fill="currentColor"/></svg>';
+const DRV_INFO_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5M12 8v.01" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+
+// One real driver card, built only from the fields get_service_driver_roster()
+// returns (name, phone, vehicle_type, status). Nothing internal is read or
+// shown (no token / auth data — the RPC does not return any).
+function buildDriverCardHtml(row, serviceType, waText) {
+  const info = rosterStatusInfo(row.status);
+  const roleTitle = roleTitleForService(serviceType);
+  const displayName = String(row.name || '').trim() || roleTitle.name;
+  const phoneText = String(row.phone || '').trim();
+  const vehicleTypeLabel = row.vehicle_type || SERVICES[serviceType]?.label || 'مركبة';
+  const cleanTel = phoneText.replace(/[^\d+]/g, '');
+  const waTarget = normalizeIraqiPhoneForWhatsapp(row.phone);
+  // «طلب الآن» only on an actually available driver (status === 'active') —
+  // unchanged rule; it still carries the same data-driver-action/id/phone
+  // attributes read by the existing click handler → the order logic.
+  const canRequest = row.status === 'active';
+
+  const phoneHtml = phoneText ? `
+      <div class="drv-phone">
+        <span class="drv-phone-ic">${DRV_PHONE_ICON_SVG}</span>
+        <bdi class="drv-phone-num" dir="ltr">${escapeHtml(phoneText)}</bdi>
+      </div>` : '';
+
+  const actionsHtml = (cleanTel || waTarget || canRequest) ? `
+      <div class="drv-actions">
+        ${cleanTel ? `<a href="tel:${escapeHtml(cleanTel)}" class="drv-btn drv-btn-call" aria-label="اتصال ${escapeHtml(roleTitle.byName)}">${CALL_ICON_SVG}<span>اتصال</span></a>` : ''}
+        ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="drv-btn drv-btn-wa" target="_blank" rel="noopener" aria-label="واتساب ${escapeHtml(roleTitle.name)}">${WA_ICON_SVG}<span>واتساب</span></a>` : ''}
+        ${canRequest ? `<button type="button" class="drv-btn drv-btn-request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب الآن">${REQUEST_ICON_SVG}<span>طلب الآن</span></button>` : ''}
+      </div>` : '';
+
+  return `
+    <article class="drv-card ${info.cls}${canRequest ? ' driver-live' : ''}">
+      <div class="drv-top">
+        <span class="drv-avatar">${DRIVER_AVATAR_SVG}</span>
+        <div class="drv-id">
+          <h4 class="drv-name">${escapeHtml(displayName)}</h4>
+          <div class="drv-sub">
+            <span class="drv-vehicle">${DRV_VEHICLE_ICON_SVG}<span>${escapeHtml(vehicleTypeLabel)}</span></span>
+            ${roleBadgeHtml(serviceType)}
+          </div>
+        </div>
+        <span class="drv-status ${info.cls}"><i class="drv-dot"></i>${info.label}</span>
+      </div>${phoneHtml}${actionsHtml}
+    </article>`;
+}
+
+function driversNoticeHtml(text) {
+  return `<div class="drv-notice" role="status">${DRV_INFO_ICON_SVG}<span>${text}</span></div>`;
+}
+
 async function loadServiceDrivers(serviceType) {
   const wrap = document.getElementById('driversListApp');
   if (!wrap) return;
@@ -993,7 +1044,23 @@ async function loadServiceDrivers(serviceType) {
     const { data: roster, error: rosterError } = await supabaseClient
       .rpc('get_service_driver_roster', { p_service_type: serviceType });
 
-    if (rosterError || !roster || roster.length === 0) return; // hidden entirely if no drivers exist yet for this service
+    // A newer service was picked while this request was in flight — drop
+    // this stale answer so one service never shows another's drivers.
+    if (state.currentService !== serviceType) return;
+
+    const roleTitle = roleTitleForService(serviceType);
+
+    if (rosterError) {
+      console.error('get_service_driver_roster failed', rosterError);
+      wrap.innerHTML = driversNoticeHtml('تعذّر تحميل قائمة السائقين حالياً، حاول مرة أخرى');
+      wrap.hidden = false;
+      return;
+    }
+    if (!roster || roster.length === 0) {
+      wrap.innerHTML = driversNoticeHtml('لا يوجد سائقون متاحون حاليًا');
+      wrap.hidden = false;
+      return;
+    }
 
     const waText = encodeURIComponent(`مرحباً، أريد حجز ${SERVICES[serviceType]?.label || ''} عبر يمّك`);
 
@@ -1004,41 +1071,24 @@ async function loadServiceDrivers(serviceType) {
       ? sortRosterByDistance(roster, state.pickupLatLng.lat, state.pickupLatLng.lng)
       : roster;
 
-    const cardsHtml = sortedRoster.map((row) => {
-      const info = rosterStatusInfo(row.status);
-      const vehicleTypeLabel = row.vehicle_type || SERVICES[serviceType]?.label || 'مركبة';
-      const cleanTel = (row.phone || '').replace(/[^\d+]/g, '');
-      const waTarget = normalizeIraqiPhoneForWhatsapp(row.phone);
-      // "طلب" is only offered on an actually available driver (status
-      // === 'active') — a busy driver cannot be picked for a real,
-      // immediate assignment. Every available driver in the
-      // GPS-sorted list can be chosen equally; none is singled out.
-      const canRequest = row.status === 'active';
-      const hasActions = cleanTel || waTarget || canRequest;
+    // Offline drivers go in their own «غير متاح» section (never mixed
+    // with requestable ones, never labelled busy). Within the main list,
+    // available drivers come first, then busy (stable → keeps GPS order).
+    const isOffline = (r) => rosterStatusInfo(r.status).key === 'offline';
+    const isActive = (r) => rosterStatusInfo(r.status).key === 'active';
+    const offlineRows = sortedRoster.filter(isOffline);
+    const liveRows = sortedRoster.filter((r) => !isOffline(r));
+    const orderedLive = [...liveRows.filter(isActive), ...liveRows.filter((r) => !isActive(r))];
 
-      const roleTitle = roleTitleForService(serviceType);
-      const actionsHtml = hasActions ? `
-        <div class="driver-actions">
-          ${cleanTel ? `<a href="tel:${cleanTel}" class="driver-action-btn call" aria-label="اتصال ${roleTitle.byName}">${CALL_ICON_SVG} اتصال</a>` : ''}
-          ${waTarget ? `<a href="https://wa.me/${waTarget}?text=${waText}" class="driver-action-btn whatsapp" target="_blank" rel="noopener" aria-label="واتساب ${roleTitle.name}">${WA_ICON_SVG} واتساب</a>` : ''}
-          ${canRequest ? `<button type="button" class="driver-action-btn request" data-driver-action="request" data-driver-id="${escapeHtml(row.id)}" data-driver-phone="${escapeHtml(row.phone || '')}" aria-label="طلب">${REQUEST_ICON_SVG} طلب</button>` : ''}
-        </div>
-      ` : '';
+    const hasRequestable = roster.some((r) => r.status === 'active');
+    const liveHtml = orderedLive.map((r) => buildDriverCardHtml(r, serviceType, waText)).join('');
+    const offlineHtml = offlineRows.map((r) => buildDriverCardHtml(r, serviceType, waText)).join('');
 
-      return `
-        <div class="driver-card-app${canRequest ? ' driver-live' : ''}">
-          <span class="driver-avatar">${DRIVER_AVATAR_SVG}</span>
-          <div class="driver-info">
-            <b>${escapeHtml(vehicleTypeLabel)}</b>
-            ${roleBadgeHtml(serviceType)}
-            <div class="driver-meta"><span class="${info.cls}">${info.dot} ${info.label}</span></div>
-          </div>
-        </div>
-        ${actionsHtml}
-      `;
-    }).join('');
-
-    wrap.innerHTML = `<p class="section-label">${roleTitleForService(serviceType).plural}</p>${cardsHtml}`;
+    wrap.innerHTML =
+      (liveHtml
+        ? `<p class="section-label">${roleTitle.plural}</p>${hasRequestable ? '' : driversNoticeHtml('لا يوجد سائقون متاحون حاليًا')}${liveHtml}`
+        : driversNoticeHtml('لا يوجد سائقون متاحون حاليًا')) +
+      (offlineHtml ? `<p class="section-label drv-unavail-label">غير متاح</p>${offlineHtml}` : '');
     wrap.hidden = false;
   } catch (err) {
     console.error('loadServiceDrivers failed', err);
@@ -2121,7 +2171,7 @@ function buildServiceSwitch() {
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then(reg => { try { reg.update(); } catch (e) {} }).catch(() => {});
     });
   }
 }
@@ -3724,36 +3774,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -------- الصوت (تحويل الكلام إلى نص) --------
-    // زر المايك يبقى مخفياً (hidden في index.html) ولا يظهر إلا بعد التحقق
-    // من دعم Web Speech فعلياً في هذا المتصفح/الوضع: وجود الـ API + HTTPS،
-    // وعلى iPhone: Safari العادي فقط (Chrome/Firefox/متصفحات التطبيقات
-    // الداخلية مبنية على WKWebView حيث الـ API غير مفعّلة). في PWA على
-    // iPhone يظهر الزر فقط إن وُجد الـ API، وإن فشل فعلياً بـ
-    // service-not-allowed يُخفى ويظهر تلميح الإملاء من لوحة المفاتيح.
-    // النص المحوَّل يُكتب داخل نفس حقل الكتابة للمراجعة — لا إرسال تلقائي.
-    // رسائل الخطأ تعرض السبب الحقيقي (ev.error) وتُسجَّل في console.
-    // onend ليست فشلاً بحد ذاتها: الفشل فقط ما يصل عبر onerror.
+    // يستخدم Web Speech API الموجود (SpeechRecognition / webkitSpeechRecognition)
+    // فقط — لا تسجيل ولا تخزين ولا رفع للصوت، والنص المحوَّل يُكتب في نفس
+    // حقل الكتابة للمراجعة (لا إرسال تلقائي).
+    // الزر يبقى ظاهراً دائماً (لا يُخفى بتخمين من User-Agent). الفحص يتم عند
+    // الضغط: HTTPS، سياسة الموقع (Permissions-Policy)، وجود الـ API، ثم أي خطأ
+    // يصل من onerror يُعرض بسببه الحقيقي مع خطوات الحل حسب الجهاز.
+    var YA_MIC_BUILD = 'mic-20261002-2'; // للتحقق من أن النسخة المنشورة هي نفسها
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     var yaUA = navigator.userAgent || '';
     var yaIsIOS = /iPad|iPhone|iPod/.test(yaUA) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var yaIsAndroid = /Android/i.test(yaUA);
     var yaIsStandalone = (navigator.standalone === true) ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-    var yaInAppOrThirdParty = /CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|MicroMessenger|Telegram|; wv\)/i.test(yaUA);
-    // Safari الحقيقي على iOS يحمل Version/ وSafari/ معاً؛ WKWebView داخل
-    // التطبيقات لا يحمل Safari/. (PWA على iOS لا يحمل Safari/ أيضاً، لذلك
-    // يُستثنى منه: يُحكم عليه بوجود الـ API فقط.)
-    var yaIsRealSafariTab = /Version\//.test(yaUA) && /Safari\//.test(yaUA);
-    function yaSpeechSupported() {
-      if (!SpeechRecognitionCtor) return false;
-      if (window.isSecureContext === false) return false;
-      if (yaInAppOrThirdParty) return false;
-      if (yaIsIOS && !yaIsStandalone && !yaIsRealSafariTab) return false;
-      return true;
+    var yaIsInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|MicroMessenger|Telegram|; wv\)/i.test(yaUA);
+    var yaIsIOSOtherBrowser = yaIsIOS && /CriOS|FxiOS|EdgiOS|OPiOS|GSA\//i.test(yaUA);
+    var yaIsFramed = false;
+    try { yaIsFramed = window.top !== window.self; } catch (e) { yaIsFramed = true; }
+
+    // Permissions-Policy لا يُضبط من الصفحة؛ يُضبط بترويسة HTTP من الخادم.
+    // هنا نقرأ فقط هل الصفحة تسمح فعلياً بالمايك.
+    function yaMicPolicyBlocked() {
+      try {
+        var pp = document.permissionsPolicy || document.featurePolicy;
+        if (pp && typeof pp.allowsFeature === 'function' && pp.allowsFeature('microphone') === false) return true;
+      } catch (e) {}
+      return false;
     }
+    // حالة إذن المايك (للرسالة فقط، لا تمنع المحاولة). لا يفتح المايك.
+    var yaMicPerm = null;
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'microphone' }).then(function (st) {
+          yaMicPerm = st.state;
+          st.onchange = function () { yaMicPerm = st.state; };
+        }).catch(function () {});
+      }
+    } catch (e) {}
+
     var yaKeyboardHint = null;
     function yaShowKeyboardHint() {
-      if (yaKeyboardHint || !yaIsIOS || !yaIsStandalone) return;
+      if (yaKeyboardHint || !yaIsIOS) return;
       yaKeyboardHint = document.createElement('p');
       yaKeyboardHint.id = 'yaMicHint';
       yaKeyboardHint.textContent = 'للإملاء الصوتي استخدم مايك لوحة المفاتيح';
@@ -3764,24 +3826,65 @@ document.addEventListener('DOMContentLoaded', () => {
       sync();
       try { new MutationObserver(sync).observe(field, { attributes: true, attributeFilter: ['hidden'] }); } catch (e) {}
     }
-    if (micBtn && !yaSpeechSupported()) {
-      micBtn.hidden = true;
-      yaShowKeyboardHint(); // يظهر فقط في PWA على iPhone
+
+    // رسائل واضحة لكل حالة/خطأ — تختلف حسب الجهاز (iPhone / Android) وحسب
+    // كون التطبيق مفتوحاً من الشاشة الرئيسية (PWA).
+    function yaSpeechMessage(code) {
+      switch (code) {
+        case 'insecure':
+          return 'المايك يعمل فقط عبر اتصال آمن HTTPS — افتح يمّك من رابط يبدأ بـ https://';
+        case 'policy':
+          return 'المايك محظور من إعدادات الموقع (Permissions-Policy) — يجب أن يسمح الخادم بـ microphone=(self)' +
+            (yaIsFramed ? '، ويلزم allow="microphone" على الـ iframe' : '');
+        case 'no-api':
+          if (yaIsIOS && yaIsStandalone) return 'المايك الصوتي غير متاح داخل التطبيق المثبّت على الشاشة الرئيسية في iPhone — افتح يمّك من Safari مباشرة، أو استخدم مايك لوحة المفاتيح';
+          if (yaIsInApp) return 'المتصفح الداخلي للتطبيقات لا يدعم المايك — افتح يمّك في Safari أو Chrome مباشرة';
+          if (yaIsIOSOtherBrowser) return 'على iPhone افتح يمّك في Safari لاستخدام المايك، أو استخدم مايك لوحة المفاتيح';
+          return 'هذا المتصفح لا يدعم التعرف على الصوت — استخدم Chrome على Android أو Safari على iPhone';
+        case 'not-allowed':
+          if (yaIsIOS && yaIsStandalone) return 'لم يُسمح بالمايك للتطبيق المثبّت — افتح يمّك من Safari (وليس من الشاشة الرئيسية) واضغط «سماح»';
+          if (yaIsIOS) return 'لم يُسمح بالمايك — اضغط aA في شريط عنوان Safari ← إعدادات الموقع ← المايكروفون ← سماح، ثم أعد المحاولة';
+          if (yaIsAndroid) return 'لم يُسمح بالمايك — اضغط أيقونة القفل بجانب الرابط ← الأذونات ← المايكروفون ← سماح، ثم أعد المحاولة';
+          return 'المايكروفون غير مسموح — اسمح له من إعدادات المتصفح/الموقع ثم أعد المحاولة';
+        case 'service-not-allowed':
+          if (yaIsIOS && yaIsStandalone) return 'خدمة الصوت غير متاحة في التطبيق المثبّت على الشاشة الرئيسية — افتح يمّك من Safari، أو استخدم مايك لوحة المفاتيح';
+          if (yaIsIOS) return 'خدمة الإملاء غير مفعّلة — من الإعدادات ← عام ← لوحة المفاتيح ← فعّل «الإملاء»، ثم أعد المحاولة';
+          if (yaIsAndroid) return 'خدمة التعرف على الصوت غير متاحة — حدّث Chrome وخدمات Google وتأكد أن الإدخال الصوتي من Google مفعّل';
+          return 'خدمة التعرف على الصوت غير مفعّلة أو غير متاحة في هذا المتصفح';
+        case 'network': return 'التعرف على الصوت يحتاج اتصالاً بالإنترنت — تأكد من الشبكة وأعد المحاولة';
+        case 'no-speech': return 'لم يُسمع أي كلام — اضغط المايك وتحدّث بوضوح';
+        case 'audio-capture': return 'لم يُعثر على مايكروفون يعمل — تأكد أن تطبيقاً آخر لا يستخدمه';
+        case 'language-not-supported': return 'اللغة العربية غير مدعومة للتعرف على الصوت في هذا المتصفح';
+        case 'bad-grammar': return 'خطأ في إعداد التعرف على الصوت';
+        case 'aborted': return 'توقف الإصغاء — اضغط المايك وتحدّث مرة أخرى';
+        default: return 'تعذّر التعرف على الصوت';
+      }
     }
-    if (micBtn && yaSpeechSupported()) {
-      // العربية العراقية أولاً، ثم العربية (السعودية)، ثم العربية العامة.
-      // يُنتقل للتالية تلقائياً فقط عند language-not-supported، ويُحفظ
-      // آخر خيار اشتغل طوال الجلسة.
-      var YA_SPEECH_LANGS = ['ar-IQ', 'ar-SA', 'ar'];
-      var YA_SPEECH_ERRORS = {
-        'not-allowed': 'المايكروفون غير مسموح — اسمح له من إعدادات المتصفح/الموقع ثم أعد المحاولة',
-        'service-not-allowed': 'خدمة التعرف على الصوت غير مفعّلة — فعّل الإملاء (Dictation) في إعدادات الجهاز، أو افتح الموقع في Safari/Chrome مباشرة بدل الشاشة الرئيسية',
-        'no-speech': 'لم يُسمع أي كلام — اضغط المايك وتحدّث بوضوح',
-        'audio-capture': 'لم يُعثر على مايكروفون يعمل على هذا الجهاز',
-        'network': 'التعرف على الصوت يحتاج اتصالاً بالإنترنت',
-        'language-not-supported': 'اللغة العربية غير مدعومة للتعرف على الصوت في هذا المتصفح',
-        'bad-grammar': 'خطأ في إعداد التعرف على الصوت'
-      };
+    function yaSpeechNotify(msg) {
+      try { if (typeof toast === 'function') toast(msg, 7000); } catch (e) {}
+    }
+    // فحص ما قبل التشغيل: يرجع رمز السبب أو null إن كان كل شيء سليماً.
+    function yaSpeechPreflight() {
+      if (window.isSecureContext === false) return 'insecure';
+      if (yaMicPolicyBlocked()) return 'policy';
+      if (!SpeechRecognitionCtor) return 'no-api';
+      return null;
+    }
+    try {
+      console.info('[Yammak speech] build=' + YA_MIC_BUILD, {
+        api: !!SpeechRecognitionCtor, secure: window.isSecureContext, policyBlocked: yaMicPolicyBlocked(),
+        ios: yaIsIOS, android: yaIsAndroid, standalone: !!yaIsStandalone, inApp: yaIsInApp, framed: yaIsFramed
+      });
+    } catch (e) {}
+
+    if (micBtn) {
+      micBtn.hidden = false; // لا يُخفى أبداً: عند عدم الإمكان تظهر رسالة توجيه واضحة عند الضغط
+      micBtn.setAttribute('data-mic-build', YA_MIC_BUILD);
+      micBtn.setAttribute('aria-pressed', 'false');
+
+      // العربية العراقية أولاً (Android)، وعلى iPhone ar-SA أولاً. يُنتقل للتالية
+      // تلقائياً فقط عند language-not-supported ويُحفظ آخر خيار اشتغل.
+      var YA_SPEECH_LANGS = yaIsIOS ? ['ar-SA', 'ar', 'ar-IQ'] : ['ar-IQ', 'ar-SA', 'ar'];
       var recognition = null;
       var active = false;        // بين الضغط ونهاية الجلسة
       var stoppedByUser = false;
@@ -3792,27 +3895,15 @@ document.addEventListener('DOMContentLoaded', () => {
       var sessionError = false;
       var langIndex = 0;
       // --- إدارة دورة الجلسات المتكررة ---
-      // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل
-      // (بدونه كان نص/خطأ قديم يلوّث الجلسة التالية).
-      // مؤقّت الحماية: بعض المتصفحات لا تُطلق onend بعد stop() أو بعد
-      // النتيجة النهائية أو بعد الخطأ، فيبقى active=true للأبد ويصير الزر
-      // «ميتاً» (الضغطة التالية تستدعي stop() على جلسة منتهية). عند انقضاء
-      // المهلة تُنهى الجلسة قسراً ويتحرر الزر.
+      // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل.
+      // مؤقّت الحماية: بعض المتصفحات لا تُطلق onend بعد stop() أو بعد النتيجة
+      // النهائية أو بعد الخطأ، فيبقى الزر «ميتاً». عند انقضاء المهلة تُنهى
+      // الجلسة قسراً ويتحرر الزر.
       var sessionId = 0;
       var stopping = false;      // طُلب الإيقاف وننتظر onend
       var guardTimer = null;
       var guardDue = 0;
-      micBtn.hidden = false;
-      micBtn.setAttribute('aria-pressed', 'false');
-      function yaSpeechDisable() { // إخفاء نهائي بعد اكتشاف عدم الدعم فعلياً
-        micBtn.hidden = true;
-        yaSpeechIdle();
-        yaShowKeyboardHint();
-      }
 
-      function yaSpeechNotify(msg) {
-        try { if (typeof toast === 'function') toast(msg, 5000); } catch (e) {}
-      }
       function yaSpeechClearGuard() {
         if (guardTimer) { clearTimeout(guardTimer); guardTimer = null; }
         guardDue = 0;
@@ -3828,7 +3919,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (finalHandled || !text) return;
         finalHandled = true;
         input.value = text;
-        input.focus();
+        // لا input.focus() هنا: فتح لوحة المفاتيح أثناء بقاء جلسة التعرف حيّة يسحب
+        // جلسة الصوت (iPhone/Android) فيُطلق المتصفح خطأ 'aborted' بعد وصول النص.
+        // التركيز يتم بعد انتهاء الجلسة (yaSpeechHandleEnd).
         yaRenderSuggestChips(yaMatchRoutes(text), text.trim());
       }
 
@@ -3841,7 +3934,8 @@ document.addEventListener('DOMContentLoaded', () => {
           pendingLangRetry = false;
           try { yaSpeechStart(); return; } catch (e) {
             try { console.error('[Yammak speech] retry failed', e); } catch (e2) {}
-            yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((e && e.name) || 'start-failed') + ']');
+            yaSpeechNotify(yaSpeechMessage((e && e.name === 'NotAllowedError') ? 'not-allowed' : 'default') + ' [' + ((e && e.name) || 'start-failed') + ']');
+            sessionError = true;
           }
         }
         pendingLangRetry = false;
@@ -3850,6 +3944,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // انتهت بلا نص ولا خطأ (ولم يوقفها المستخدم): تلميح فقط، ليس فشلاً
         if (!lastText && !sessionError && !stoppedByUser) yaSpeechNotify('لم يصلني كلام — اضغط المايك وتحدّث ثم انتظر لحظة');
         yaSpeechIdle();
+        // الجلسة انتهت فعلاً: الآن فقط نركّز الحقل ليراجع المستخدم النص
+        if (finalHandled && !document.hidden) { try { input.focus({ preventScroll: true }); } catch (e) {} }
       }
       // إنهاء قسري: فصل معالجات الجلسة (لا يصل منها أي حدث بعد الآن) ثم abort.
       function yaSpeechForceEnd() {
@@ -3884,6 +3980,13 @@ document.addEventListener('DOMContentLoaded', () => {
       window.addEventListener('pagehide', yaSpeechAbortAll);
 
       function yaSpeechStart() {
+        // ضمان جلسة حيّة واحدة فقط: إن بقيت جلسة قديمة تُفصل معالجاتها بصمت قبل البدء
+        if (recognition) {
+          var stale = recognition;
+          recognition = null;
+          stale.onstart = stale.onresult = stale.onerror = stale.onend = stale.onspeechend = stale.onaudioend = null;
+          try { stale.abort(); } catch (e) {}
+        }
         var rec = new SpeechRecognitionCtor();
         var sid = ++sessionId;
         recognition = rec;
@@ -3924,8 +4027,13 @@ document.addEventListener('DOMContentLoaded', () => {
         rec.onerror = function (ev) {
           if (sid !== sessionId) return;
           var code = (ev && ev.error) ? ev.error : 'unknown';
-          try { console.error('[Yammak speech] error=' + code, 'lang=' + rec.lang, (ev && ev.message) || ''); } catch (e) {}
-          if (code === 'aborted' && (stoppedByUser || stopping)) return;
+          try { console.error('[Yammak speech] error=' + code, 'lang=' + rec.lang, 'perm=' + yaMicPerm, (ev && ev.message) || ''); } catch (e) {}
+          // 'aborted' ليس خطأً للمستخدم أبداً: يصدر من stop()/abort() الداخلي، أو من
+          // المتصفح/النظام عند انتزاع الصوت (لوحة المفاتيح، مكالمة، تبديل تطبيق)، أو بعد
+          // وصول النص. نتجاهله، وonend يقرر: نص وصل → يُعتمد، لا نص → تلميح لطيف بلا رمز خطأ.
+          if (code === 'aborted') return;
+          // 'no-speech' بعد أن وصل كلام فعلاً ليس فشلاً
+          if (code === 'no-speech' && (gotText || stoppedByUser || stopping)) return;
           sessionError = true;
           if (code === 'language-not-supported' && langIndex < YA_SPEECH_LANGS.length - 1) {
             sessionError = false;
@@ -3934,10 +4042,13 @@ document.addEventListener('DOMContentLoaded', () => {
             yaSpeechArmGuard(1500);
             return;
           }
-          var msg = YA_SPEECH_ERRORS[code] || 'تعذّر التعرف على الصوت';
+          if (code === 'language-not-supported') langIndex = 0; // فشلت كل اللغات: ابدأ من الأولى في المحاولة القادمة
+          var msg = yaSpeechMessage(code);
+          // إذن مرفوض فعلاً من إعدادات المتصفح: وجّه لتغييره بدل «أعد المحاولة»
+          if (code === 'not-allowed' && yaMicPerm === 'prompt') msg += ' (إن ظهر طلب الإذن اضغط «سماح»)';
           yaSpeechNotify(msg + ' [' + code + ']');
-          // PWA على iPhone: الخدمة غير متاحة فعلياً → أخفِ الزر وأظهر التلميح
-          if (code === 'service-not-allowed' && yaIsIOS && yaIsStandalone) { yaSpeechDisable(); return; }
+          // iPhone: لوحة المفاتيح تبقى طريقة الإملاء المتاحة (تلميح دائم تحت الحقل)
+          if (code === 'service-not-allowed' || (code === 'not-allowed' && yaIsIOS && yaIsStandalone)) yaShowKeyboardHint();
           yaSpeechArmGuard(1500); // بعض المتصفحات لا تُطلق onend بعد الخطأ
         };
         rec.onend = function () {
@@ -3947,6 +4058,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       micBtn.addEventListener('click', function () {
+        // فحص قبل أي شيء: السبب يُعرض برسالة واضحة بدل زر «ميّت»
+        if (!active) {
+          var pre = yaSpeechPreflight();
+          if (pre) {
+            try { console.warn('[Yammak speech] preflight=' + pre); } catch (e) {}
+            yaSpeechNotify(yaSpeechMessage(pre));
+            if (pre === 'no-api') yaShowKeyboardHint();
+            return;
+          }
+        }
         if (active) {
           if (stopping) { // ضغطة أخرى أثناء انتظار الإيقاف: أنهِ قسراً بدل الانتظار
             stoppedByUser = true;
@@ -3960,6 +4081,9 @@ document.addEventListener('DOMContentLoaded', () => {
           yaSpeechArmGuard(2000);
           return;
         }
+        // الإذن: rec.start() يُستدعى مباشرة داخل حدث الضغط (بدون await/setTimeout قبله)،
+        // وهو الذي يُظهر نافذة إذن المايك/الإملاء. لا getUserMedia هنا عمداً: فتح المايك
+        // مرتين (getUserMedia ثم SpeechRecognition) يسبب 'aborted' على Safari.
         active = true;
         stoppedByUser = false;
         gotText = false;
@@ -3974,7 +4098,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
           yaSpeechIdle();
           try { console.error('[Yammak speech] start() threw', err); } catch (e) {}
-          yaSpeechNotify('تعذّر بدء التعرف على الصوت [' + ((err && err.name) || 'start-failed') + ']');
+          var nm = (err && err.name) || 'start-failed';
+          yaSpeechNotify(yaSpeechMessage(nm === 'NotAllowedError' ? 'not-allowed' : 'default') + ' [' + nm + ']');
         }
       });
     }
