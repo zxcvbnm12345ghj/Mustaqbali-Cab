@@ -5181,32 +5181,9 @@ html.has-cat-photo-restaurants #plcGrid .plc-card:has(.plc-card-cat-restaurants)
 html.has-cat-photo-markets #plcGrid .plc-card:has(.plc-card-cat-markets) .plc-card-img-ph{ background-image: url("assets/places/markets.jpg?v=2026100201"); }
 html.has-cat-photo-future-office #plcGrid .plc-card:has(.plc-card-cat-futureOffice) .plc-card-img-ph{ background-image: url("assets/places/future-office.jpg?v=2026100201"); }
 
-/* ---- 4) صفحة تفاصيل عنصر واحد — نفس منطق البانر (تبويب نشط فعلياً)،
-   ولا تظهر إلا حين لا توجد صورة حقيقية لهذا العنصر بعينه
-   (#plcDetailHeroPh غير مخفي). الأيقونة الصغيرة (svg حقيقية هنا) تُخفى
-   حين تظهر صورة التصنيف خلفها. مكتب المستقبل (فرع واحد يُفتح مباشرة بلا
-   تبويب) يستخدم صورته كافتراضي عام — انظر ملاحظة الحد أعلاه. ---- */
-/* FIX: كل حالة (افتراضي/مطاعم/أسواق) أصبحت مستقلة تماماً — الخلفية
-   وإخفاء إيموجي الـfallback مرتبطان معاً بنفس فئة html.has-cat-photo-*
-   الخاصة بتلك الحالة تحديداً. سابقاً كان "إخفاء الإيموجي" عاماً غير
-   مشروط بأي حالة، فلو فشلت صورة مكتب المستقبل (الافتراضية) بينما
-   نجحت صورة المطاعم، كان يمكن أن يظهر إيموجي مخفي جزئياً أو تعارض
-   بصري؛ الآن كل حالة تُخفي الإيموجي فقط إذا صورتها هي تحديداً نجحت. */
-html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/future-office.jpg?v=2026100201"); /* افتراضي: لا تبويب نشط (فرع مكتب المستقبل يُفتح مباشرة) */
-  background-size:cover; background-position:center;
-}
-html.has-cat-photo-future-office .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
-html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/restaurants.jpg?v=2026100201");
-  background-size:cover; background-position:center;
-}
-html.has-cat-photo-restaurants #sheet:has(.plc-tab[data-plc-kind="restaurants"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
-html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])){
-  background-image: url("assets/places/markets.jpg?v=2026100201");
-  background-size:cover; background-position:center;
-}
-html.has-cat-photo-markets #sheet:has(.plc-tab[data-plc-kind="markets"].active) .plc-detail-hero:has(#plcDetailHeroPh:not([hidden])) #plcDetailHeroPh svg{ display:none; }
+/* ---- 4) صفحة تفاصيل عنصر واحد — أُزيلت هنا صور التصنيف البديلة (assets/places) نهائياً.
+   إن لم يملك النشاط صورة حقيقية في Supabase تبقى مساحة الغلاف نظيفة بأيقونة SVG فقط،
+   دون أي صورة نشاط أو تصنيف. (بقية الصفحات، كالقوائم والرئيسية، لم تُمس.) ---- */
 
 } /* /:has() support */
 
@@ -9572,3 +9549,66 @@ html.has-cat-photo-future-office #soonCardFutureOffice .soon-ic{
   background: var(--green-dim, rgba(34,197,94,0.14));
 }
 .yinst-share{ margin-top: 12px; }
+
+/* =========================================================================
+   صفحة تفاصيل النشاط — واتساب / الوصول / الخريطة / «تواصل عبر يمّك»
+   -------------------------------------------------------------------------
+   إضافة معزولة: كل الأصناف جديدة (.plc-detail-quick, .plc-quick-btn,
+   .plc-detail-map-card, .plc-detail-map, .plc-map-pin, .plc-yammak-btn)
+   ومحصورة داخل sheet-view[data-view="placeDetail"]. لا تعديل على أي قاعدة
+   قائمة. تستخدم متغيرات الهوية الموجودة فقط. Mobile-first (320→430+).
+   ========================================================================= */
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-quick[hidden],
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn[hidden],
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map-card[hidden],
+.app-shell .sheet-view[data-view="placeDetail"] .plc-yammak-btn[hidden]{ display: none !important; }
+
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-quick{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; min-width: 0;
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-quick.is-single{ grid-template-columns: 1fr; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn{
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 10px 8px; min-width: 0;
+  background: #fff; border: 1px solid var(--ui-line); border-radius: 16px;
+  box-shadow: var(--ui-shadow-sm); color: var(--ui-ink);
+  font-size: 14.5px; font-weight: 800; text-decoration: none; text-align: center;
+  transition: transform .12s, box-shadow .2s;
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn:active{ transform: scale(0.97); }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn svg{ width: 22px; height: 22px; flex: 0 0 22px; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn span{ min-width: 0; overflow-wrap: anywhere; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-wa svg{ color: #16A34A; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-quick-dir svg{ color: var(--purple); }
+
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map-card{
+  margin: 0 0 14px; background: #fff; border: 1px solid var(--ui-line);
+  border-radius: 18px; overflow: hidden; box-shadow: var(--ui-shadow-sm); min-width: 0;
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map-title{
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px;
+  font-size: 13.5px; font-weight: 800; color: var(--ui-ink);
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map-title svg{ width: 18px; height: 18px; flex: 0 0 18px; color: var(--purple); }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map{
+  width: 100%; height: 190px; background: var(--purple-dim);
+  pointer-events: none; /* read-only preview: never traps the page scroll */
+  direction: ltr;       /* Leaflet lays out in LTR even inside an RTL page */
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map .leaflet-control-attribution{ font-size: 9.5px; }
+.plc-map-pin{ background: transparent; border: 0; }
+.plc-map-pin svg{ display: block; filter: drop-shadow(0 4px 5px rgba(27,18,64,0.35)); }
+
+.app-shell .sheet-view[data-view="placeDetail"] .plc-yammak-btn{
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 52px; padding: 10px 14px; margin: 0 0 14px;
+  background: #fff; color: var(--purple); border: 1.5px solid var(--purple); border-radius: 16px;
+  font-size: 14.5px; font-weight: 800; cursor: pointer;
+}
+.app-shell .sheet-view[data-view="placeDetail"] .plc-yammak-btn svg{ width: 20px; height: 20px; flex: 0 0 20px; }
+.app-shell .sheet-view[data-view="placeDetail"] .plc-yammak-btn:active{ transform: scale(0.98); }
+
+@media (max-width: 340px){
+  .app-shell .sheet-view[data-view="placeDetail"] .plc-quick-btn{ font-size: 13px; gap: 6px; }
+  .app-shell .sheet-view[data-view="placeDetail"] .plc-detail-map{ height: 160px; }
+}

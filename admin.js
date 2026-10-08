@@ -1758,6 +1758,11 @@ async function togglePlaceActive(kind, id) {
   const cfg = PLACE_TABLES[kind];
   const row = placesState[kind].find(r => r.id === id);
   if (!row) return;
+  // تفعيل مكان بلا موقع يُظهره للزبائن دون إمكانية الطلب منه: يُمنع حتى يُحدَّد موقعه من «تعديل».
+  if (!row.active && !(row.lat != null && row.lng != null && Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))) {
+    alert('لا يمكن تفعيل هذا المكان قبل تحديد موقعه: افتح «تعديل» ثم اضغط 📍 تحديد الموقع من الخريطة.');
+    return;
+  }
   const { error } = await supabaseClient.from(cfg.table).update({ active: !row.active }).eq('id', id);
   if (error) {
     console.error(error);
@@ -1784,9 +1789,14 @@ async function deletePlace(kind, id) {
 
 // Delivery pickup coordinates for restaurants / markets / future_office
 // (columns lat/lng). The modal's static HTML has no inputs for them, so
-// they are added once from here, right under the address field, styled
-// like the existing inputs. Both empty = no coordinates = customers
-// cannot request delivery from this place.
+// they are added once from here, right under the address field.
+// The coordinates are no longer typed by hand: the admin taps
+// "📍 تحديد الموقع من الخريطة" and picks the place on a map (picker below);
+// #placeLat / #placeLng stay as READ-ONLY fields that hold the picked
+// values, so openPlaceModal() / readPlaceCoords() / savePlace() keep
+// reading and writing the same lat/lng columns exactly as before.
+// Both empty = no coordinates = customers cannot request delivery from
+// this place (places.js / yammak-services.js block the order).
 function ensurePlaceCoordFields() {
   if (document.getElementById('placeLat')) return;
   const addr = document.getElementById('placeAddress');
@@ -1794,17 +1804,183 @@ function ensurePlaceCoordFields() {
   const anchor = addr.closest('.field, .form-field, .form-group, .float-field') || addr.parentElement;
   const wrap = document.createElement('div');
   wrap.id = 'placeCoordsWrap';
-  wrap.style.cssText = 'margin-top:8px';
+  wrap.className = 'admin-field';
   const cls = addr.className || '';
   wrap.innerHTML =
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<label style="flex:1;min-width:120px;display:block">خط العرض (lat)' +
-        '<input id="placeLat" type="number" step="any" inputmode="decimal" class="' + cls + '" placeholder="مثال: 36.3350"></label>' +
-      '<label style="flex:1;min-width:120px;display:block">خط الطول (lng)' +
-        '<input id="placeLng" type="number" step="any" inputmode="decimal" class="' + cls + '" placeholder="مثال: 43.1189"></label>' +
+    '<label>موقع المكان <span class="opt">(مطلوب للمكان النشط)</span></label>' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px">' +
+      '<button type="button" class="admin-btn" id="placeLocPickBtn" style="width:auto;padding:8px 16px">📍 تحديد الموقع من الخريطة</button>' +
+      '<span id="placeLocStatus" style="font-size:13px"></span>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
+      '<label style="flex:1;min-width:120px;display:block;font-size:12px;opacity:.8">خط العرض (lat)' +
+        '<input id="placeLat" type="number" step="any" readonly tabindex="-1" class="' + cls + '" placeholder="يُملأ من الخريطة"></label>' +
+      '<label style="flex:1;min-width:120px;display:block;font-size:12px;opacity:.8">خط الطول (lng)' +
+        '<input id="placeLng" type="number" step="any" readonly tabindex="-1" class="' + cls + '" placeholder="يُملأ من الخريطة"></label>' +
     '</div>' +
     '<small style="display:block;margin-top:4px;opacity:.75">إحداثيات المكان — مطلوبة ليتمكّن الزبون من طلب توصيل من هذا المكان.</small>';
   anchor.insertAdjacentElement('afterend', wrap);
+  wrap.querySelector('#placeLocPickBtn').addEventListener('click', openPlacePicker);
+  refreshPlaceCoordStatus();
+}
+
+// Valid saved/picked coordinates from the two read-only inputs, or null.
+function readPlaceCoordInputs() {
+  const latRaw = (document.getElementById('placeLat')?.value ?? '').trim();
+  const lngRaw = (document.getElementById('placeLng')?.value ?? '').trim();
+  if (latRaw === '' || lngRaw === '') return null;
+  const lat = Number(latRaw), lng = Number(lngRaw);
+  return (Number.isFinite(lat) && Number.isFinite(lng)) ? { lat, lng } : null;
+}
+
+function refreshPlaceCoordStatus() {
+  const statusEl = document.getElementById('placeLocStatus');
+  const btn = document.getElementById('placeLocPickBtn');
+  if (!statusEl || !btn) return;
+  const c = readPlaceCoordInputs();
+  if (c) {
+    statusEl.textContent = '✅ الموقع محدد (' + c.lat.toFixed(5) + ' ، ' + c.lng.toFixed(5) + ')';
+    btn.textContent = '📍 تغيير الموقع من الخريطة';
+  } else {
+    statusEl.textContent = '⚠️ لم يُحدَّد موقع بعد';
+    btn.textContent = '📍 تحديد الموقع من الخريطة';
+  }
+}
+
+/* ---------- Map picker for a place's coordinates ----------
+   Leaflet 1.9.4 + OpenStreetMap tiles — the same library/tile source the
+   customer app already uses (index.html / app.js), loaded on demand the
+   first time the picker opens so the rest of the admin page is unchanged.
+   The picker only fills #placeLat / #placeLng; nothing is saved until the
+   normal "حفظ" button of the place modal runs savePlace(). */
+const PLACE_PICKER_DEFAULT_CENTER = { lat: 35.9824, lng: 43.2578 }; // = SERVICE_REGION_CENTER في app.js (تطبيق الزبون)
+const placePicker = { el: null, map: null, marker: null, lat: null, lng: null };
+let leafletLoadPromise = null;
+
+function loadLeafletOnce() {
+  if (window.L && window.L.map) return Promise.resolve();
+  if (leafletLoadPromise) return leafletLoadPromise;
+  const cssP = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    css.onload = () => resolve();
+    css.onerror = () => reject(new Error('leaflet-css-failed'));
+    document.head.appendChild(css);
+  });
+  const jsP = new Promise((resolve, reject) => {
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve();
+    js.onerror = () => reject(new Error('leaflet-js-failed'));
+    document.head.appendChild(js);
+  });
+  leafletLoadPromise = Promise.all([cssP, jsP]).then(() => undefined, (err) => {
+    leafletLoadPromise = null; // allow a retry on the next click
+    throw err;
+  });
+  return leafletLoadPromise;
+}
+
+function ensurePlacePickerModal() {
+  if (placePicker.el) return placePicker.el;
+  const el = document.createElement('div');
+  el.id = 'placePickerBackdrop';
+  el.style.cssText = 'display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:10px;';
+  el.innerHTML =
+    '<div style="background:#fff;color:#111;border-radius:14px;width:min(96vw,720px);max-height:96vh;display:flex;flex-direction:column;overflow:hidden;direction:rtl">' +
+      '<div style="padding:12px 14px 4px;font-weight:700">حدّد موقع المكان على الخريطة</div>' +
+      '<div style="padding:0 14px 8px;font-size:12px;opacity:.75">اضغط على الخريطة أو اسحب الدبوس لضبط الموقع بدقة.</div>' +
+      '<div id="placePickerMap" style="height:min(60vh,460px);width:100%;background:#e9eef2"></div>' +
+      '<div id="placePickerInfo" style="padding:8px 14px;font-size:13px;min-height:20px"></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px">' +
+        '<button type="button" class="admin-btn" id="placePickerConfirm" style="width:auto;padding:10px 18px" disabled>تأكيد الموقع</button>' +
+        '<button type="button" class="admin-btn danger" id="placePickerCancel" style="width:auto;padding:10px 18px">إلغاء</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(el);
+  el.addEventListener('click', (e) => { if (e.target === el) closePlacePicker(); });
+  el.querySelector('#placePickerCancel').addEventListener('click', closePlacePicker);
+  el.querySelector('#placePickerConfirm').addEventListener('click', confirmPlacePicker);
+  placePicker.el = el;
+  return el;
+}
+
+function setPlacePickerPoint(lat, lng) {
+  placePicker.lat = lat;
+  placePicker.lng = lng;
+  if (!placePicker.marker) {
+    placePicker.marker = L.marker([lat, lng], {
+      draggable: true,
+      icon: L.divIcon({
+        className: '',
+        html: '<span style="display:block;font-size:30px;line-height:30px;margin:-30px 0 0 -15px">📍</span>',
+        iconSize: [0, 0],
+      }),
+    }).addTo(placePicker.map);
+    placePicker.marker.on('dragend', () => {
+      const ll = placePicker.marker.getLatLng().wrap();
+      setPlacePickerPoint(ll.lat, ll.lng);
+    });
+  } else {
+    placePicker.marker.setLatLng([lat, lng]);
+  }
+  const info = placePicker.el && placePicker.el.querySelector('#placePickerInfo');
+  if (info) info.textContent = 'الإحداثيات: ' + lat.toFixed(6) + ' ، ' + lng.toFixed(6);
+  const confirmBtn = placePicker.el && placePicker.el.querySelector('#placePickerConfirm');
+  if (confirmBtn) confirmBtn.disabled = false;
+}
+
+function openPlacePicker() {
+  const el = ensurePlacePickerModal();
+  const info = el.querySelector('#placePickerInfo');
+  const confirmBtn = el.querySelector('#placePickerConfirm');
+  confirmBtn.disabled = true;
+  placePicker.lat = null;
+  placePicker.lng = null;
+  info.textContent = 'جارٍ تحميل الخريطة…';
+  el.style.display = 'flex';
+  loadLeafletOnce().then(() => {
+    if (el.style.display === 'none') return; // أُغلقت النافذة أثناء التحميل
+    const existing = readPlaceCoordInputs(); // موقع محفوظ سابقاً (أو مختار الآن) يُعرض ويمكن تغييره
+    const start = existing || PLACE_PICKER_DEFAULT_CENTER;
+    const zoom = existing ? 17 : 13;
+    if (!placePicker.map) {
+      placePicker.map = L.map('placePickerMap').setView([start.lat, start.lng], zoom);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(placePicker.map);
+      placePicker.map.on('click', (e) => {
+        const ll = e.latlng.wrap();
+        setPlacePickerPoint(ll.lat, ll.lng);
+      });
+    } else {
+      placePicker.map.setView([start.lat, start.lng], zoom);
+    }
+    if (placePicker.marker) { placePicker.marker.remove(); placePicker.marker = null; }
+    if (existing) setPlacePickerPoint(existing.lat, existing.lng);
+    else info.textContent = 'اضغط على موقع المكان في الخريطة.';
+    setTimeout(() => { if (placePicker.map) placePicker.map.invalidateSize(); }, 50);
+  }).catch((err) => {
+    console.error('place picker: map failed to load', err);
+    info.textContent = 'تعذّر تحميل الخريطة — تحقق من الاتصال بالإنترنت ثم أعد المحاولة.';
+  });
+}
+
+function closePlacePicker() {
+  if (placePicker.el) placePicker.el.style.display = 'none';
+}
+
+function confirmPlacePicker() {
+  if (placePicker.lat == null || placePicker.lng == null) return;
+  const latEl = document.getElementById('placeLat');
+  const lngEl = document.getElementById('placeLng');
+  if (latEl) latEl.value = Number(placePicker.lat.toFixed(6));
+  if (lngEl) lngEl.value = Number(placePicker.lng.toFixed(6));
+  refreshPlaceCoordStatus();
+  showPlaceModalError(null);
+  closePlacePicker();
 }
 
 function readPlaceCoords() {
@@ -1843,6 +2019,7 @@ function openPlaceModal(kind, row) {
   const latEl = document.getElementById('placeLat'), lngEl = document.getElementById('placeLng');
   if (latEl) latEl.value = row?.lat ?? '';
   if (lngEl) lngEl.value = row?.lng ?? '';
+  refreshPlaceCoordStatus();
   document.getElementById('placeHours').value = row?.hours_text || '';
   document.getElementById('placeDescription').value = row?.description || '';
   document.getElementById('placeActive').checked = row ? !!row.active : true;
@@ -1907,6 +2084,11 @@ async function savePlace() {
   const coords = readPlaceCoords();
   if (!coords.ok) {
     showPlaceModalError(coords.message);
+    return;
+  }
+  // الموقع مطلوب لأي مكان ظاهر للزبائن: places.js (requestPlaceDelivery) يمنع الطلب من مكان بلا lat/lng.
+  if (active && (coords.lat === null || coords.lng === null)) {
+    showPlaceModalError('حدّد موقع المكان على الخريطة (📍) قبل الحفظ — الموقع مطلوب ليتمكّن الزبون من الطلب منه. (يمكنك إلغاء «نشط» لحفظه بدون موقع.)');
     return;
   }
 

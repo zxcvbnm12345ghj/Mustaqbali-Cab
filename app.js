@@ -3795,7 +3795,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // الزر يبقى ظاهراً دائماً (لا يُخفى بتخمين من User-Agent). الفحص يتم عند
     // الضغط: HTTPS، سياسة الموقع (Permissions-Policy)، وجود الـ API، ثم أي خطأ
     // يصل من onerror يُعرض بسببه الحقيقي مع خطوات الحل حسب الجهاز.
-    var YA_MIC_BUILD = 'mic-20261003-2'; // للتحقق من أن النسخة المنشورة هي نفسها
+    var YA_MIC_BUILD = 'mic-20261003-3-trace'; // للتحقق من أن النسخة المنشورة هي نفسها
     var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     var yaUA = navigator.userAgent || '';
     var yaIsIOS = /iPad|iPhone|iPod/.test(yaUA) ||
@@ -3876,7 +3876,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     function yaSpeechNotify(msg) {
-      try { if (typeof toast === 'function') toast(msg, 7000); } catch (e) {}
+      // DIAGNOSTIC (مؤقت): الرسالة التي تحمل [trace: ...] تبقى 20 ثانية ليتسنى تصويرها.
+      try { if (typeof toast === 'function') toast(msg, String(msg).indexOf('[trace:') !== -1 ? 20000 : 7000); } catch (e) {}
     }
     // فحص ما قبل التشغيل: يرجع رمز السبب أو null إن كان كل شيء سليماً.
     function yaSpeechPreflight() {
@@ -3912,6 +3913,16 @@ document.addEventListener('DOMContentLoaded', () => {
       var speechStarted = false; // وصل onspeechstart: سمع المتصفح كلاماً
       var silentRetries = 0;     // محاولات تبديل اللغة بعد جلسة انتهت صامتة (بلا نص ولا خطأ) في نفس الضغطة
       var langIndex = 0;
+      // DIAGNOSTIC (مؤقت): سجل أحداث SpeechRecognition بالترتيب مع الزمن لكل جلسة ضمن الضغطة الحالية.
+      // للقراءة فقط — لا يؤثر على أي منطق. يُلحق بنص رسالة الخطأ على شكل [trace: ...].
+      var yaTraceSessions = [];
+      function yaTraceText() {
+        try {
+          return '[trace: ' + yaTraceSessions.map(function (t) {
+            return t.ev.join(' > ') + ' | lang=' + t.lang;
+          }).join(' // ') + ']';
+        } catch (e) { return '[trace: unavailable]'; }
+      }
       // --- إدارة دورة الجلسات المتكررة ---
       // sessionId يزيد مع كل جلسة: أي حدث يصل متأخراً من جلسة أقدم يُتجاهل.
       // مؤقّت الحماية: بعض المتصفحات لا تُطلق onend بعد stop() أو بعد النتيجة
@@ -3979,11 +3990,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
           if (!sessionError && silentRetries > 0) langIndex = 0; // فشلت كل اللغات بصمت: ابدأ من الأولى في الضغطة القادمة
-          try { console.warn('[Yammak speech] انتهت الجلسة بلا نص — stage=' + stage); } catch (e) {}
+          try { console.warn('[Yammak speech] انتهت الجلسة بلا نص — stage=' + stage + ' ' + yaTraceText()); } catch (e) {}
           if (!sessionError) yaSpeechNotify(
             (stage === 'no-audio' ? 'لم يبدأ التقاط الصوت — تأكد من إذن المايك وأن تطبيقاً آخر لا يستخدمه، ثم أعد المحاولة'
               : stage === 'no-speech-detected' ? 'المايك يعمل لكن لم يُسمع كلام — تحدّث بصوت أوضح وقريب من الجهاز'
-              : 'سُمع كلام لكن لم يصل نص — تأكد من الإنترنت ثم أعد المحاولة') + ' [' + stage + ']');
+              : 'سُمع كلام لكن لم يصل نص — تأكد من الإنترنت ثم أعد المحاولة') + ' [' + stage + '] ' + yaTraceText());
         }
         yaSpeechIdle();
         // الجلسة انتهت فعلاً: الآن فقط نركّز الحقل ليراجع المستخدم النص
@@ -3993,6 +4004,7 @@ document.addEventListener('DOMContentLoaded', () => {
       function yaSpeechForceEnd() {
         var old = recognition;
         var sid = sessionId;
+        try { var trLast = yaTraceSessions[yaTraceSessions.length - 1]; if (trLast) trLast.ev.push('force-end'); } catch (e) {}
         if (old) {
           old.onstart = old.onresult = old.onerror = old.onend = old.onspeechend = old.onaudioend = old.onaudiostart = old.onspeechstart = null;
           try { old.abort(); } catch (e) {}
@@ -4036,6 +4048,27 @@ document.addEventListener('DOMContentLoaded', () => {
         rec.continuous = false;
         rec.interimResults = true;
         rec.maxAlternatives = 1;
+        // DIAGNOSTIC (مؤقت): مستمعات إضافية فقط (addEventListener) تُسجَّل قبل المعالجات الأصلية
+        // فتُسجَّل الأحداث قبل أن تعمل منطقها. لا تغيّر أي معالج ولا أي حالة.
+        try {
+          var trSess = { lang: rec.lang, ev: [] };
+          var trT0 = Date.now();
+          yaTraceSessions.push(trSess);
+          ['start', 'audiostart', 'soundstart', 'speechstart', 'result', 'nomatch',
+           'speechend', 'soundend', 'audioend', 'error', 'end'].forEach(function (evName) {
+            rec.addEventListener(evName, function (ev) {
+              var label = evName;
+              if (evName === 'error') {
+                label = 'error:' + ((ev && ev.error) || 'unknown');
+              } else if (evName === 'result') {
+                var rr = ev && ev.results && ev.results[ev.results.length - 1];
+                var rt = (rr && rr[0] && rr[0].transcript) ? String(rr[0].transcript).trim() : '';
+                label = 'result:' + (rr && rr.isFinal ? 'final' : 'interim') + (rt ? '' : '-empty');
+              }
+              trSess.ev.push(label + '@' + (Date.now() - trT0));
+            });
+          });
+        } catch (e) {}
         audioStarted = false;
         speechStarted = false;
 
@@ -4098,7 +4131,7 @@ document.addEventListener('DOMContentLoaded', () => {
           var msg = yaSpeechMessage(code);
           // إذن مرفوض فعلاً من إعدادات المتصفح: وجّه لتغييره بدل «أعد المحاولة»
           if (code === 'not-allowed' && yaMicPerm === 'prompt') msg += ' (إن ظهر طلب الإذن اضغط «سماح»)';
-          yaSpeechNotify(msg + ' [' + code + ']');
+          yaSpeechNotify(msg + ' [' + code + '] ' + yaTraceText());
           // iPhone: لوحة المفاتيح تبقى طريقة الإملاء المتاحة (تلميح دائم تحت الحقل)
           if (code === 'service-not-allowed' || (code === 'not-allowed' && yaIsIOS && yaIsStandalone)) yaShowKeyboardHint();
           yaSpeechArmGuard(1500); // بعض المتصفحات لا تُطلق onend بعد الخطأ
@@ -4144,6 +4177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingLangRetry = false;
         sessionError = false;
         silentRetries = 0;
+        yaTraceSessions = [];
         stopping = false;
         try {
           yaSpeechStart();

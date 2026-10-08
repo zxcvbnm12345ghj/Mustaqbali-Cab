@@ -207,7 +207,7 @@ function renderPlaceDetail(kind, row) {
   const showHeroEmpty = () => {
     hero.style.backgroundImage = '';
     hero.classList.remove('has-img');
-    if (heroPh) { heroPh.hidden = false; heroPh.textContent = cfg.emptyIcon; }
+    if (heroPh) heroPh.hidden = false; // keeps the SVG icon from index.html (no emoji)
   };
   if (row.image_url) {
     const preload = new Image();
@@ -262,6 +262,165 @@ function renderPlaceDetail(kind, row) {
   }
 
   document.getElementById('plcDeliveryBtn').onclick = () => requestPlaceDelivery(kind, row);
+
+  renderPlaceDetailExtras(kind, row);
+}
+
+/* ============================================================
+   Detail page extras: WhatsApp, directions, map, «تواصل عبر يمّك».
+   Everything is built ONLY from the real row (phone / lat / lng /
+   name). Nothing is shown when the data behind it is missing, and no
+   coordinates are ever invented.
+   ============================================================ */
+
+// «تواصل عبر يمّك» — ready but OFF. Set to true later to show the
+// button. When on, it calls window.onPlaceYammakContact(kind, row) if
+// a handler is defined; otherwise it just tells the customer it is
+// coming soon. It is not connected to trips / orders / GPS.
+const PLACE_DETAIL_YAMMAK_CONTACT_ENABLED = false;
+
+// Valid, real coordinates only. Missing / out-of-range / 0,0 → null.
+function placeDetailCoords(row) {
+  if (!row || row.lat == null || row.lng == null || row.lat === '' || row.lng === '') return null;
+  const lat = Number(row.lat);
+  const lng = Number(row.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
+// Local Iraqi numbers (07XXXXXXXXX / 7XXXXXXXXX) become 9647XXXXXXXXX.
+// Numbers already in international form (+… / 00… / 964…) are kept.
+// Anything that does not look like a phone number returns '' (no button).
+function placeDetailWhatsappNumber(phone) {
+  let d = String(phone || '')
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))   // Arabic-Indic digits
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06F0));  // Persian digits
+  const hadPlus = /^\s*\+/.test(d);
+  d = d.replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('00')) d = d.slice(2);
+  else if (!hadPlus && d.startsWith('0')) d = '964' + d.slice(1);
+  else if (!hadPlus && d.length === 10 && d.startsWith('7')) d = '964' + d;
+  return d.length >= 10 && d.length <= 15 ? d : '';
+}
+
+function placeDetailSetLink(el, href) {
+  if (!el) return;
+  if (href) { el.href = href; el.hidden = false; }
+  else { el.removeAttribute('href'); el.hidden = true; }
+}
+
+function renderPlaceDetailExtras(kind, row) {
+  const coords = placeDetailCoords(row);
+
+  // WhatsApp
+  const waNumber = placeDetailWhatsappNumber(row.phone);
+  const waText = `مرحباً، أتواصل معكم من تطبيق يمّك بخصوص: ${row.name || ''}`.trim();
+  placeDetailSetLink(
+    document.getElementById('plcWhatsappBtn'),
+    waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waText)}` : ''
+  );
+
+  // Directions (opens the customer's maps app with the real coordinates)
+  placeDetailSetLink(
+    document.getElementById('plcDirectionsBtn'),
+    coords ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}&travelmode=driving` : ''
+  );
+
+  const quick = document.getElementById('plcDetailQuick');
+  if (quick) {
+    quick.hidden = !(waNumber || coords);
+    quick.classList.toggle('is-single', !(waNumber && coords));
+  }
+
+  // «تواصل عبر يمّك»
+  const yBtn = document.getElementById('plcYammakContactBtn');
+  if (yBtn) {
+    yBtn.hidden = !PLACE_DETAIL_YAMMAK_CONTACT_ENABLED;
+    yBtn.onclick = () => {
+      if (typeof window.onPlaceYammakContact === 'function') window.onPlaceYammakContact(kind, row);
+      else toast('قريباً — التواصل عبر يمّك');
+    };
+  }
+
+  renderPlaceDetailMap(coords);
+}
+
+/* Small read-only map (Leaflet is already loaded by index.html).
+   Non-interactive on purpose so it never traps the page scroll. The
+   marker is an inline SVG, so no extra image requests are needed. */
+const placeDetailMapState = { map: null, marker: null, token: 0 };
+
+// Tile source for the detail map — kept in ONE place so it can be linked to
+// the project's own map provider later without touching the rest of the code.
+// Defaults to the same source the admin map picker uses (OpenStreetMap, see
+// admin.js). app.js was not available when this was written, so this is NOT
+// confirmed against the customer map: to switch provider, define
+//   window.YAMMAK_MAP_TILES = { url: '…{z}/{x}/{y}…', attribution: '…', maxZoom: 19, subdomains: 'abc' }
+// before this file runs (or edit the fallback below).
+function placeDetailTileConfig() {
+  const custom = (typeof window !== 'undefined') ? window.YAMMAK_MAP_TILES : null;
+  if (custom && typeof custom.url === 'string' && custom.url) return custom;
+  return {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+  };
+}
+
+function placeDetailPinIcon() {
+  return L.divIcon({
+    className: 'plc-map-pin',
+    html: '<svg viewBox="0 0 24 32" width="34" height="44" aria-hidden="true">' +
+          '<path d="M12 31s-9-9.2-9-18a9 9 0 0 1 18 0c0 8.800-9 18-9 18Z" fill="#6D28D9" stroke="#fff" stroke-width="1.6"/>' +
+          '<circle cx="12" cy="13" r="3.600" fill="#fff"/></svg>',
+    iconSize: [34, 44],
+    iconAnchor: [17, 43]
+  });
+}
+
+function renderPlaceDetailMap(coords) {
+  const card = document.getElementById('plcDetailMapCard');
+  const box = document.getElementById('plcDetailMap');
+  if (!card || !box) return;
+
+  if (!coords || typeof L === 'undefined') {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const myToken = ++placeDetailMapState.token;
+  const place = () => {
+    if (myToken !== placeDetailMapState.token) return; // another place was opened meanwhile
+    const st = placeDetailMapState;
+    const latlng = [coords.lat, coords.lng];
+    if (!st.map) {
+      st.map = L.map(box, {
+        zoomControl: false, dragging: false, touchZoom: false, doubleClickZoom: false,
+        scrollWheelZoom: false, boxZoom: false, keyboard: false, tap: false,
+        attributionControl: true
+      });
+      st.map.attributionControl.setPrefix(false);
+      const tiles = placeDetailTileConfig();
+      L.tileLayer(tiles.url, {
+        maxZoom: tiles.maxZoom || 19,
+        attribution: tiles.attribution || '',
+        subdomains: tiles.subdomains || 'abc'
+      }).addTo(st.map);
+    }
+    st.map.invalidateSize();
+    st.map.setView(latlng, 16, { animate: false });
+    if (st.marker) st.marker.setLatLng(latlng);
+    else st.marker = L.marker(latlng, { icon: placeDetailPinIcon(), interactive: false, keyboard: false }).addTo(st.map);
+  };
+
+  // The detail view becomes visible right after render (sheet snap
+  // animation), so size the map again once it has a real width/height.
+  setTimeout(place, 60);
+  setTimeout(place, 450);
 }
 
 function requestPlaceDelivery(kind, row) {

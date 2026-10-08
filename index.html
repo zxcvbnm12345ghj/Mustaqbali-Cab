@@ -152,7 +152,7 @@
      tiles/markers/behavior are completely unaffected — only *when* this
      one stylesheet applies, not what it contains. -->
 <link rel="stylesheet" href="style.css?v=20260920">
-<link rel="stylesheet" href="app.css?v=20261003-install1">
+<link rel="stylesheet" href="app.css?v=20261008-plcdetail1">
 <!-- FIX (Leaflet CSS fallback): كان هناك مصدر CDN واحد فقط (unpkg) —
      إن تعذّر الوصول إليه (حظر شبكة محلي على unpkg تحديداً، أو تعطّل
      مؤقت) تبقى تنسيقات الخريطة (طبقات البلاطة/العلامات) مفقودة رغم أن
@@ -1998,6 +1998,35 @@
               <span id="plcDetailPhone">—</span>
             </div>
           </div>
+
+          <!-- Real data only: each control below shows ONLY when the row has
+               the data behind it (phone → WhatsApp, lat/lng → directions +
+               map). Filled by renderPlaceDetailExtras() in places.js. -->
+          <div class="plc-detail-quick" id="plcDetailQuick" hidden>
+            <a href="#" class="plc-quick-btn plc-quick-wa" id="plcWhatsappBtn" target="_blank" rel="noopener" hidden>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.500 11.500a8.500 8.500 0 0 1-12.600 7.400L3.500 20.500l1.600-4.300A8.500 8.500 0 1 1 20.500 11.500Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.500c.3 2 2.200 4.200 4.800 5l1.300-1.200 1.800.8-.2 1.200c-.1.500-.6.8-1.100.7-3.300-.6-5.800-3.100-6.300-6.300-.1-.5.200-1 .7-1.100l1.200-.1.800 1.800L9 9.500Z" fill="currentColor"/></svg>
+              <span>واتساب</span>
+            </a>
+            <a href="#" class="plc-quick-btn plc-quick-dir" id="plcDirectionsBtn" target="_blank" rel="noopener" hidden>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.500 11.200 20.500 4 13.300 21l-2.200-7.600-7.600-2.200Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+              <span>الوصول للموقع</span>
+            </a>
+          </div>
+
+          <div class="plc-detail-map-card" id="plcDetailMapCard" hidden>
+            <div class="plc-detail-map-title">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6.500-5.700-6.500-11A6.500 6.500 0 0 1 18.500 10c0 5.300-6.500 11-6.500 11Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.300" stroke="currentColor" stroke-width="1.7"/></svg>
+              <span>الموقع على الخريطة</span>
+            </div>
+            <div class="plc-detail-map" id="plcDetailMap" role="img" aria-label="موقع النشاط على الخريطة"></div>
+          </div>
+
+          <!-- «تواصل عبر يمّك»: hidden until PLACE_DETAIL_YAMMAK_CONTACT_ENABLED
+               is switched on in places.js. -->
+          <button type="button" class="plc-yammak-btn" id="plcYammakContactBtn" hidden>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.500h16v10.500H9.500L5.500 19.500V16H4V5.500Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            تواصل عبر يمّك
+          </button>
         </div>
 
         <div class="plc-detail-actions" id="plcDetailActions">
@@ -2205,7 +2234,7 @@
 <script src="config.js"></script>
 <script src="app.js?v=20261003-mic3-vh1"></script>
 <script src="market.js"></script>
-<script src="places.js"></script>
+<script src="places.js?v=20261008-plcdetail1"></script>
 <script src="yammak-services.js"></script>
 
 <!-- Account page (حسابي) wiring — purely additive, same spirit as the
